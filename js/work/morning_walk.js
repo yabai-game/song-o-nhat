@@ -9,6 +9,7 @@ import { ROUTE } from '../gfx/site.js';
 import { STATION } from '../gfx/station.js';
 import { CARE_ROOM } from '../gfx/care.js';
 import { BENTO_ROOM } from '../gfx/bento.js';
+import { LOTUS_FIELD } from '../gfx/lotus.js';
 import { camera, isPortrait } from '../gfx/stage.js';
 import { $, show, card, esc, deltaChips, deltaText, toast } from '../ui/ui.js';
 
@@ -38,6 +39,18 @@ function walkinFor(job, stages) {
       blocks: stages.bento ? stages.bento.blocks : [],
       place: 'Xưởng cơm hộp さくら食品',
       tip: 'Vào xưởng, chào tổ trưởng Tanaka trước giờ họp đầu ca',
+    };
+  }
+  if (job === 'lotus') {
+    return {
+      stage: 'lotus',
+      start: LOTUS_FIELD.start,
+      greeter: 'foreman',
+      greeterAt: LOTUS_FIELD.greeterAt,
+      bounds: LOTUS_FIELD.bounds,
+      blocks: stages.lotus ? stages.lotus.blocks : [],
+      place: 'Ruộng sen 霞ヶ浦 · Ibaraki',
+      tip: 'Đi dọc bờ ruộng, chào quản lý Tanaka trước giờ họp đầu ca',
     };
   }
   return {
@@ -138,7 +151,7 @@ export class MorningWalk {
     const P = this.who.player;
     this.setStage('dorm');
     this.stages.dorm.setTime('day'); this.stages.dorm.onigiri.visible = true;
-    P.unpinAll(); if (P.helmet) P.helmet.visible = false; if (P.cap) P.cap.visible = false;
+    P.unpinAll(); if (P.helmet) P.helmet.visible = false; if (P.cap) P.cap.visible = false; if (P.waders) P.waders.setVisible(false);
     P.look(this.S.look.colors);
     // lying on the futon, face up, head towards the back wall
     P.yaw = 0; P.play('idle'); P.holder.rotation.x = -Math.PI / 2;
@@ -174,7 +187,7 @@ export class MorningWalk {
     this.controls.enabled = true;
     this.controls.onTap = null;
     if (train) {
-      const dest = this.walkin.stage === 'bento' ? 'xưởng' : 'viện';
+      const dest = this.walkin.stage === 'bento' ? 'xưởng' : this.walkin.stage === 'lotus' ? 'ruộng sen' : 'viện';
       $('sh-place').querySelector('span').textContent = 'Đường ra ga さくら駅';
       this.tip('駅はあっち', `Đi bộ tới biển 🚉 さくら駅 ở cuối phố, đi tàu tới ${dest} trước 7:45 (朝礼)`, 5);
     } else {
@@ -198,7 +211,7 @@ export class MorningWalk {
   }
   // phase 4: the ride (the camera follows the train out of the station)
   ride() {
-    const s = this.st, P = this.who.player, dest = this.walkin.stage === 'bento' ? 'xưởng' : 'viện';
+    const s = this.st, P = this.who.player, dest = this.walkin.stage === 'bento' ? 'xưởng' : this.walkin.stage === 'lotus' ? 'ruộng sen' : 'viện';
     board(s); P.holder.visible = false; this.controls.enabled = false; this.controls.target = null;
     this.stages.station.sendTrain('leave'); this.rideT = 0;
     show('sh-tip', false);
@@ -216,6 +229,12 @@ export class MorningWalk {
     if (w.stage === 'bento') {
       P.look({ ...this.S.look.colors, top: '#f2f2ee', bottom: '#f2f2ee' });
       if (P.cap) P.cap.visible = true;
+    } else if (w.stage === 'lotus') {
+      P.look({ ...this.S.look.colors, top: '#2b3a36', bottom: '#3f5a3c' });
+      if (P.waders) P.waders.setVisible(true);
+      this.stages.lotus.setWeather({});
+      this.stages.lotus.setCollected(0);
+      this.stages.lotus.setSpray(false);
     }
     P.holder.visible = true;
     P.holder.position.set(w.start.x, 0, w.start.z);
@@ -304,7 +323,7 @@ export class MorningWalk {
   askSkip() {
     if (this.paused) return;
     this.paused = true;
-    const place = this.commute === 'train' ? (this.walkin.stage === 'bento' ? 'xưởng cơm hộp' : 'viện dưỡng lão') : 'công trường';
+    const place = this.commute === 'train' ? (this.walkin.stage === 'bento' ? 'xưởng cơm hộp' : this.walkin.stage === 'lotus' ? 'ruộng sen' : 'viện dưỡng lão') : 'công trường';
     card(`<h2>Bỏ qua buổi sáng?</h2><p>Đi thẳng tới ${place}, đến vừa kịp giờ.</p>`, [
       { label: 'Đi tiếp', on: () => { this.paused = false; } },
       { label: 'Bỏ qua →', cls: 'ghost', on: () => { this.st.phase = 'street'; this.st.min = Math.min(this.st.min, MORNING.CHOREI - 3); this.finish(); } },
@@ -321,7 +340,7 @@ export class MorningWalk {
     const hungLine = r.kind === 'late' ? '遅いぞ！みんな待ってる。 — Muộn rồi! Mọi người đang chờ.' : 'おはよう！今日も頑張ろう。 — Chào em! Hôm nay cố lên nhé.';
     const train = this.commute === 'train';
     if (!train) { this.overhead.say(this.who.hung, hungLine, 4); if (P.helmet) P.helmet.visible = true; }
-    const whereTxt = train ? (this.walkin.stage === 'bento' ? 'Bạn tới xưởng cơm hộp' : 'Bạn tới viện dưỡng lão') : 'Bạn tới cổng công trường';
+    const whereTxt = train ? (this.walkin.stage === 'bento' ? 'Bạn tới xưởng cơm hộp' : this.walkin.stage === 'lotus' ? 'Bạn tới ruộng sen' : 'Bạn tới viện dưỡng lão') : 'Bạn tới cổng công trường';
     card(`<h2>${head}</h2><p>${whereTxt} lúc <b>${clock(r.min)}</b> · 朝礼 ${clock(MORNING.CHOREI)}.</p>
       <div class="deltas">${deltaChips(r.deltas) || '<span class="delta">—</span>'}</div>
       <p class="lesson">${esc(lesson)}</p>`, [

@@ -1,11 +1,12 @@
 // Job data — pure module. Texts and numbers copied from the original (docs/ORIGINAL_SPEC.md §4, Appendix A).
 import { CARE_DAYS, CARE_RANKS } from './care_data.js';
 import { BENTO_DAYS, BENTO_RANKS } from './bento_data.js';
-export { CARE_DAYS, CARE_RANKS, BENTO_DAYS, BENTO_RANKS };
-// M1: the construction site (`site`); M2: the care home (`care`) and the bento factory (`bento`).
+import { LOTUS_DAYS, LOTUS_RANKS } from './lotus_data.js';
+export { CARE_DAYS, CARE_RANKS, BENTO_DAYS, BENTO_RANKS, LOTUS_DAYS, LOTUS_RANKS };
+// M1: the construction site (`site`); M2: the care home (`care`), bento factory (`bento`), and lotus field (`lotus`).
 
 export const JOBS = {
-  lotus: { icon: '🪷', sector: 'Nông nghiệp', name: 'Thu hoạch củ sen', place: 'Ruộng sen', area: 'Ibaraki', jp: '蓮田', unit: 'củ sen', ready: false,
+  lotus: { icon: '🪷', sector: 'Nông nghiệp', name: 'Thu hoạch củ sen', place: 'Ruộng sen', area: 'Ibaraki', jp: '蓮田', unit: 'củ sen', ready: true,
     desc: 'Lội bùn, xịt nước áp lực cao để đào củ sen. Ibaraki là nơi trồng củ sen nhiều nhất Nhật Bản.' },
   care: { icon: '👵', sector: 'Điều dưỡng 介護', name: 'Chăm sóc người cao tuổi', place: 'Viện dưỡng lão', area: 'Tokyo', jp: '介護施設', unit: 'lượt chăm sóc', ready: true,
     desc: 'Đút ăn, lau miệng, trò chuyện với các cụ. Phải nghe hiểu tiếng Nhật và nói kính ngữ thật nhẹ nhàng.' },
@@ -144,7 +145,7 @@ export const EVENINGS = [
 ];
 
 /** per-job week data and rank names */
-export const DAYS_BY_JOB = { site: SITE_DAYS, care: CARE_DAYS, bento: BENTO_DAYS };
-export const RANKS_BY_JOB = { site: SITE_RANKS, care: CARE_RANKS, bento: BENTO_RANKS };
+export const DAYS_BY_JOB = { site: SITE_DAYS, care: CARE_DAYS, bento: BENTO_DAYS, lotus: LOTUS_DAYS };
+export const RANKS_BY_JOB = { site: SITE_RANKS, care: CARE_RANKS, bento: BENTO_RANKS, lotus: LOTUS_RANKS };
 export const daysOf = (job) => DAYS_BY_JOB[job] || SITE_DAYS;
 export const ranksOf = (job) => RANKS_BY_JOB[job] || SITE_RANKS;

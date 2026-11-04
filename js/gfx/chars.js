@@ -355,3 +355,58 @@ export function makeSanitaryCap(ch, color = '#f6f6f2') {
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return { group: g, h };
 }
+
+/**
+ * Lotus-field chest wader gear (胴長 + ゴム手袋): rubber work gloves parented to both hands and a
+ * moss-green chest bib with shoulder straps parented to the chest bone.
+ */
+export function wearWaders(ch) {
+  ch.holder.updateMatrixWorld(true);
+  const gloveMat = new THREE.MeshStandardMaterial({ color: '#d46b2c', roughness: 0.55 });
+  const bibMat = new THREE.MeshStandardMaterial({ color: '#3f5a3c', roughness: 0.65 });
+  const strapMat = new THREE.MeshStandardMaterial({ color: '#243322', roughness: 0.7 });
+  const parts = [];
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ch.holder.rotation.y);
+  const s1 = new THREE.Vector3(1, 1, 1);
+
+  for (const hand of [ch.handL, ch.handR]) {
+    if (!hand) continue;
+    const g = new THREE.Group();
+    const mitt = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 10), gloveMat);
+    mitt.scale.set(0.9, 1.15, 0.85);
+    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.058, 0.09, 12), gloveMat);
+    cuff.position.y = 0.055;
+    g.add(mitt, cuff);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    const pos = new THREE.Vector3();
+    hand.getWorldPosition(pos);
+    const local = hand.matrixWorld.clone().invert().multiply(new THREE.Matrix4().compose(pos, q, s1));
+    local.decompose(g.position, g.quaternion, g.scale);
+    hand.add(g);
+    parts.push(g);
+  }
+
+  const spineBone = ch.chest || ch.spine1 || ch.spine;
+  if (spineBone) {
+    const bib = new THREE.Group();
+    const front = new THREE.Mesh(new THREE.BoxGeometry(0.29, 0.28, 0.04), bibMat);
+    front.position.set(0, -0.02, 0.13);
+    const sL = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.24, 0.03), strapMat);
+    sL.position.set(-0.09, 0.14, 0.11);
+    const sR = sL.clone();
+    sR.position.x = 0.09;
+    bib.add(front, sL, sR);
+    bib.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    const pos = new THREE.Vector3();
+    spineBone.getWorldPosition(pos);
+    const local = spineBone.matrixWorld.clone().invert().multiply(new THREE.Matrix4().compose(pos, q, s1));
+    local.decompose(bib.position, bib.quaternion, bib.scale);
+    spineBone.add(bib);
+    parts.push(bib);
+  }
+
+  return {
+    parts,
+    setVisible(v) { for (const p of parts) p.visible = !!v; },
+  };
+}
