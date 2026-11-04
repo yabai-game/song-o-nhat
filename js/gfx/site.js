@@ -54,6 +54,7 @@ export const ROUTE = {
   gate: { x: 3, z: 22.1 },
   konbini: { x: -1, z: 28.5 },   // in front of the konbini, facing the street
   market: { x: -5.5, z: 22.2 },  // across the street from the konbini: スーパー さくら
+  shrine: { x: 7.8, z: 28.2 },   // east end of the south sidewalk: the way to ⛩ さくら神社
   station: { x: 8.4, z: 24.6 },  // east end of the street: the way to さくら駅 (care home commute)
   bounds: { x0: -31, x1: 9, z0: 21.8, z1: 28.7 },
   blocks: [{ x: -22.7, z: 29.45, r: 0.55 }, { x: -20.6, z: 29.5, r: 0.45 }, { x: -19.45, z: 29.5, r: 0.45 }],
@@ -522,6 +523,22 @@ export async function buildSite() {
     post.position.set(ROUTE.station.x + 1.4, 1.6, 23.0); post.castShadow = true; scene.add(post);
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.6), new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.6 }));
     sign.position.set(ROUTE.station.x + 1.35, 2.75, 23.0); sign.rotation.y = -Math.PI / 2; scene.add(sign); // faces the player walking east
+  }
+  // signpost on the south sidewalk at the head of the street: the way to Sakura Shrine (⛩ さくら神社 →)
+  {
+    const sTex = canvasTexture(384, 128, (g) => {
+      g.fillStyle = '#fdf8ec'; g.fillRect(0, 0, 384, 128);
+      g.strokeStyle = '#c92a1d'; g.lineWidth = 10; g.strokeRect(6, 6, 372, 116);
+      g.fillStyle = '#c92a1d'; g.fillRect(14, 14, 356, 34);
+      g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '800 20px "Zen Maru Gothic", "Yu Gothic", sans-serif'; g.fillText('参道入口 · Lối vào đền', 192, 31);
+      g.fillStyle = '#1d1d1d'; g.font = '900 42px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+      g.fillText('⛩ さくら神社 →', 192, 84);
+    });
+    const sPost = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 2.7, 8), M('#6b4a30'));
+    sPost.position.set(ROUTE.shrine.x + 1.2, 1.35, 29.15); sPost.castShadow = true; scene.add(sPost);
+    const sBoard = new THREE.Mesh(new THREE.PlaneGeometry(1.65, 0.55), new THREE.MeshStandardMaterial({ map: sTex, side: THREE.DoubleSide, roughness: 0.65 }));
+    sBoard.position.set(ROUTE.shrine.x + 1.14, 2.35, 29.15); sBoard.rotation.y = -Math.PI / 2; scene.add(sBoard);
   }
   // LED street lights (CC0 Meshy model): pole on the south sidewalk, the head reaching over the street.
   // The model's arm points +z from its pole, so it is turned around: pole at z 29.0, head at ≈ 27.2.

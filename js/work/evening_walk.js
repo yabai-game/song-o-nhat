@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { EVENING, createEvening, tick, talked, enterRoom, act, toBed } from '../core/evening.js';
 import {
   COOK_STEPS, goodOf, cookable, canCookTonight, cook, savingVsKonbini,
+  createCookStove, pressCookStep, releaseCookStep, tickCookStep, cookStepProgress,
 } from '../core/market_rules.js';
 import { yen, save } from '../core/state.js';
 import { clock } from '../core/morning.js';
@@ -47,14 +48,40 @@ export class EveningWalk {
       b.addEventListener('pointerdown', (e) => { e.preventDefault(); this.action(a.id); });
       this.btn[a.id] = b; this.mine.push(b);
     }
+    this.cookBtn = {}; this.cookBars = {};
+    this.cookMine = COOK_STEPS.map((s) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'act hold-act';
+      b.dataset.id = s.id;
+      b.innerHTML = `<span class="hold-bar"></span><span class="i">${s.icon}</span><span class="l">${s.vi}</span><span class="j">${s.jp}</span>`;
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); this.pressCook(s.id); });
+      for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+        b.addEventListener(ev, () => this.releaseCook(s.id));
+      }
+      this.cookBtn[s.id] = b;
+      this.cookBars[s.id] = b.querySelector('.hold-bar');
+      return b;
+    });
     this.fade = document.createElement('div'); this.fade.className = 'fade'; $('app').appendChild(this.fade);
     $('sh-quit').addEventListener('click', () => this.active && this.skip());
     addEventListener('keydown', (e) => {
       if (!this.active) return;
+      if (this.cookState && this.cookState.phase === 'step') {
+        if (e.repeat) return;
+        const map = { Digit1: 'cut', Space: 'cut', Digit2: 'fry', Digit3: 'plate' };
+        if (map[e.code]) { e.preventDefault(); this.pressCook(map[e.code]); }
+        return;
+      }
       if (e.code === 'Space' || e.code === 'Digit1') { e.preventDefault(); this.action('sleep'); }
       if (e.code === 'Digit2' || e.code === 'ShiftLeft') this.action(this.ev.phase === 'room' ? 'bath' : 'run');
       if (e.code === 'Digit3') this.action('call');
       if (e.code === 'Digit4') this.action(this.ev.phase === 'room' ? 'cook' : 'market');
+    });
+    addEventListener('keyup', (e) => {
+      if (!this.active || !this.cookState || this.cookState.phase !== 'step') return;
+      const map = { Digit1: 'cut', Space: 'cut', Digit2: 'fry', Digit3: 'plate' };
+      if (map[e.code]) this.releaseCook(map[e.code]);
     });
   }
 
@@ -156,8 +183,17 @@ export class EveningWalk {
     const icon = e.min >= 21 * 60 ? '🌙' : '🌆';
     let suffix = e.phase === 'room' ? (e.min >= EVENING.LATE ? ' · khuya rồi!' : ' · nghỉ ngơi') : ' · về nhà';
     if (this.cookState && this.cookState.phase === 'step') {
-      const st = COOK_STEPS[this.cookState.stepIdx];
-      if (st) suffix = ` · ${st.icon} ${st.vi} ${st.jp} (${this.cookState.stepIdx + 1}/${COOK_STEPS.length})`;
+      const st = this.cookState.stove;
+      const cur = COOK_STEPS[st.idx];
+      if (cur) suffix = ` · Bấm giữ ${cur.icon} ${cur.vi} ${cur.jp} (${st.idx + 1}/${COOK_STEPS.length})`;
+      for (let i = 0; i < COOK_STEPS.length; i++) {
+        const s = COOK_STEPS[i];
+        const b = this.cookBtn[s.id];
+        const bar = this.cookBars[s.id];
+        b.classList.toggle('hot', i === st.idx);
+        const pct = i < st.idx ? 100 : i === st.idx ? Math.round(cookStepProgress(st) * 100) : 0;
+        bar.style.width = `${pct}%`;
+      }
     }
     const txt = `${icon} ${clock(e.min)}${suffix}`;
     if (g.textContent !== txt) g.textContent = txt;
@@ -260,33 +296,61 @@ export class EveningWalk {
   beginCook(recipe) {
     show('sh-tip', false);
     if (recipe.stove) {
-      this.cookState = { recipe, phase: 'toStove', stepIdx: 0, timer: 0 };
+      this.cookState = { recipe, phase: 'toStove', stove: createCookStove(recipe.id) };
       this.controls.target = new THREE.Vector3(DORM.stove.x, 0, DORM.stove.z);
     } else {
-      this.cookState = { recipe, phase: 'toTable', stepIdx: 0, timer: 0 };
+      this.cookState = { recipe, phase: 'toTable', stove: null };
       this.controls.target = new THREE.Vector3(DORM.table.x - 0.35, 0, DORM.table.z + 0.35);
     }
     this.hud();
   }
 
-  startStoveStep(idx) {
+  enterStoveMode() {
     const cs = this.cookState;
     if (!cs) return;
-    if (idx >= COOK_STEPS.length) {
-      if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(false);
-      cs.phase = 'toTable';
-      this.controls.target = new THREE.Vector3(DORM.table.x - 0.35, 0, DORM.table.z + 0.35);
-      return;
-    }
     cs.phase = 'step';
-    cs.stepIdx = idx;
-    const step = COOK_STEPS[idx];
-    cs.timer = step.sec;
     const P = this.who.player;
     P.yaw = Math.PI;
-    P.play('pick');
-    if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(step.id === 'fry');
-    this.overhead.say(P, `${step.icon} ${step.jp} — ${step.vi}… (${idx + 1}/${COOK_STEPS.length})`, step.sec + 0.2);
+    P.play('idle');
+    $('acts').replaceChildren(...this.cookMine);
+    const first = COOK_STEPS[0];
+    this.tip('切る → 炒める → 盛り付け', `Bấm và giữ từng nút theo thứ tự: 1. ${first.icon} ${first.vi} → 2. 🔥 Xào → 3. 🍚 Dọn ra`, 6);
+    this.hud();
+  }
+
+  pressCook(stepId) {
+    const cs = this.cookState;
+    if (!cs || cs.phase !== 'step') return;
+    const P = this.who.player;
+    const r = pressCookStep(cs.stove, stepId);
+    if (!r.ok) {
+      if (r.reason === 'wrong_order') {
+        P.reachTo = 0;
+        P.wristSway = 0;
+        if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(false);
+        this.overhead.say(P, `${r.jp} — ${r.vi}`, 2.2);
+        this.tip('順番が違うよ', `Sai thứ tự rồi! Bước tiếp theo phải là: ${r.want.icon} ${r.want.vi} (${r.want.jp})`, 3.5);
+      }
+      this.hud();
+      return;
+    }
+    P.yaw = Math.PI;
+    P.reachTo = 0.7;
+    P.wristSway = stepId === 'plate' ? 0.35 : 1.0;
+    if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(stepId === 'fry');
+    this.overhead.say(P, `${r.step.icon} ${r.step.jp} — Đang ${r.step.vi.toLowerCase()}…`, 2);
+    this.hud();
+  }
+
+  releaseCook(stepId) {
+    const cs = this.cookState;
+    if (!cs || cs.phase !== 'step') return;
+    if (stepId && cs.stove.holding && cs.stove.holding !== stepId) return;
+    releaseCookStep(cs.stove);
+    const P = this.who.player;
+    P.reachTo = 0;
+    P.wristSway = 0;
+    if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(false);
     this.hud();
   }
 
@@ -295,11 +359,14 @@ export class EveningWalk {
     if (!cs) return;
     const recipe = cs.recipe;
     this.cookState = null;
+    const P = this.who.player;
+    P.reachTo = 0;
+    P.wristSway = 0;
     if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(false);
+    $('acts').replaceChildren(...this.mine);
     if (!recipe.stove) this.ev.min += 5;
     const res = cook(this.S, this.S.pantry, recipe.id);
     if (this.storage) save(this.S, this.storage);
-    const P = this.who.player;
     P.yaw = Math.atan2(DORM.table.x - P.holder.position.x, DORM.table.z - P.holder.position.z);
     P.play('idle');
     this.busy = 1.2;
@@ -345,12 +412,21 @@ export class EveningWalk {
       if (this.lie >= 1) { this.lie = -1; this.paused = true; setTimeout(() => this.fadeTo(() => { this._hide(); this.ev = null; this.onSleep(); }), 700); }
     } else if (!this.paused) {
       if (this.cookState && this.cookState.phase === 'step') {
-        this.cookState.timer -= dt;
         P.yaw = Math.PI;
-        if (this.cookState.timer <= 0) {
-          const doneStep = COOK_STEPS[this.cookState.stepIdx];
-          if (doneStep) e.min += doneStep.min;
-          this.startStoveStep(this.cookState.stepIdx + 1);
+        const tr = tickCookStep(this.cookState.stove, dt);
+        if (tr.advanced) {
+          e.min += tr.minDelta;
+          P.reachTo = 0;
+          P.wristSway = 0;
+          if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(false);
+          if (tr.done) {
+            $('acts').replaceChildren(...this.mine);
+            this.cookState.phase = 'toTable';
+            this.controls.target = new THREE.Vector3(DORM.table.x - 0.35, 0, DORM.table.z + 0.35);
+          } else {
+            const nxt = COOK_STEPS[this.cookState.stove.idx];
+            if (nxt) this.overhead.say(P, `✓ Xong ${tr.completedStep.vi}! Tiếp: ${nxt.icon} ${nxt.vi} (${nxt.jp})`, 2.2);
+          }
         }
       } else if (this.busy > 0) {
         this.busy -= dt;
@@ -390,7 +466,7 @@ export class EveningWalk {
       if (this.cookState) {
         if (this.cookState.phase === 'toStove' && (!c.target || Math.hypot(pos.x - DORM.stove.x, pos.z - DORM.stove.z) < 0.32)) {
           c.target = null;
-          this.startStoveStep(0);
+          this.enterStoveMode();
         } else if (this.cookState.phase === 'toTable' && (!c.target || Math.hypot(pos.x - (DORM.table.x - 0.35), pos.z - (DORM.table.z + 0.35)) < 0.35)) {
           c.target = null;
           this.finishCookAtTable();

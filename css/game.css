@@ -199,3 +199,14 @@ button.small { font-size: 13px; padding: 8px 12px; }
 @media (max-height: 500px) and (min-aspect-ratio: 1/1) {
   .market-bar { top: calc(52px + env(safe-area-inset-top, 0px)); max-width: min(360px, calc(100% - 380px)); }
 }
+
+/* press-and-hold progress bar on stove buttons */
+.act.hold-act { position: relative; overflow: hidden; }
+.act.hold-act .hold-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: rgba(126, 214, 160, 0.34); pointer-events: none; transition: width 0.05s linear; }
+.act.hold-act > :not(.hold-bar) { position: relative; z-index: 1; }
+
+/* shrine omikuji fortune slip */
+.omikuji-slip { border: 3px solid #c92a1d; border-radius: 12px; background: #fffdf6; color: #2b2118; padding: 14px 16px; margin: 4px 0 10px; text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,.22); }
+.omikuji-slip .omi-sub { font-family: var(--font-jp); font-size: 13px; font-weight: 800; color: #c92a1d; letter-spacing: 0.08em; }
+.omikuji-slip .omi-kanji { font-family: var(--font-jp); font-size: 46px; font-weight: 900; color: #c92a1d; line-height: 1.15; margin: 6px 0; }
+.omikuji-slip .omi-vi { font-size: 14.5px; color: #2b2118; font-weight: 600; margin: 4px 0 0; line-height: 1.35; }

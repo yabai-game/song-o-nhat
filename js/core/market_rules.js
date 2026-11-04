@@ -56,6 +56,73 @@ export const COOK_STEPS = [
   { id: 'plate', icon: '🍚', vi: 'Dọn ra', jp: '盛り付け', sec: 0.6, min: 5 },
 ];
 
+export function createCookStove(recipeId) {
+  return { recipeId, idx: 0, held: 0, holding: null, minAdded: 0, done: false };
+}
+
+export function cookStepProgress(st) {
+  if (!st) return 0;
+  if (st.done) return 1;
+  const cur = COOK_STEPS[st.idx];
+  return cur ? Math.max(0, Math.min(1, st.held / cur.sec)) : 0;
+}
+
+/**
+ * Press and hold a stove step button (cut -> fry -> plate).
+ * Pressing the wrong step returns { ok: false, reason: 'wrong_order' } with no penalty
+ * and keeps existing progress intact.
+ */
+export function pressCookStep(st, stepId) {
+  if (!st || st.done) return { ok: false, reason: 'done' };
+  const cur = COOK_STEPS[st.idx];
+  if (!cur) return { ok: false, reason: 'done' };
+  if (stepId !== cur.id) {
+    st.holding = null;
+    return {
+      ok: false,
+      reason: 'wrong_order',
+      want: cur,
+      jp: '「順番が違うよ」',
+      vi: 'Sai thứ tự rồi',
+    };
+  }
+  st.holding = stepId;
+  return { ok: true, step: cur, idx: st.idx };
+}
+
+/** Releasing mid-step pauses progress without losing accumulated hold time. */
+export function releaseCookStep(st) {
+  if (st) st.holding = null;
+  return st;
+}
+
+/** Advances hold progress while the active step button is held down. */
+export function tickCookStep(st, dt) {
+  if (!st || st.done || !st.holding || !(dt > 0)) {
+    return { advanced: false, done: !!(st && st.done), progress: cookStepProgress(st), minDelta: 0 };
+  }
+  const cur = COOK_STEPS[st.idx];
+  if (!cur || st.holding !== cur.id) {
+    return { advanced: false, done: false, progress: cookStepProgress(st), minDelta: 0 };
+  }
+  st.held = Math.min(cur.sec, st.held + dt);
+  if (st.held + 1e-6 >= cur.sec) {
+    st.held = 0;
+    st.holding = null;
+    st.idx += 1;
+    st.minAdded += cur.min;
+    if (st.idx >= COOK_STEPS.length) st.done = true;
+    return {
+      advanced: true,
+      completedStep: cur,
+      minDelta: cur.min,
+      done: st.done,
+      progress: 1,
+    };
+  }
+  return { advanced: false, done: false, progress: st.held / cur.sec, minDelta: 0 };
+}
+
 export const CLERK_LINES = {
   bag: {
     jp: '「袋はご利用ですか？」',

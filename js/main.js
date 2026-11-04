@@ -13,6 +13,7 @@ import { spotFor, createEvening } from './core/evening.js';
 import { spoil, goodOf } from './core/market_rules.js';
 import { buildDorm } from './gfx/dorm.js';
 import { buildMarket } from './gfx/market.js';
+import { buildShrine } from './gfx/shrine.js';
 import { buildCare } from './gfx/care.js';
 import { buildBento, BENTO_ROOM } from './gfx/bento.js';
 import { buildLotus, LOTUS_FIELD } from './gfx/lotus.js';
@@ -21,6 +22,8 @@ import { Crowd } from './gfx/crowd.js';
 import { CareShift, seatFolk } from './work/care_shift.js';
 import { BentoShift } from './work/bento_shift.js';
 import { LotusShift } from './work/lotus_shift.js';
+import { DayOff } from './work/dayoff.js';
+import { dayOffSummary } from './core/dayoff_rules.js';
 import { $, show, card, toast, deltaChips, esc, Overhead } from './ui/ui.js';
 import { newState, save, load, clearSave, yen, jpLevel, applyFx } from './core/state.js';
 import { JOBS, NPCS, INTRO, rankOf, rankPay, daysOf, ranksOf } from './core/jobs.js';
@@ -73,6 +76,7 @@ async function boot() {
     G.care = new CareShift({ stage: G.stages.care, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.bento = new BentoShift({ stage: G.stages.bento, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.lotus = new LotusShift({ stage: G.stages.lotus, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
+    G.dayoff = new DayOff({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.streetCrowd = await new Crowd(G.stages.site.scene, { mode: 'street', seed: 331 }).spawnStreet();
     G.streetCrowd.setVisible(false);
     await setPlayer();
@@ -320,7 +324,7 @@ function dayHud(label) {
 
 async function runStep() {
   const S = G.S; hideAll();
-  if (S.story >= DAYS) return weekEnd();
+  if (S.story >= DAYS) return S.flags.dayOff?.done ? weekEnd() : dayOffStep();
   const st = daySteps(S.story, jobOf())[S.sStep];
   // each day starts in the dorm: wake up and walk to the site before the morning meeting
   if (S.sStep === 0 && S.flags.morningDay !== S.story) return morningStep(st);
@@ -651,22 +655,52 @@ async function sleepStep(st) {
   if (after) setTimeout(() => G.mode === 'evening' && G.evening.tip('今日の一言', after, 6), 900);
 }
 
+/** The shrine stage is built the first time the player enters さくら神社 on the day off. */
+let shrineP = null;
+function ensureShrine() {
+  if (!shrineP) {
+    shrineP = buildShrine().then((sh) => {
+      G.stages.shrine = sh;
+      return sh;
+    });
+  }
+  return shrineP;
+}
+
+async function dayOffStep(demo = false) {
+  if (!G.stages.shrine) { toast('⛩️ Đang vào đền さくら神社…', '日曜日 · Ngày nghỉ'); await ensureShrine(); }
+  hideNpcs();
+  await dress(false);
+  const [hung, hoa] = [await npc('hung', 'shrine'), await npc('hoa', 'shrine')];
+  await spawnWorkers();
+  G.mode = 'dayoff';
+  G.dayoff.start({
+    S: G.S,
+    stages: G.stages,
+    who: { player: G.player, hung, hoa },
+    setStage,
+    storage: demo ? null : storage,
+    demo,
+    onEnd: () => weekEnd(),
+  });
+}
+
 function weekEnd() {
   const S = G.S, e = weekEval(S);
-  if (e.bonus && !S.flags.weekBonus) { applyFx(S, { money: e.bonus }); S.flags.weekBonus = true; save(S, storage); }
+  if (e.bonus && !S.flags.weekBonus) { applyFx(S, { money: e.bonus }); S.flags.weekBonus = true; if (!S.flags.demo) save(S, storage); }
   setStage('town'); G.stages.town.setTime('day'); hideNpcs();
   G.mode = 'talk';
   dayHud('Đánh giá tuần đầu');
   $('day-label').textContent = `📋 Tuần đầu ở ${JOBS[S.job].place.toLowerCase()}`;
+  const btns = S.flags.demo
+    ? [{ label: '← Về chế độ thử', on: demoScreen }, { label: 'Về màn hình chính', cls: 'ghost', on: titleScreen }]
+    : [{ label: 'Về màn hình chính', on: titleScreen }, { label: 'Chơi lại từ đầu', cls: 'ghost', on: () => { clearSave(storage); creatorScreen(); } }];
   card(`<h2>📋 Tuần đầu ở ${esc(JOBS[S.job].place)}</h2>
     <div class="big">${e.grade.split(' ')[0]}</div>
     <h2 style="text-align:center">${esc(e.grade.split(' ').slice(1).join(' '))}</h2>
     <p class="jpline" style="text-align:center">「${esc(e.jp)}」</p>
-    <ul><li>🏆 Thử thách vượt qua: ${e.win}/5</li><li>🤝 Người sẵn sàng giúp bạn: ${e.ally}</li><li>👀 Lần bị để ý: ${e.watch}</li>${e.bonus ? `<li>💰 Thưởng: +${yen(e.bonus)}</li>` : ''}</ul>
-    <p class="lesson">Vòng tháng làm việc (lương, trả nợ, tăng ca, sự kiện tháng) sẽ có ở M3. Bạn có thể chơi lại tuần đầu hoặc thử các ca thử thách.</p>`, [
-    { label: 'Về màn hình chính', on: titleScreen },
-    { label: 'Chơi lại từ đầu', cls: 'ghost', on: () => { clearSave(storage); creatorScreen(); } },
-  ]);
+    <ul><li>🏆 Thử thách vượt qua: ${e.win}/5</li><li>🤝 Người sẵn sàng giúp bạn: ${e.ally}</li><li>👀 Lần bị để ý: ${e.watch}</li><li>${esc(dayOffSummary(S))}</li>${e.bonus ? `<li>💰 Thưởng: +${yen(e.bonus)}</li>` : ''}</ul>
+    <p class="lesson">Vòng tháng làm việc (lương, trả nợ, tăng ca, sự kiện tháng) sẽ có ở M3. Bạn có thể chơi lại tuần đầu hoặc thử các ca thử thách.</p>`, btns);
 }
 
 // ---------- demo: try any afternoon challenge, no scoring ----------
@@ -692,6 +726,9 @@ const CREDITS = [
   ['Kệ siêu thị', 'Low Poly Store Shelves and Supermarket Rack Pack', 'Ankitimation', '3c5ec087909140c2a9483bb9bb838a25', 'CC BY 4.0'],
   ['Đồ siêu thị', 'Super market asset [low poly] [pixel]', 'Kanna-Nakajima', '9d6158220c894c2a8e28e48178f72a6c', 'CC BY 4.0'],
   ['Bếp ga', 'Gas Stove', 'Xin', 'acf506540b6a4c25b6836d6e12aac57b', 'CC BY 4.0'],
+  ['Cổng torii', 'Japanese Torii gate Game Asset', 'Bazylonator', 'e12d2fa1b2b94928b8b87cb7787e2462', 'CC BY 4.0'],
+  ['Đèn đá', 'Japanese Stone Lantern', 'Sahir Virmani', 'e0417d1e05984727a50f9ab1451d162d', 'CC BY 4.0'],
+  ['Đền', 'Japanese shrine', 'GreenG', '56baeb7b13ba4238a2f54c363e0b', 'CC BY 4.0'],
 ];
 function creditsScreen() {
   hideAll();
@@ -708,6 +745,7 @@ function demoScreen() {
   hideAll(); G.demoJob = null;
   const name = (d) => d.b.label.replace(/^Ca chiều: |^Thử thách cuối tuần: /, '');
   const rows = [
+    { label: '🎌 Ngày nghỉ ở đền', on: () => demoDayOff() },
     { label: '🗑️ Phân loại rác', on: () => demoTrash() },
     { label: '🛒 Siêu thị (20:05)', on: () => demoMarket() },
     { label: '🍳 Nấu cơm', on: () => demoCook() },
@@ -716,7 +754,15 @@ function demoScreen() {
     ...daysOf('bento').map((d, i) => ({ label: `🍱 Ngày ${i + 1}: ${name(d)}`, on: () => demoShift('bento', i) })),
     ...daysOf('lotus').map((d, i) => ({ label: `🪷 Ngày ${i + 1}: ${name(d)}${d.b.rain ? ' 🌧️' : ''}`, on: () => demoShift('lotus', i) })),
   ];
-  card('<h2>🎮 Thử ca làm 3D</h2><p>🗑️ Phân loại rác · 🛒 Siêu thị · 🍳 Nấu cơm · 👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · 🪷 Ruộng sen · không tính điểm.</p>', [...rows, { label: '← Quay lại', cls: 'ghost', on: titleScreen }]);
+  card('<h2>🎮 Thử ca làm 3D</h2><p>🎌 Ngày nghỉ ở đền · 🗑️ Phân loại rác · 🛒 Siêu thị · 🍳 Nấu cơm · 👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · 🪷 Ruộng sen · không tính điểm.</p>', [...rows, { label: '← Quay lại', cls: 'ghost', on: titleScreen }]);
+}
+async function demoDayOff() {
+  hideAll(); hideNpcs();
+  const demoS = newState({ name: G.draft.name || 'Bạn', job: 'site', look: { gender: G.draft.gender, outfit: G.draft.outfit, colors: { ...G.draft.colors } } });
+  demoS.story = DAYS;
+  demoS.flags.demo = true;
+  G.S = demoS;
+  await dayOffStep(true);
 }
 async function demoMarket() {
   hideAll(); hideNpcs();
@@ -838,8 +884,9 @@ function frame() {
   if (G.mode === 'morning') G.morning.update(dt, t);
   if (G.mode === 'evening') G.evening.update(dt, t);
   if (G.mode === 'market') G.market.update(dt, t);
+  if (G.mode === 'dayoff') G.dayoff.update(dt, t);
   if (G.streetCrowd) {
-    const onStreet = G.stageId === 'site' && (G.mode === 'morning' || G.mode === 'evening');
+    const onStreet = G.stageId === 'site' && (G.mode === 'morning' || G.mode === 'evening' || G.mode === 'dayoff');
     G.streetCrowd.setVisible(onStreet);
     if (onStreet) G.streetCrowd.update(dt, P.holder.position);
   }
