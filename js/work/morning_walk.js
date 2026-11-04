@@ -387,7 +387,7 @@ export class MorningWalk {
         this.tip('朝ご飯は？', 'Ăn sáng ở bàn (🍙) hoặc ra cửa đi làm luôn (🚪)', 5);
       }
     }
-    let moving = false;
+    let moving = false, speed = 0;
     if (!this.paused && s.phase !== 'wake' && this.rise < 0 && !s.over) {
       if (this.busy > 0) this.busy -= dt;
       else {
@@ -403,6 +403,7 @@ export class MorningWalk {
         if (!c.target) this.bestD = Infinity;
         if (mag >= 0.05) {
           moving = true;
+          const ox = pos.x, oz = pos.z;
           const room = s.phase === 'room', plat = s.phase === 'platform', inside = s.phase === 'walkin';
           const B = room ? DORM.bounds : plat ? STATION.bounds : inside ? this.walkin.bounds : ROUTE.bounds;
           const blocks = room ? DORM.blocks : plat ? STATION.blocks : inside ? (this.walkin.blocks || []) : ROUTE.blocks;
@@ -413,6 +414,7 @@ export class MorningWalk {
             if (dd < rr && dd > 1e-4) { pos.x = o.x + dx / dd * rr; pos.z = o.z + dz / dd * rr; }
           }
           pos.x = THREE.MathUtils.clamp(pos.x, B.x0, B.x1); pos.z = THREE.MathUtils.clamp(pos.z, B.z0, B.z1);
+          speed = dt > 0 ? Math.hypot(pos.x - ox, pos.z - oz) / dt : 0;
           let dy = Math.atan2(this.dir.x, this.dir.z) - P.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
           P.yaw += dy * Math.min(1, dt * 12);
           tick(s, dt);
@@ -428,7 +430,7 @@ export class MorningWalk {
     }
     if (this.greetT >= 0 && !this.paused) { this.greetT += dt; if (this.greetT > 2.4 && !s.over) { this.greetT = -1; this.finish(); } }
     if (this.rideT >= 0 && !this.paused) { this.rideT += dt; if (this.rideT > 3.4) { this.rideT = -1; this.fadeTo(() => this.enterCare()); } }
-    if (this.rise < 0 && s.phase !== 'wake' && s.phase !== 'ride') P.play(moving ? (this.running && s.phase === 'street' ? 'run' : 'walk') : 'idle');
+    if (this.rise < 0 && s.phase !== 'wake' && s.phase !== 'ride') P.moveAt(speed);
 
     // camera
     camera.fov = portrait ? 56 : 46; camera.updateProjectionMatrix();

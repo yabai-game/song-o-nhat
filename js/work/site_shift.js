@@ -135,7 +135,7 @@ export class SiteShift {
     if (!this.active) return;
     const s = this.st, p = this.who.player, pos = p.holder.position;
     const c = this.controls;
-    let moving = false;
+    let moving = false, speed = 0;
     if (!this.paused && this.intro <= 0 && s.busy <= 0 && !s.over) {
       let mag = c.input(this.dir);
       if (mag < 0.05 && c.target) {
@@ -145,6 +145,7 @@ export class SiteShift {
       } else if (mag >= 0.05) { this.dir.multiplyScalar(1 / Math.max(mag, 1e-4)); }
       if (mag >= 0.05) {
         moving = true;
+        const ox = pos.x, oz = pos.z;
         const sp = speedOf(s, this.opts.walk) * mag * dt;
         pos.x += this.dir.x * sp; pos.z += this.dir.z * sp;
         for (const o of BLOCK) {
@@ -155,16 +156,13 @@ export class SiteShift {
         if (dd < 0.7 && dd > 1e-4) { pos.x = f.x + dx / dd * 0.7; pos.z = f.z + dz / dd * 0.7; }
         pos.x = THREE.MathUtils.clamp(pos.x, SITE_BOUNDS.x0, SITE_BOUNDS.x1);
         pos.z = THREE.MathUtils.clamp(pos.z, SITE_BOUNDS.z0, SITE_BOUNDS.z1);
+        speed = dt > 0 ? Math.hypot(pos.x - ox, pos.z - oz) / dt : 0;
         const want = Math.atan2(this.dir.x, this.dir.z);
         let dy = want - p.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         p.yaw += dy * Math.min(1, dt * 12);
       }
     }
-    // animation: carry clip while holding pipes (walking or standing), run/walk/idle otherwise
-    const anim = moving ? (s.run ? 'run' : 'walk') : 'idle';
-    p.play(anim);
-    const a = p.acts[p.cur];
-    if (a) a.timeScale = moving ? (this.opts.walk || 1) * (s.carry && !s.run ? 0.9 : 1) : 1;
+    p.moveAt(speed);
     p.shoulderTo = s.carry ? 1 : 0;
 
     if (!this.paused) {

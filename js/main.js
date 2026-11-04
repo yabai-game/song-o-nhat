@@ -183,11 +183,14 @@ async function spawnWorkers() {
 function updateWorkers(dt) {
   for (const ch of G.workers) {
     const w = ch.w, p = ch.holder.position;
-    if (w.wait > 0) { w.wait -= dt; ch.play('idle'); if (w.wait <= 0) { w.tx = w.x + (Math.random() - 0.5) * w.xr; w.tz = w.z + (Math.random() - 0.5) * w.zr; } }
+    if (w.wait > 0) { w.wait -= dt; ch.moveAt(0); if (w.wait <= 0) { w.tx = w.x + (Math.random() - 0.5) * w.xr; w.tz = w.z + (Math.random() - 0.5) * w.zr; } }
     else {
       const dx = w.tx - p.x, dz = w.tz - p.z, d = Math.hypot(dx, dz);
-      if (d < 0.1) { w.wait = 1 + Math.random() * 3; continue; }
-      p.x += dx / d * 1.5 * dt; p.z += dz / d * 1.5 * dt; ch.yaw = Math.atan2(dx, dz); ch.play('walk');
+      if (d < 0.1) { w.wait = 1 + Math.random() * 3; ch.moveAt(0); continue; }
+      const ox = p.x, oz = p.z;
+      p.x += dx / d * 1.5 * dt; p.z += dz / d * 1.5 * dt;
+      ch.yaw = Math.atan2(dx, dz);
+      ch.moveAt(dt > 0 ? Math.hypot(p.x - ox, p.z - oz) / dt : 0);
     }
   }
 }

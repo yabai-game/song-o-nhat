@@ -1,7 +1,7 @@
 // Street pedestrians (south street on the site stage) and platform passengers (Sakura station).
 import { makeCharacter } from './chars.js';
 import { STATION } from './station.js';
-import { CROWD, KINDS, rng, pickLooks, makeWalker, stepWalker } from '../core/crowd.js';
+import { CROWD, KINDS, rng, pickLooks, makeWalker, stepWalker, turnYaw } from '../core/crowd.js';
 
 export const STREET_LANES = [
   { z: 22.3, x0: -30, x1: 8.5 },
@@ -42,8 +42,8 @@ export class Crowd {
         const ch = chars[k++];
         const w = makeWalker(lane, this.rand);
         ch.holder.position.set(w.x, 0, w.z);
-        ch.yaw = w.dir * (Math.PI / 2);
-        ch.play('walk');
+        ch.yaw = w.yaw;
+        ch.moveAt(w.speed);
         ch.holder.visible = this.visible;
         this.scene.add(ch.holder);
         this.items.push({ ch, w, lane });
@@ -72,7 +72,7 @@ export class Crowd {
       const p = this.items[i];
       p.ch.holder.position.set(p.x0, STATION.floor, p.z0);
       p.ch.yaw = 0;
-      p.ch.play('idle');
+      p.ch.moveAt(0);
       p.wait = i * 0.35;
       p.boarding = false;
       p.boarded = false;
@@ -105,9 +105,11 @@ export class Crowd {
           p.boarding = true;
           if (p.wait > 0) {
             p.wait -= dt;
-            p.ch.play('idle');
+            p.ch.yaw = turnYaw(p.ch.yaw, 0, dt, CROWD.TURN_RATE).yaw;
+            p.ch.moveAt(0);
           } else {
             const pos = p.ch.holder.position;
+            const ox = pos.x, oz = pos.z;
             const dx = p.tx - pos.x, dz = p.tz - pos.z, d = Math.hypot(dx, dz);
             const step = CROWD.WALK * dt;
             if (d <= step || d < 0.08) {
@@ -118,12 +120,13 @@ export class Crowd {
             }
             pos.x += (dx / d) * step;
             pos.z += (dz / d) * step;
-            p.ch.yaw = Math.atan2(dx, dz);
-            p.ch.play('walk');
+            p.ch.yaw = turnYaw(p.ch.yaw, Math.atan2(dx, dz), dt, CROWD.TURN_RATE).yaw;
+            const speed = dt > 0 ? Math.hypot(pos.x - ox, pos.z - oz) / dt : 0;
+            p.ch.moveAt(speed);
           }
         } else {
-          p.ch.yaw = 0;
-          p.ch.play('idle');
+          p.ch.yaw = turnYaw(p.ch.yaw, 0, dt, CROWD.TURN_RATE).yaw;
+          p.ch.moveAt(0);
         }
         p.ch.update(dt);
       }
@@ -131,11 +134,13 @@ export class Crowd {
     }
     for (let i = 0; i < this.items.length; i++) {
       const p = this.items[i];
+      const ox = p.w.x;
       const state = stepWalker(p.w, dt, this.rand, p.lane, playerPos);
       p.ch.holder.position.x = p.w.x;
       p.ch.holder.position.z = p.w.z;
-      p.ch.yaw = p.w.dir * (Math.PI / 2);
-      p.ch.play(state);
+      p.ch.yaw = p.w.yaw !== undefined ? p.w.yaw : p.w.dir * (Math.PI / 2);
+      const speed = state === 'walk' && dt > 0 ? Math.abs(p.w.x - ox) / dt : 0;
+      p.ch.moveAt(speed);
       p.ch.update(dt);
     }
   }

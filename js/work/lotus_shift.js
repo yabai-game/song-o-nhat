@@ -43,9 +43,12 @@ export class LotusShift {
     P.unpinAll();
     P.holder.rotation.x = 0;
     P.bendTo = 0;
+    P.reachTo = 0;
+    P.reach = 0;
+    P.wristSway = 0;
     P.holder.position.set(LOTUS_FIELD.player.x, LOTUS.GROUND_Y, LOTUS_FIELD.player.z);
     P.yaw = LOTUS_FIELD.player.yaw;
-    P.play('idle');
+    P.moveAt(0);
 
     if (F) {
       F.holder.position.set(LOTUS_FIELD.foreman.x, 0, LOTUS_FIELD.foreman.z);
@@ -98,6 +101,9 @@ export class LotusShift {
     show('sh-tip', false);
     if (this.who && this.who.player) {
       this.who.player.bendTo = 0;
+      this.who.player.reachTo = 0;
+      this.who.player.reach = 0;
+      this.who.player.wristSway = 0;
       this.who.player.holder.position.y = 0;
     }
   }
@@ -152,6 +158,20 @@ export class LotusShift {
       this.controls.target = null;
       P.yaw = Math.atan2(sp.x - pos.x, sp.z - pos.z);
       P.bendTo = id === 'wash' ? 0.35 : 0.65;
+      if (id === 'dig') {
+        P.reachTo = 1;
+        P.wristSway = 0;
+      } else if (id === 'wash') {
+        P.reachTo = 0.7;
+        P.wristSway = 1;
+      } else if (id === 'pull') {
+        P.reach = 1;
+        P.reachTo = 1;
+        P.wristSway = 0;
+      } else if (id === 'collect') {
+        P.reachTo = 0.6;
+        P.wristSway = 0;
+      }
       const stp = STEPS[id];
       this.overhead.say(P, `${stp.jp}！`, 1.1);
       if (sp.state < 4) {
@@ -203,15 +223,25 @@ export class LotusShift {
     if (!this.active) return;
     const s = this.st, P = this.who.player, pos = P.holder.position, c = this.controls;
     const portrait = isPortrait();
-    let moving = false;
+    let moving = false, speed = 0;
 
     if (!this.paused) {
       if (this.intro > 0) this.intro -= dt;
       else {
         const ev = step(s, dt);
-        if (ev.includes('ready')) P.bendTo = 0;
+        if (ev.includes('ready')) {
+          P.bendTo = 0;
+          P.reachTo = 0;
+          P.wristSway = 0;
+        }
         if (ev.includes('warn10')) this.tip('あと10秒！', 'Còn 10 giây!', 3);
         if (ev.includes('lose')) this.lose();
+
+        if (s.busy > 0 && s.busyStep === 'pull') {
+          const pullF = Math.max(0, s.busy / STEPS.pull.time);
+          P.reach = pullF;
+          P.reachTo = pullF;
+        }
 
         if (s.busy <= 0 && !s.over) {
           let mag = c.input(this.dir);
@@ -225,11 +255,13 @@ export class LotusShift {
           }
           if (mag >= 0.05) {
             moving = true;
-            const speed = LOTUS.WALK * (s.walk || 1) * (s.rain ? 0.92 : 1) * mag * dt;
+            const ox = pos.x, oz = pos.z;
+            const stepDist = LOTUS.WALK * (s.walk || 1) * (s.rain ? 0.92 : 1) * mag * dt;
             const B = LOTUS.BOUNDS;
-            pos.x = THREE.MathUtils.clamp(pos.x + this.dir.x * speed, B.x0, B.x1);
-            pos.z = THREE.MathUtils.clamp(pos.z + this.dir.z * speed, B.z0, B.z1);
+            pos.x = THREE.MathUtils.clamp(pos.x + this.dir.x * stepDist, B.x0, B.x1);
+            pos.z = THREE.MathUtils.clamp(pos.z + this.dir.z * stepDist, B.z0, B.z1);
             pos.y = LOTUS.GROUND_Y;
+            speed = dt > 0 ? Math.hypot(pos.x - ox, pos.z - oz) / dt : 0;
             let dy = Math.atan2(this.dir.x, this.dir.z) - P.yaw;
             dy = Math.atan2(Math.sin(dy), Math.cos(dy));
             P.yaw += dy * Math.min(1, dt * 10);
@@ -255,7 +287,7 @@ export class LotusShift {
       if (this.endT < 0) this.win();
     }
 
-    P.play(moving ? 'walk' : 'idle');
+    P.moveAt(speed);
 
     // Camera: showcase overview during intro, then follow player over the lotus paddy
     camera.fov = portrait ? 56 : 46;

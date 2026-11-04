@@ -5,7 +5,7 @@ export const LOTUS = {
   GROUND_Y: -0.14,     // mud depth: player stands 0.14 m lower than the bund
   REACH: 2.3,          // max distance (m) to work on the nearest unfinished lotus spot
   HIDE_CAM_DIST: 3.2,  // hide lotus leaf instances closer than 3.2 m to the camera
-  WALK: 3.4,           // base walking speed in the mud paddy (m/s), scaled by opts.walk
+  WALK: 1.8,           // base walking speed in the mud paddy (m/s), scaled by opts.walk; ≤ GAIT.WALK_MAX so wading uses the walk clip
   BOUNDS: { x0: -10.5, x1: 10.5, z0: -3.8, z1: 5.2 },
   SPOTS: [
     [-2.2, 2],

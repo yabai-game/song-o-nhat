@@ -42,7 +42,7 @@ export class BentoShift {
     Object.assign(this, { opts, who, meta, onEnd });
     this.st = createBento(opts);
     const P = who.player, F = who.foreman;
-    P.unpinAll(); P.holder.rotation.x = 0; P.bendTo = 0;
+    P.unpinAll(); P.holder.rotation.x = 0; P.bendTo = 0; P.reachTo = 0; P.reach = 0;
     P.holder.position.set(BENTO_ROOM.player.x, 0, BENTO_ROOM.player.z);
     P.yaw = BENTO_ROOM.player.yaw; P.play('idle');
     if (F) {
@@ -79,7 +79,8 @@ export class BentoShift {
     for (const a of ACTIONS) this.btn[a.id].classList.remove('hot');
     this.stage.clearTrays();
     show('shifthud', false); show('sh-tip', false);
-    if (this.who && this.who.player) this.who.player.bendTo = 0;
+    clearTimeout(this.reachT);
+    if (this.who && this.who.player) { this.who.player.bendTo = 0; this.who.player.reachTo = 0; }
   }
 
   tip(jp, vi, sec = 5.5) {
@@ -110,7 +111,9 @@ export class BentoShift {
     }
     if (r === 'good') {
       const it = ITEMS[id];
-      P.bendTo = 0.35; setTimeout(() => { if (this.active) P.bendTo = 0; }, 140);
+      P.bendTo = 0.35; P.reachTo = 1;
+      clearTimeout(this.reachT);
+      this.reachT = setTimeout(() => { if (this.active) { P.bendTo = 0; P.reachTo = 0; } }, 250);
       this.tip(it.jp, `Đúng rồi! ${it.vi}`, 2.2);
       this.stage.syncTrays(s.trays);
       if (s.result === 'win') this.endT = 0.5;

@@ -1,4 +1,7 @@
 // Pure rules for street pedestrians and platform passengers (no DOM, three.js or timers).
+import { turnYaw } from './gait.js';
+
+export { turnYaw };
 
 export const CROWD = {
   WALK: 1.25,
@@ -7,6 +10,7 @@ export const CROWD = {
   PAUSE_MAX: 3,
   PAUSE_CHANCE: 0.2,
   AVOID: 0.9,
+  TURN_RATE: 6,
 };
 
 export const KINDS = ['hoodie', 'suit', 'f_casual', 'f_office', 'elder_m', 'elder_f', 'npc_black'];
@@ -78,7 +82,7 @@ export function makeWalker(lane, rand = Math.random) {
   const x = lane.x0 + rand() * (lane.x1 - lane.x0);
   const dir = rand() < 0.5 ? -1 : 1;
   const speed = CROWD.WALK + (rand() * 2 - 1) * CROWD.WALK_VAR;
-  return { x, z: lane.z, dir, speed, pause: 0 };
+  return { x, z: lane.z, dir, yaw: dir * (Math.PI / 2), speed, pause: 0 };
 }
 
 /** Advance walker by dt seconds; returns 'walk' | 'idle'. Never walks through player or leaves [x0, x1]. */
@@ -87,6 +91,16 @@ export function stepWalker(w, dt, rand = Math.random, lane, player = null) {
     if (w.x < lane.x0) w.x = lane.x0;
     else if (w.x > lane.x1) w.x = lane.x1;
     if (lane.z !== undefined) w.z = lane.z;
+  }
+  if (w.yaw !== undefined) {
+    const targetYaw = w.dir * (Math.PI / 2);
+    const t = turnYaw(w.yaw, targetYaw, dt, CROWD.TURN_RATE);
+    if (t.turning || Math.abs(t.yaw - w.yaw) > 1e-6) {
+      w.yaw = t.yaw;
+      if (w.pause > 0) w.pause = Math.max(0, w.pause - dt);
+      return 'idle';
+    }
+    w.yaw = targetYaw;
   }
   if (player && Math.hypot(w.x - player.x, w.z - player.z) < CROWD.AVOID) {
     w.pause = Math.max(w.pause, 0.3);
@@ -124,7 +138,7 @@ export function stepWalker(w, dt, rand = Math.random, lane, player = null) {
       w.pause = CROWD.PAUSE_MIN + rand() * (CROWD.PAUSE_MAX - CROWD.PAUSE_MIN);
       return 'idle';
     }
-    return 'walk';
+    return w.yaw !== undefined ? 'idle' : 'walk';
   }
   if (nx >= lane.x1) {
     w.x = lane.x1;
@@ -133,7 +147,7 @@ export function stepWalker(w, dt, rand = Math.random, lane, player = null) {
       w.pause = CROWD.PAUSE_MIN + rand() * (CROWD.PAUSE_MAX - CROWD.PAUSE_MIN);
       return 'idle';
     }
-    return 'walk';
+    return w.yaw !== undefined ? 'idle' : 'walk';
   }
   w.x = nx;
   return 'walk';

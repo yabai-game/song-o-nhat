@@ -171,7 +171,7 @@ export class EveningWalk {
     if (!this.active || !this.ev) return;
     const e = this.ev, P = this.who.player, pos = P.holder.position, c = this.controls;
     const portrait = isPortrait();
-    let moving = false;
+    let moving = false, speed = 0;
     if (this.lie >= 0) {
       // lying down on the futon pivoting around the hips (0.9 s), then sleep
       this.lie = Math.min(1, this.lie + dt / 0.9);
@@ -192,6 +192,7 @@ export class EveningWalk {
         } else if (mag >= 0.05) this.dir.multiplyScalar(1 / Math.max(mag, 1e-4));
         if (mag >= 0.05) {
           moving = true;
+          const ox = pos.x, oz = pos.z;
           const room = e.phase === 'room' || e.phase === 'bed', B = room ? DORM.bounds : ROUTE.bounds, blocks = room ? DORM.blocks : ROUTE.blocks;
           const sp = WALK * (this.running && !room ? RUN_MUL : 1) * (room ? 0.6 : 1) * mag * dt;
           pos.x += this.dir.x * sp; pos.z += this.dir.z * sp;
@@ -200,6 +201,7 @@ export class EveningWalk {
             if (dd < rr && dd > 1e-4) { pos.x = o.x + dx / dd * rr; pos.z = o.z + dz / dd * rr; }
           }
           pos.x = THREE.MathUtils.clamp(pos.x, B.x0, B.x1); pos.z = THREE.MathUtils.clamp(pos.z, B.z0, B.z1);
+          speed = dt > 0 ? Math.hypot(pos.x - ox, pos.z - oz) / dt : 0;
           let dy = Math.atan2(this.dir.x, this.dir.z) - P.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
           P.yaw += dy * Math.min(1, dt * 12);
           tick(e, dt);
@@ -208,7 +210,7 @@ export class EveningWalk {
       if ((e.phase === 'toSpot' || e.phase === 'toDorm') && Math.hypot(pos.x - this.target.x, pos.z - this.target.z) < 1.6) this.arrived();
       if (this.toFuton && !c.target) { this.toFuton = false; this.lie = 0; }
     }
-    if (this.lie < 0 && P.cur !== 'talk') P.play(moving ? (this.running && e.phase !== 'room' ? 'run' : 'walk') : 'idle');
+    if (this.lie < 0) P.moveAt(speed);
 
     // camera: over-the-back on the street, diorama view in the room
     camera.fov = portrait ? 56 : 46; camera.updateProjectionMatrix();

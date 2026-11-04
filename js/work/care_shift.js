@@ -12,7 +12,7 @@ const ACTIONS = [
   { id: 'talk', icon: '💬', label: 'Trò chuyện', jp: '話す' },
   { id: 'comfort', icon: '❤️', label: 'Dỗ dành', jp: 'なだめる' },
 ];
-const WALK = 3.0, NEAR_TAG = 4.2, SEAT = 0.52;
+const WALK = 1.9, NEAR_TAG = 4.2, SEAT = 0.52;
 
 export class CareShift {
   constructor({ stage, controls, overhead, camRig }) {
@@ -39,7 +39,7 @@ export class CareShift {
     Object.assign(this, { opts, who, meta, onEnd });
     this.st = createCare(opts, who.folk.length);
     const p = who.player;
-    p.unpinAll(); p.holder.rotation.x = 0; p.bendTo = 0; if (p.helmet) p.helmet.visible = false;
+    p.unpinAll(); p.holder.rotation.x = 0; p.bendTo = 0; p.reachTo = 0; if (p.helmet) p.helmet.visible = false;
     p.holder.position.set(CARE_ROOM.start.x, 0, CARE_ROOM.start.z); p.yaw = CARE_ROOM.start.yaw; p.play('idle');
     who.nurse.holder.position.set(CARE_ROOM.nurse.x, 0, CARE_ROOM.nurse.z); who.nurse.yaw = Math.PI / 2; who.nurse.play('idle');
     seatFolk(who.folk);
@@ -64,6 +64,7 @@ export class CareShift {
     this.tags = [];
     show('shifthud', false); show('sh-tip', false);
     this.who.player.bendTo = 0;
+    this.who.player.reachTo = 0;
   }
 
   tip(jp, vi, sec = 6.5) {
@@ -91,8 +92,11 @@ export class CareShift {
     if (r === 'good') {
       this.overhead.say(P, `${N.say} — ${N.sayVi}`, 3);
       this.tip(N.say, N.sayVi, 3.5);
-      if (id === 'feed' || id === 'wipe') { P.bendTo = 0.45; setTimeout(() => { P.bendTo = 0; }, CARE.ACT_TIME * 1000); }
-      else { P.play('talk'); setTimeout(() => this.active && P.play('idle'), CARE.ACT_TIME * 1000); }
+      if (id === 'feed' || id === 'wipe') {
+        P.bendTo = 0.45;
+        P.reachTo = 0.8;
+        setTimeout(() => { P.bendTo = 0; P.reachTo = 0; }, CARE.ACT_TIME * 1000);
+      } else { P.play('talk'); setTimeout(() => this.active && P.play('idle'), CARE.ACT_TIME * 1000); }
       setTimeout(() => this.active && this.overhead.say(f, '😊 ありがとう — Cảm ơn cháu', 2.2), 500);
       if (s.result === 'win') this.endT = 0.6;
     } else if (r === 'bad') {
@@ -130,7 +134,7 @@ export class CareShift {
   update(dt) {
     if (!this.active) return;
     const s = this.st, P = this.who.player, pos = P.holder.position, c = this.controls, portrait = isPortrait();
-    let moving = false;
+    let speed = 0;
     if (!this.paused && this.intro <= 0 && !s.over && s.busy <= 0) {
       let mag = c.input(this.dir);
       if (mag < 0.05 && c.target) {
@@ -140,7 +144,7 @@ export class CareShift {
         if (d < 0.1 || this.stuckT > 0.4) { c.target = null; mag = 0; this.bestD = Infinity; this.stuckT = 0; } else { this.dir.multiplyScalar(1 / d); mag = 1; }
       } else if (mag >= 0.05) this.dir.multiplyScalar(1 / Math.max(mag, 1e-4));
       if (mag >= 0.05) {
-        moving = true;
+        const ox = pos.x, oz = pos.z;
         const sp = WALK * mag * dt;
         pos.x += this.dir.x * sp; pos.z += this.dir.z * sp;
         for (const o of this.stage.blocks) {
@@ -149,11 +153,12 @@ export class CareShift {
         }
         const B = CARE_ROOM.bounds;
         pos.x = THREE.MathUtils.clamp(pos.x, B.x0, B.x1); pos.z = THREE.MathUtils.clamp(pos.z, B.z0, B.z1);
+        speed = dt > 0 ? Math.hypot(pos.x - ox, pos.z - oz) / dt : 0;
         let dy = Math.atan2(this.dir.x, this.dir.z) - P.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         P.yaw += dy * Math.min(1, dt * 12);
       }
     }
-    if (P.cur !== 'talk') P.play(moving ? 'walk' : 'idle');
+    P.moveAt(speed);
     if (!this.paused) {
       if (this.intro > 0) this.intro -= dt;
       else for (const [ev] of step(s, dt)) { if (ev === 'lose') this.lose(); if (ev === 'warn10') this.tip('急いで！', 'Còn 10 giây!', 3); }

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { loadModel } from './stage.js';
+import { gait } from '../core/gait.js';
 
 // One entry per Meshy model. ref = reference colours measured from each texture (sRGB 0..1)
 // by tools/process_character.py. Adding an outfit = one model file + one line here.
@@ -111,6 +112,7 @@ export class Character {
         else if (n === 'Spine1') this.spine1 = o;
         else if (n === 'LeftHand') this.handL = o;
         else if (n === 'RightHand') this.handR = o;
+        else if (n === 'LeftArm') this.armL = o;
         else if (n === 'RightArm') this.armR = o;
         else if (n === 'RightForeArm') this.foreR = o;
         else if (n === 'LeftForeArm') this.foreL = o;
@@ -131,20 +133,37 @@ export class Character {
     this.attach = []; // { obj, bone, bone2, up, side, fwd }
     this.yaw = 0;
     this.bend = 0; this.bendTo = 0; // 0..1 procedural forward bend (pick up, bow)
+    this.reach = 0; this.reachTo = 0; // 0..1 both arms reaching forward (~55°) with forearms bent (~35°)
+    this.wristSway = 0; this.swayT = 0; // 2 Hz left-right wrist sway during water-jet washing
     this.shoulder = 0; this.shoulderTo = 0; // 0..1 right hand up on the shoulder (shoulder carry)
     // bones posed procedurally: clips exported with optimised (constant-track-free) animation may
     // not write these every frame, so restore their rest rotation before each mixer update —
     // otherwise the extra rotation piles up frame after frame and the body folds over
-    this.posed = [this.spine, this.spine1, this.chest, this.armR, this.foreR, this.foreL, this.thighL, this.thighR, this.shinL, this.shinR]
+    this.posed = [this.spine, this.spine1, this.chest, this.armL, this.armR, this.foreL, this.foreR, this.handL, this.handR, this.thighL, this.thighR, this.shinL, this.shinR]
       .filter(Boolean).map((b) => [b, b.quaternion.clone()]);
     this.sit = 0; // 1 = seated (wheelchair): thighs forward, shins down, forearms on the lap
   }
   play(name, fade = 0.25) {
+    if (name === 'idle' || name === 'talk') {
+      const a = this.acts[name];
+      if (a) a.timeScale = 1;
+    }
     if (this.cur === name || !this.acts[name]) return;
     const next = this.acts[name], prev = this.acts[this.cur];
     next.reset().setEffectiveWeight(1).play();
     prev.crossFadeTo(next, fade, false);
     this.cur = name;
+  }
+  /** Select walk/run/idle and match clip playback speed to actual ground speed (m/s). */
+  moveAt(speed) {
+    const g = gait(speed);
+    if (g.clip === 'idle' && this.cur === 'talk') {
+      if (this.acts.talk) this.acts.talk.timeScale = 1;
+      return;
+    }
+    this.play(g.clip);
+    const a = this.acts[this.cur];
+    if (a) a.timeScale = (this.cur === 'idle' || this.cur === 'talk') ? 1 : g.timeScale;
   }
   setColor(slot, hex) {
     const u = this.tint.userData.u, ref = OUTFITS[this.kind].ref;
@@ -182,6 +201,25 @@ export class Character {
       if (this.foreL) tilt(this.foreL, _side, -0.9 * this.sit);
       if (this.foreR) tilt(this.foreR, _side, -0.9 * this.sit);
     }
+    // working reach pose: both upper arms swing forward ~55° (0.96 rad) and forearms bend ~35° (0.61 rad)
+    this.reach += (this.reachTo - this.reach) * Math.min(1, dt * 12);
+    if (this.reach > 0.01) {
+      _side.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+      this.holder.updateMatrixWorld(true);
+      if (this.armL) tilt(this.armL, _side, -this.reach * 0.96);
+      if (this.armR) tilt(this.armR, _side, -this.reach * 0.96);
+      if (this.foreL) tilt(this.foreL, _side, -this.reach * 0.61);
+      if (this.foreR) tilt(this.foreR, _side, -this.reach * 0.61);
+    }
+    if (this.wristSway > 0.01) {
+      this.swayT += dt;
+      const wAngle = Math.sin(this.swayT * Math.PI * 4) * 0.28 * this.wristSway; // 2 Hz left-right sway
+      this.holder.updateMatrixWorld(true);
+      if (this.foreL) tilt(this.foreL, _up, wAngle * 0.45);
+      if (this.foreR) tilt(this.foreR, _up, wAngle * 0.45);
+      if (this.handL) tilt(this.handL, _up, wAngle);
+      if (this.handR) tilt(this.handR, _up, wAngle);
+    }
     // right arm raised so the hand holds a load on the right shoulder (axes found on the Meshy rig)
     this.shoulder += (this.shoulderTo - this.shoulder) * Math.min(1, dt * 10);
     if (this.shoulder > 0.01 && this.armR && this.foreR) {
@@ -202,7 +240,7 @@ export class Character {
   }
 }
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _x = new THREE.Vector3(1, 0, 0);
-const _side = new THREE.Vector3(), _a = new THREE.Vector3(), _qp = new THREE.Quaternion();
+const _side = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _a = new THREE.Vector3(), _qp = new THREE.Quaternion();
 /** rotate a bone by `angle` about a WORLD axis: local' = (parentWorld⁻¹ · axis rotation) · local */
 function tilt(bone, axisW, angle) {
   bone.parent.getWorldQuaternion(_qp);
