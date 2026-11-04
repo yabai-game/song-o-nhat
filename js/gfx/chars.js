@@ -306,3 +306,52 @@ export function wearHelmet(ch, helmet) {
   ch.head.add(helmet);
   void h;
 }
+
+/**
+ * Sanitary food-factory headgear (衛生帽 + マスク): a soft white bouffant hair cap with a short brim,
+ * back hairnet snood, and a pleated white face mask over the nose and mouth, parented to the head bone
+ * via wearHelmet(ch, cap.group).
+ */
+export function makeSanitaryCap(ch, color = '#f6f6f2') {
+  ch.holder.updateMatrixWorld(true);
+  const a = new THREE.Vector3(), b = new THREE.Vector3();
+  ch.head.getWorldPosition(a); ch.headTop.getWorldPosition(b);
+  const h = a.distanceTo(b) || 0.55;
+  const R = h * 0.5;
+  const cloth = new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.02 });
+  const netMat = new THREE.MeshStandardMaterial({ color: '#e8e8e2', roughness: 0.85 });
+  const maskMat = new THREE.MeshStandardMaterial({ color: '#fafafa', roughness: 0.75, side: THREE.DoubleSide });
+  const g = new THREE.Group();
+
+  // soft puffed cap dome covering the crown and sides of the hair
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(R * 1.04, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.58), cloth);
+  dome.scale.set(0.98, 0.94, 1.08);
+  dome.position.set(0, R * 0.02, -R * 0.03);
+  // elastic headband rim
+  const band = new THREE.Mesh(new THREE.TorusGeometry(R * 0.98, R * 0.045, 8, 32), netMat);
+  band.rotation.x = Math.PI / 2; band.scale.set(0.97, 1.07, 1); band.position.y = R * 0.02;
+  // short soft front visor
+  const brimShape = new THREE.Shape();
+  brimShape.absarc(0, 0, R * 1.01, Math.PI * 0.16, Math.PI * 0.84, false);
+  brimShape.absarc(0, 0, R * 0.82, Math.PI * 0.84, Math.PI * 0.16, true);
+  const brim = new THREE.Mesh(new THREE.ExtrudeGeometry(brimShape, { depth: R * 0.035, bevelEnabled: false, curveSegments: 16 }), cloth);
+  brim.rotation.x = -Math.PI / 2 + 0.22; brim.position.set(0, R * 0.04, R * 0.28);
+  // back hairnet snood tucking the hair at the nape
+  const snood = new THREE.Mesh(new THREE.SphereGeometry(R * 0.58, 16, 12), netMat);
+  snood.scale.set(1.05, 0.82, 0.72); snood.position.set(0, -R * 0.34, -R * 0.56);
+
+  // curved pleated face mask covering the lower face (+z)
+  const mask = new THREE.Mesh(
+    new THREE.CylinderGeometry(R * 0.84, R * 0.76, R * 0.46, 20, 1, true, -Math.PI * 0.27, Math.PI * 0.54),
+    maskMat,
+  );
+  mask.position.set(0, -R * 0.56, R * 0.10);
+  // two soft pleat ridges across the mask
+  const p1 = new THREE.Mesh(new THREE.TorusGeometry(R * 0.81, R * 0.016, 6, 20, Math.PI * 0.48), netMat);
+  p1.rotation.set(Math.PI / 2, 0, Math.PI * 0.26); p1.position.set(0, -R * 0.48, R * 0.10);
+  const p2 = p1.clone(); p2.position.y = -R * 0.63;
+
+  g.add(dome, band, brim, snood, mask, p1, p2);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return { group: g, h };
+}

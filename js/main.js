@@ -1,7 +1,7 @@
 // Game flow: title → creator → job → first week at the construction site (M1).
 import * as THREE from 'three';
 import { renderer, camera, resize, isPortrait, CamRig, loadModel } from './gfx/stage.js';
-import { OUTFITS, SWATCH, ensureSrc, makeCharacter, makeHelmet, wearHelmet, refHex } from './gfx/chars.js';
+import { OUTFITS, SWATCH, ensureSrc, makeCharacter, makeHelmet, makeSanitaryCap, wearHelmet, refHex } from './gfx/chars.js';
 import { buildTown } from './gfx/town.js';
 import { buildSite, DECK_Y, WANDER, ROUTE } from './gfx/site.js';
 import { Controls } from './gfx/controls.js';
@@ -11,9 +11,11 @@ import { EveningWalk } from './work/evening_walk.js';
 import { spotFor } from './core/evening.js';
 import { buildDorm } from './gfx/dorm.js';
 import { buildCare } from './gfx/care.js';
+import { buildBento, BENTO_ROOM } from './gfx/bento.js';
 import { buildStation } from './gfx/station.js';
 import { Crowd } from './gfx/crowd.js';
 import { CareShift, seatFolk } from './work/care_shift.js';
+import { BentoShift } from './work/bento_shift.js';
 import { $, show, card, toast, deltaChips, esc, Overhead } from './ui/ui.js';
 import { newState, save, load, clearSave, yen, jpLevel, applyFx } from './core/state.js';
 import { JOBS, NPCS, INTRO, rankOf, rankPay, daysOf, ranksOf } from './core/jobs.js';
@@ -41,16 +43,18 @@ const NPC_LOOK = {
 // care home residents: model + cardigan colour (Tanaka-san, Suzuki-san, Sato-san, Kimura-san)
 const FOLK_LOOK = [['elder_m', '#4f7f8f'], ['elder_f', '#a0605f'], ['elder_m', '#8a7a4f'], ['elder_f', '#6d6a9a']];
 const WORK_COLORS = { top: '#1f3148', bottom: '#1c2c42' }; // JOB_OUTFIT.site: navy work clothes
+const BENTO_COLORS = { top: '#f2f2ee', bottom: '#f2f2ee' }; // JOB_OUTFIT.bento: white sanitary clothes
 
 // ---------- boot ----------
 async function boot() {
   try {
     const fontReady = document.fonts ? document.fonts.load('700 48px "Zen Maru Gothic"', 'ラーメン安全第一') : Promise.resolve();
-    let done = 0; const tick = (p) => p.then((v) => { done++; $('bar').style.width = `${Math.round(done / 6 * 100)}%`; return v; });
-    const [town, site, care] = await Promise.all([tick(buildTown()), tick(buildSite()), tick(buildCare()), tick(ensureSrc('hoodie')), tick(ensureSrc('suit')), tick(fontReady.catch(() => {}))]);
+    let done = 0; const tick = (p) => p.then((v) => { done++; $('bar').style.width = `${Math.round(done / 7 * 100)}%`; return v; });
+    const [town, site, care, bento] = await Promise.all([tick(buildTown()), tick(buildSite()), tick(buildCare()), tick(buildBento()), tick(ensureSrc('hoodie')), tick(ensureSrc('suit')), tick(fontReady.catch(() => {}))]);
     G.stages.town = town;
     G.stages.site = site;
     G.stages.care = care;
+    G.stages.bento = bento;
     G.stages.dorm = buildDorm({ lowtable: await loadModel('lowtable') });
     $('bar').style.width = '100%';
     G.controls = new Controls($('joy'));
@@ -58,6 +62,7 @@ async function boot() {
     G.morning = new MorningWalk({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.evening = new EveningWalk({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.care = new CareShift({ stage: G.stages.care, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
+    G.bento = new BentoShift({ stage: G.stages.bento, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.streetCrowd = await new Crowd(G.stages.site.scene, { mode: 'street', seed: 331 }).spawnStreet();
     G.streetCrowd.setVisible(false);
     await setPlayer();
@@ -90,6 +95,7 @@ async function setPlayer() {
   else ch.holder.position.set(0, 0, 1.2);
   G.player = ch; G.own = ch;
   const h = makeHelmet(ch); wearHelmet(ch, h.group); ch.helmet = h.group; h.group.visible = G.stageId === 'site';
+  const c = makeSanitaryCap(ch); wearHelmet(ch, c.group); ch.cap = c.group; c.group.visible = G.stageId === 'bento';
   G.stage && G.stage.scene.add(ch.holder);
 }
 
@@ -98,12 +104,15 @@ async function npc(id, where) {
   if (!G.npcs[id]) {
     const ch = await makeCharacter(L.kind, L.colors);
     if (L.helmet) { const h = makeHelmet(ch, L.helmet); wearHelmet(ch, h.group); ch.helmet = h.group; }
+    if (id === 'tanaka' || id === 'sato') { const c = makeSanitaryCap(ch); wearHelmet(ch, c.group); ch.cap = c.group; c.group.visible = false; }
     G.npcs[id] = ch;
   }
   const ch = G.npcs[id];
   G.stages[where].scene.add(ch.holder);
   ch.unpinAll();
   if (ch.helmet) ch.helmet.visible = where === 'site';
+  if (ch.cap) ch.cap.visible = where === 'bento';
+  if (id === 'tanaka' || id === 'sato') ch.look(where === 'bento' ? { ...L.colors, ...BENTO_COLORS } : L.colors);
   return ch;
 }
 function hideNpcs() { for (const ch of Object.values(G.npcs)) { ch.holder.parent?.remove(ch.holder); ch.unpinAll(); } }
@@ -120,10 +129,19 @@ function swapPlayer(ch) {
   G.player = ch; G.stage && G.stage.scene.add(ch.holder);
   return ch;
 }
-/** At work in the care home the player wears the caregiver uniform; elsewhere their own outfit. */
+/** At work in the care home the player wears the caregiver uniform; in the bento factory, the white sanitary uniform + cap + mask; elsewhere their own outfit. */
 async function dress(atWork) {
-  const kind = atWork && jobOf() === 'care' ? (lookOf().gender === 'f' ? 'care_f' : 'care_m') : null;
-  if (!kind) return swapPlayer(G.own);
+  const job = jobOf();
+  const kind = atWork && job === 'care' ? (lookOf().gender === 'f' ? 'care_f' : 'care_m') : null;
+  if (!kind) {
+    const ch = swapPlayer(G.own);
+    if (ch) {
+      if (ch.helmet) ch.helmet.visible = false;
+      if (ch.cap) ch.cap.visible = !!(atWork && job === 'bento');
+      ch.look(atWork && job === 'bento' ? { ...lookOf().colors, ...BENTO_COLORS } : lookOf().colors);
+    }
+    return ch;
+  }
   if (!G.wardrobe[kind]) G.wardrobe[kind] = await makeCharacter(kind, { hair: lookOf().colors.hair, skin: lookOf().colors.skin });
   return swapPlayer(G.wardrobe[kind]);
 }
@@ -189,6 +207,7 @@ function hideAll() { for (const id of ['title', 'creator', 'jobs', 'dayhud', 'ta
 function titleScreen() {
   hideAll(); hideNpcs(); setStage('town'); G.stages.town.setTime('day');
   G.demoJob = null; swapPlayer(G.own);
+  if (G.own) { if (G.own.helmet) G.own.helmet.visible = false; if (G.own.cap) G.own.cap.visible = false; G.own.look(G.draft.colors); }
   G.mode = 'title'; G.player.holder.visible = true;
   G.player.holder.position.set(0, 0, 1.2); G.player.play('idle');
   const S = load(storage);
@@ -231,6 +250,7 @@ async function pickOutfit(id) {
 }
 function creatorScreen() {
   hideAll(); setStage('town'); G.stages.town.setTime('day'); swapPlayer(G.own);
+  if (G.own) { if (G.own.helmet) G.own.helmet.visible = false; if (G.own.cap) G.own.cap.visible = false; G.own.look(G.draft.colors); }
   G.mode = 'creator'; G.spin = 0.5;
   outfitList(); ['top', 'bottom', 'hair', 'skin'].forEach(swatchRow);
   $('lbl-bottom').textContent = OUTFITS[G.draft.outfit].bottomLabel;
@@ -311,19 +331,20 @@ function ensureStation() {
 }
 
 async function morningStep(st) {
-  const S = G.S;
+  const S = G.S, job = jobOf();
   hideNpcs(); await dress(false);
   G.mode = 'morning';
-  const train = jobOf() === 'care';
+  const train = job === 'care' || job === 'bento';
   if (train && !G.stages.station) { toast('🚉 Đang tải ga tàu…', 'さくら駅'); await ensureStation(); }
   if (train && G.stationCrowd) G.stationCrowd.reset();
   const [suzuki, hung] = [await npc('suzuki', 'site'), await npc('hung', 'site')];
-  const nurse = train ? await npc('yamada', 'care') : null;
-  if (train) await spawnFolk(); // the residents are already at breakfast when the player walks in
+  const nurse = job === 'care' ? await npc('yamada', 'care') : null;
+  const foreman = job === 'bento' ? await npc('tanaka', 'bento') : null;
+  if (job === 'care') await spawnFolk(); // the residents are already at breakfast when the player walks in
   await spawnWorkers();
   G.morning.start({
-    S, stages: G.stages, who: { player: G.player, suzuki, hung, nurse },
-    commute: jobOf() === 'care' ? 'train' : 'walk',
+    S, stages: G.stages, who: { player: G.player, suzuki, hung, nurse, foreman },
+    commute: train ? 'train' : 'walk',
     setStage, dayLabel: `📅 Ngày ${S.story + 1}/5 · Buổi sáng`,
     onEnd: () => { S.flags.morningDay = S.story; save(S, storage); hideAll(); talkStep(st); },
   });
@@ -338,51 +359,57 @@ function eveningPlace(st) {
 }
 
 async function eveningStep(st) {
-  const S = G.S;
+  const S = G.S, job = jobOf();
   hideNpcs(); await dress(false);
   G.mode = 'evening';
   await spawnWorkers();
   G.evening.start({
     S, spot: spotFor(st.data), stages: G.stages, who: { player: G.player }, setStage,
-    from: jobOf() === 'care' ? 'station' : 'gate',
+    from: job === 'care' || job === 'bento' ? 'station' : 'gate',
     dayLabel: `📅 Ngày ${S.story + 1}/5 · Buổi tối`,
     onArrive: () => { S.flags.eveningDay = S.story; save(S, storage); talkStep(st, eveningPlace(st)); },
   });
 }
 
 async function talkStep(st, where = null) {
-  const d = st.data, atWork = st.at === 'work' && !where, atCare = atWork && jobOf() === 'care';
+  const d = st.data, job = jobOf(), atWork = st.at === 'work' && !where;
+  const atCare = atWork && job === 'care', atBento = atWork && job === 'bento';
   await dress(atWork);
-  setStage(where ? where.stage : atCare ? 'care' : atWork ? 'site' : 'town');
+  setStage(where ? where.stage : atCare ? 'care' : atBento ? 'bento' : atWork ? 'site' : 'town');
   hideNpcs();
   G.mode = 'talk';
-  G.talkCam = where ? where.cam : atCare ? 'care' : atWork ? 'deck' : 'town';
+  G.talkCam = where ? where.cam : atCare ? 'care' : atBento ? 'bento' : atWork ? 'deck' : 'town';
   const P = G.player; P.play('idle');
   if (atCare) {
     P.unpinAll(); P.holder.rotation.x = 0;
     await spawnFolk();
     P.holder.position.set(0.4, 0, 3.6);
+  } else if (atBento) {
+    P.unpinAll(); P.holder.rotation.x = 0;
+    G.stages.bento.clearTrays();
+    P.holder.position.set(BENTO_ROOM.talkPlayer.x, 0, BENTO_ROOM.talkPlayer.z);
   } else if (atWork) {
     P.look({ ...G.S.look.colors, ...WORK_COLORS }); P.unpinAll(); P.helmet.visible = true;
     G.stages.site.setWeather({}); G.stages.site.setTime('day'); G.stages.site.ring.visible = false;
     await spawnWorkers();
     P.holder.position.set(-1.2, DECK_Y, 1.9);
   } else if (where) {
-    P.look(G.S.look.colors); P.unpinAll(); if (P.helmet) P.helmet.visible = false; P.holder.rotation.x = 0;
+    P.look(G.S.look.colors); P.unpinAll(); if (P.helmet) P.helmet.visible = false; if (P.cap) P.cap.visible = false; P.holder.rotation.x = 0;
     if (where.stage === 'site') { G.stages.site.setWeather({}); G.stages.site.setTime('dusk'); G.stages.site.ring.visible = false; }
     else G.stages.dorm.setTime('night');
     P.holder.position.set(where.pos.x, 0, where.pos.z);
   } else {
-    P.look(G.S.look.colors); P.unpinAll(); if (P.helmet) P.helmet.visible = false;
+    P.look(G.S.look.colors); P.unpinAll(); if (P.helmet) P.helmet.visible = false; if (P.cap) P.cap.visible = false;
     G.stages.town.setTime(st.data.place === 'konbini' || st.data.place === 'bank' ? 'dusk' : 'night');
     P.holder.position.set(-0.6, 0, 2.2);
   }
   let N = null;
   if (d.who) {
-    N = await npc(d.who, where ? where.stage : atCare ? 'care' : atWork ? 'site' : 'town');
+    N = await npc(d.who, where ? where.stage : atCare ? 'care' : atBento ? 'bento' : atWork ? 'site' : 'town');
+    if (where && job !== 'site' && N.helmet) N.helmet.visible = false;
     // on the deck the pair stands across it, so the camera can look along the deck between the rails;
     // on the street they stand side by side in front of the shop, facing each other
-    const off = atWork && !atCare ? [-0.5, -1.5] : G.talkCam === 'street' ? [1.4, 0.15] : [1.5, -0.6];
+    const off = atWork && !atCare && !atBento ? [-0.5, -1.5] : G.talkCam === 'street' ? [1.4, 0.15] : [1.5, -0.6];
     N.holder.position.set(P.holder.position.x + off[0], P.holder.position.y, P.holder.position.z + off[1]);
     N.yaw = Math.atan2(P.holder.position.x - N.holder.position.x, P.holder.position.z - N.holder.position.z);
     P.yaw = Math.atan2(N.holder.position.x - P.holder.position.x, N.holder.position.z - P.holder.position.z);
@@ -415,6 +442,7 @@ async function talkStep(st, where = null) {
 
 async function shiftStep(st) {
   if (jobOf() === 'care') return careShiftStep(st);
+  if (jobOf() === 'bento') return bentoShiftStep(st);
   const S = G.S;
   await dress(true);
   setStage('site'); hideNpcs();
@@ -466,6 +494,31 @@ async function careShiftStep(st, demo = false) {
   ]);
   dayHud(st.label);
   G.camRig.snap(G.stages.care.showcase.pos, G.stages.care.showcase.look);
+}
+
+/** Bento factory shift: stand at the conveyor belt and place the requested side dish into each tray. */
+async function bentoShiftStep(st, demo = false) {
+  const S = G.S || { jobXp: 0, ally: 0, watch: 0 };
+  await dress(true);
+  setStage('bento'); hideNpcs();
+  G.mode = 'shift'; G.activeShift = G.bento;
+  const P = G.player;
+  const foreman = await npc('tanaka', 'bento');
+  const opts = { ...shiftOpts(st.data, st.hard, S), speed: st.data.speed };
+  const rk = rankOf(S.jobXp || 0);
+  const meta = { unit: JOBS.bento.unit, rankLabel: demo ? '🎮 Chế độ thử' : `🎖️ ${rk + 1}/10 ${ranksOf('bento')[rk]}`,
+    onRetry: () => { if (!demo) { retryCost(G.S); save(G.S, storage); } } };
+  const begin = () => G.bento.start(opts, { player: P, foreman }, meta, (r) => (demo ? demoScreen() : shiftDone(st, r)));
+  if (demo) { begin(); return; }
+  card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
+    ${opts.jp ? `<p class="jpline">${esc(opts.jp)}</p>` : ''}
+    <p>${esc(opts.vi || 'Đứng trước băng chuyền, nhìn biểu tượng trên khay rồi bấm đúng món khi khay vào vùng vàng.')}</p>
+    <ul><li>🎯 Đóng gói ${opts.goal} hộp cơm</li>${opts.maxMiss ? `<li>❌ Sai/trôi qua tối đa ${opts.maxMiss} khay</li>` : ''}</ul>
+    <p class="lesson">🍱 Phím 1 / 2 / 3 hoặc chạm nút: 🍗 Gà rán 唐揚げ · 🌭 Xúc xích ウインナー · 🥦 Rau 野菜. Bấm khi khay đã vào vùng vàng.</p>`, [
+    { label: 'Bắt đầu ca →', on: begin },
+  ]);
+  dayHud(st.label);
+  G.camRig.snap(G.stages.bento.showcase.pos, G.stages.bento.showcase.look);
 }
 
 function shiftDone(st, r) {
@@ -536,6 +589,8 @@ const CREDITS = [
   ['Sân ga', 'Nazo no eki (Mystery Station)', 'Thomas Nguyen', '6cbd6ce6354f44a4b6517e8176d8741b', 'CC BY 4.0'],
   ['Cổng soát vé', 'Animated Ticket Gate', '€r!c', '19a605237de941edbd9fe829ca0cfedf', 'CC BY 4.0'],
   ['Ghế sân ga', 'Japan Train Station Bench', 'ditovirnantio', 'e23d79c1014a431bb913d15fc395b4f0', 'CC BY 4.0'],
+  ['Băng chuyền', 'Conveyor Belt', 'Cianon', '55f0d0f9b3384ea4b49cfc8aef97dcf9', 'CC BY 4.0'],
+  ['Hộp cơm bento', 'Low Poly Bento 弁当', 'SaltySaveState', 'f27d78a4526a4fe685b5ae2f75f60c11', 'CC BY 4.0'],
 ];
 function creditsScreen() {
   hideAll();
@@ -554,13 +609,15 @@ function demoScreen() {
   const rows = [
     ...daysOf('site').map((d, i) => ({ label: `👷 Ngày ${i + 1}: ${name(d)}${d.b.wind ? ' 💨' : ''}${d.b.rain ? ' 🌧️' : ''}`, on: () => demoShift('site', i) })),
     ...daysOf('care').map((d, i) => ({ label: `👵 Ngày ${i + 1}: ${name(d)}`, on: () => demoShift('care', i) })),
+    ...daysOf('bento').map((d, i) => ({ label: `🍱 Ngày ${i + 1}: ${name(d)}`, on: () => demoShift('bento', i) })),
   ];
-  card('<h2>🎮 Thử ca làm 3D</h2><p>👷 Công trường · 👵 Viện dưỡng lão · không tính điểm.</p>', [...rows, { label: '← Quay lại', cls: 'ghost', on: titleScreen }]);
+  card('<h2>🎮 Thử ca làm 3D</h2><p>👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · không tính điểm.</p>', [...rows, { label: '← Quay lại', cls: 'ghost', on: titleScreen }]);
 }
 async function demoShift(job, i) {
   G.demoJob = job;
   const W = daysOf(job)[i].b;
   if (job === 'care') return careShiftStep({ data: W, hard: true, label: W.label }, true);
+  if (job === 'bento') return bentoShiftStep({ data: W, hard: true, label: W.label }, true);
   await dress(true);
   setStage('site'); hideNpcs(); G.mode = 'shift'; G.activeShift = G.shift;
   G.player.look({ ...G.draft.colors, ...WORK_COLORS });

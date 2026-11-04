@@ -1,7 +1,8 @@
 // Job data — pure module. Texts and numbers copied from the original (docs/ORIGINAL_SPEC.md §4, Appendix A).
 import { CARE_DAYS, CARE_RANKS } from './care_data.js';
-export { CARE_DAYS, CARE_RANKS };
-// M1: the construction site (`site`); M2: the care home (`care`). Lotus and bento follow.
+import { BENTO_DAYS, BENTO_RANKS } from './bento_data.js';
+export { CARE_DAYS, CARE_RANKS, BENTO_DAYS, BENTO_RANKS };
+// M1: the construction site (`site`); M2: the care home (`care`) and the bento factory (`bento`).
 
 export const JOBS = {
   lotus: { icon: '🪷', sector: 'Nông nghiệp', name: 'Thu hoạch củ sen', place: 'Ruộng sen', area: 'Ibaraki', jp: '蓮田', unit: 'củ sen', ready: false,
@@ -10,7 +11,7 @@ export const JOBS = {
     desc: 'Đút ăn, lau miệng, trò chuyện với các cụ. Phải nghe hiểu tiếng Nhật và nói kính ngữ thật nhẹ nhàng.' },
   site: { icon: '👷', sector: 'Xây dựng 建設', name: 'Vác ống thép trên giàn giáo', place: 'Công trường', area: 'Saitama', jp: '建設現場', unit: 'bó ống thép', ready: true,
     desc: 'Làm việc trên cao, an toàn là trên hết. Chạy trên giàn giáo là bị đốc công mắng ngay!' },
-  bento: { icon: '🍱', sector: 'Thực phẩm 食品', name: 'Xếp cơm hộp trên băng chuyền', place: 'Xưởng cơm hộp', area: 'Chiba', jp: '弁当工場', unit: 'hộp cơm', ready: false,
+  bento: { icon: '🍱', sector: 'Thực phẩm 食品', name: 'Xếp cơm hộp trên băng chuyền', place: 'Xưởng cơm hộp', area: 'Chiba', jp: '弁当工場', unit: 'hộp cơm', ready: true,
     desc: 'Băng chuyền không chờ ai: gắp đúng món vào hộp, đúng lúc. Vệ sinh là số một.' },
 };
 
@@ -143,7 +144,7 @@ export const EVENINGS = [
 ];
 
 /** per-job week data and rank names */
-export const DAYS_BY_JOB = { site: SITE_DAYS, care: CARE_DAYS };
-export const RANKS_BY_JOB = { site: SITE_RANKS, care: CARE_RANKS };
+export const DAYS_BY_JOB = { site: SITE_DAYS, care: CARE_DAYS, bento: BENTO_DAYS };
+export const RANKS_BY_JOB = { site: SITE_RANKS, care: CARE_RANKS, bento: BENTO_RANKS };
 export const daysOf = (job) => DAYS_BY_JOB[job] || SITE_DAYS;
 export const ranksOf = (job) => RANKS_BY_JOB[job] || SITE_RANKS;

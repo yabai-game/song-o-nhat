@@ -8,6 +8,7 @@ import { DORM } from '../gfx/dorm.js';
 import { ROUTE } from '../gfx/site.js';
 import { STATION } from '../gfx/station.js';
 import { CARE_ROOM } from '../gfx/care.js';
+import { BENTO_ROOM } from '../gfx/bento.js';
 import { camera, isPortrait } from '../gfx/stage.js';
 import { $, show, card, esc, deltaChips, deltaText, toast } from '../ui/ui.js';
 
@@ -25,6 +26,31 @@ const SHOW = { wake: ['wake', 'snooze'], room: ['out', 'eat'], street: ['greet',
 // where the nurse waits for the morning greeting, just inside the dining room
 const NURSE_AT = { x: -1.4, z: 2.6 };
 const WALK = 3.0, RUN_MUL = 1.6, NEAR = 1.7;
+
+function walkinFor(job, stages) {
+  if (job === 'bento') {
+    return {
+      stage: 'bento',
+      start: BENTO_ROOM.start,
+      greeter: 'foreman',
+      greeterAt: BENTO_ROOM.greeterAt,
+      bounds: BENTO_ROOM.bounds,
+      blocks: stages.bento ? stages.bento.blocks : [],
+      place: 'Xưởng cơm hộp さくら食品',
+      tip: 'Vào xưởng, chào tổ trưởng Tanaka trước giờ họp đầu ca',
+    };
+  }
+  return {
+    stage: 'care',
+    start: { x: 0.6, z: CARE_ROOM.bounds.z1 - 0.2, yaw: Math.PI },
+    greeter: 'nurse',
+    greeterAt: { x: NURSE_AT.x, z: NURSE_AT.z, yaw: 0.5 },
+    bounds: CARE_ROOM.bounds,
+    blocks: stages.care ? stages.care.blocks : [],
+    place: 'Viện dưỡng lão さくら苑',
+    tip: 'Vào phòng ăn, chào chị Yamada trước giờ họp đầu ca',
+  };
+}
 
 export class MorningWalk {
   constructor({ controls, overhead, camRig }) {
@@ -49,9 +75,10 @@ export class MorningWalk {
   }
 
   /** stages = { dorm, site }; who = { player, suzuki, hung }; setStage(id) switches the rendered scene */
-  /** commute: 'walk' (street to the site gate) or 'train' (dorm → station → care home, 22 min) */
-  start({ S, stages, who, setStage, dayLabel, onEnd, commute = 'walk' }) {
+  /** commute: 'walk' (street to the site gate) or 'train' (dorm → station → care home / bento factory, 22 min) */
+  start({ S, stages, who, setStage, dayLabel, onEnd, commute = 'walk', walkin = null }) {
     Object.assign(this, { S, stages, who, setStage, onEnd, commute });
+    this.walkin = walkin || walkinFor(S && S.job, stages);
     this.st = createMorning();
     this.active = true; this.paused = false; this.running = false; this.rise = -1; this.busy = 0; this.bestD = Infinity; this.stuckT = 0;
     this.platT = 0; this.rideT = -1; this.boarding = false; this.warned = false; this.greetT = -1; this.pendingGreet = false;
@@ -95,7 +122,7 @@ export class MorningWalk {
       this.btn.board.disabled = !stopped;
       this.btn.board.classList.toggle('hot', stopped);
     } else if (s.phase === 'walkin') {
-      this.btn.greet.classList.toggle('hot', this.near(NURSE_AT, 2.2));
+      this.btn.greet.classList.toggle('hot', this.near(this.walkin.greeterAt, 2.2));
     }
   }
   near(pt, r = NEAR) { const p = this.who.player.holder.position; return Math.hypot(p.x - pt.x, p.z - pt.z) < r; }
@@ -111,7 +138,7 @@ export class MorningWalk {
     const P = this.who.player;
     this.setStage('dorm');
     this.stages.dorm.setTime('day'); this.stages.dorm.onigiri.visible = true;
-    P.unpinAll(); if (P.helmet) P.helmet.visible = false;
+    P.unpinAll(); if (P.helmet) P.helmet.visible = false; if (P.cap) P.cap.visible = false;
     P.look(this.S.look.colors);
     // lying on the futon, face up, head towards the back wall
     P.yaw = 0; P.play('idle'); P.holder.rotation.x = -Math.PI / 2;
@@ -147,8 +174,9 @@ export class MorningWalk {
     this.controls.enabled = true;
     this.controls.onTap = null;
     if (train) {
+      const dest = this.walkin.stage === 'bento' ? 'xưởng' : 'viện';
       $('sh-place').querySelector('span').textContent = 'Đường ra ga さくら駅';
-      this.tip('駅はあっち', 'Đi bộ tới biển 🚉 さくら駅 ở cuối phố, đi tàu tới viện trước 7:45 (朝礼)', 5);
+      this.tip('駅はあっち', `Đi bộ tới biển 🚉 さくら駅 ở cuối phố, đi tàu tới ${dest} trước 7:45 (朝礼)`, 5);
     } else {
       $('sh-place').querySelector('span').textContent = 'Đường tới công trường';
       this.tip('行ってきます！', 'Đi bộ tới cổng công trường trước 7:45 (họp đầu ca 朝礼)', 5);
@@ -156,7 +184,7 @@ export class MorningWalk {
     this.camRig.init = false;
   }
 
-  // ---- care home commute, phase 3: the platform of さくら駅 ----
+  // ---- train commute, phase 3: the platform of さくら駅 ----
   enterPlatform() {
     const P = this.who.player, stn = this.stages.station;
     this.setStage('station'); stn.sendTrain('reset');
@@ -170,27 +198,44 @@ export class MorningWalk {
   }
   // phase 4: the ride (the camera follows the train out of the station)
   ride() {
-    const s = this.st, P = this.who.player;
+    const s = this.st, P = this.who.player, dest = this.walkin.stage === 'bento' ? 'xưởng' : 'viện';
     board(s); P.holder.visible = false; this.controls.enabled = false; this.controls.target = null;
     this.stages.station.sendTrain('leave'); this.rideT = 0;
     show('sh-tip', false);
-    toast('🚃 電車で' + MORNING.TRAIN + '分', `Đi tàu ${MORNING.TRAIN} phút tới ga gần viện · ⏰ ${clock(s.min)}`);
+    toast('🚃 電車で' + MORNING.TRAIN + '分', `Đi tàu ${MORNING.TRAIN} phút tới ga gần ${dest} · ⏰ ${clock(s.min)}`);
   }
-  // phase 5: into the care home, greet the nurse
+  // phase 5: into the workplace room, greet the supervisor/nurse
+  greeterNpc() {
+    const g = this.walkin.greeter;
+    return typeof g === 'string' ? (this.who[g] || this.who.greeter) : (g || this.who.greeter || this.who.nurse);
+  }
   enterCare() {
-    const s = this.st, P = this.who.player, N = this.who.nurse;
+    const s = this.st, P = this.who.player, w = this.walkin, N = this.greeterNpc();
     alight(s); this.rideT = -1;
-    this.setStage('care');
-    P.holder.visible = true; P.holder.position.set(0.6, 0, CARE_ROOM.bounds.z1 - 0.2); P.yaw = Math.PI; P.play('idle');
-    if (N) { this.stages.care.scene.add(N.holder); N.holder.position.set(NURSE_AT.x, 0, NURSE_AT.z); N.yaw = 0.5; N.play('idle'); }
+    this.setStage(w.stage);
+    if (w.stage === 'bento') {
+      P.look({ ...this.S.look.colors, top: '#f2f2ee', bottom: '#f2f2ee' });
+      if (P.cap) P.cap.visible = true;
+    }
+    P.holder.visible = true;
+    P.holder.position.set(w.start.x, 0, w.start.z);
+    P.yaw = w.start.yaw ?? Math.PI;
+    P.play('idle');
+    if (N) {
+      this.stages[w.stage].scene.add(N.holder);
+      N.holder.position.set(w.greeterAt.x, 0, w.greeterAt.z);
+      N.yaw = w.greeterAt.yaw ?? 0.5;
+      N.play('idle');
+    }
     this.controls.reset({ yaw: 0.25, pitch: 0.36, groundY: 0, yawLimit: [-Infinity, Infinity] });
     this.controls.enabled = true;
-    $('sh-place').querySelector('span').textContent = 'Viện dưỡng lão さくら苑';
-    this.tip('おはようございます', 'Vào phòng ăn, chào chị Yamada trước giờ họp đầu ca', 5);
+    $('sh-place').querySelector('span').textContent = w.place;
+    if (Array.isArray(w.tip)) this.tip(w.tip[0], w.tip[1], 5);
+    else this.tip('おはようございます', w.tip, 5);
     this.camRig.init = false;
   }
   greetNurse() {
-    const P = this.who.player, N = this.who.nurse;
+    const P = this.who.player, N = this.greeterNpc();
     if (this.greetT >= 0) return;
     this.greetT = 0; this.busy = 1.6; P.bendTo = 0.45; setTimeout(() => { P.bendTo = 0; }, 700);
     if (N) {
@@ -235,7 +280,8 @@ export class MorningWalk {
       this.boarding = true; this.controls.target = new THREE.Vector3(STATION.door.x, 0, STATION.door.z);
       this.overhead.say(P, '乗ります！', 1.2);
     } else if (id === 'greet' && s.phase === 'walkin') {
-      if (!this.near(NURSE_AT, 2.2)) { this.controls.target = new THREE.Vector3(NURSE_AT.x + 0.9, 0, NURSE_AT.z + 0.6); this.pendingGreet = true; return; }
+      const gAt = this.walkin.greeterAt;
+      if (!this.near(gAt, 2.2)) { this.controls.target = new THREE.Vector3(gAt.x + 0.9, 0, gAt.z + 0.6); this.pendingGreet = true; return; }
       this.greetNurse();
     } else if (id === 'greet') {
       const suz = this.who.suzuki;
@@ -258,7 +304,8 @@ export class MorningWalk {
   askSkip() {
     if (this.paused) return;
     this.paused = true;
-    card(`<h2>Bỏ qua buổi sáng?</h2><p>Đi thẳng tới ${this.commute === 'train' ? 'viện dưỡng lão' : 'công trường'}, đến vừa kịp giờ.</p>`, [
+    const place = this.commute === 'train' ? (this.walkin.stage === 'bento' ? 'xưởng cơm hộp' : 'viện dưỡng lão') : 'công trường';
+    card(`<h2>Bỏ qua buổi sáng?</h2><p>Đi thẳng tới ${place}, đến vừa kịp giờ.</p>`, [
       { label: 'Đi tiếp', on: () => { this.paused = false; } },
       { label: 'Bỏ qua →', cls: 'ghost', on: () => { this.st.phase = 'street'; this.st.min = Math.min(this.st.min, MORNING.CHOREI - 3); this.finish(); } },
     ]);
@@ -274,7 +321,8 @@ export class MorningWalk {
     const hungLine = r.kind === 'late' ? '遅いぞ！みんな待ってる。 — Muộn rồi! Mọi người đang chờ.' : 'おはよう！今日も頑張ろう。 — Chào em! Hôm nay cố lên nhé.';
     const train = this.commute === 'train';
     if (!train) { this.overhead.say(this.who.hung, hungLine, 4); if (P.helmet) P.helmet.visible = true; }
-    card(`<h2>${head}</h2><p>${train ? 'Bạn tới viện dưỡng lão' : 'Bạn tới cổng công trường'} lúc <b>${clock(r.min)}</b> · 朝礼 ${clock(MORNING.CHOREI)}.</p>
+    const whereTxt = train ? (this.walkin.stage === 'bento' ? 'Bạn tới xưởng cơm hộp' : 'Bạn tới viện dưỡng lão') : 'Bạn tới cổng công trường';
+    card(`<h2>${head}</h2><p>${whereTxt} lúc <b>${clock(r.min)}</b> · 朝礼 ${clock(MORNING.CHOREI)}.</p>
       <div class="deltas">${deltaChips(r.deltas) || '<span class="delta">—</span>'}</div>
       <p class="lesson">${esc(lesson)}</p>`, [
       { label: 'Vào họp đầu ca →', on: () => { this.stop(); this.onEnd(r); } },
@@ -337,8 +385,8 @@ export class MorningWalk {
         if (mag >= 0.05) {
           moving = true;
           const room = s.phase === 'room', plat = s.phase === 'platform', inside = s.phase === 'walkin';
-          const B = room ? DORM.bounds : plat ? STATION.bounds : inside ? CARE_ROOM.bounds : ROUTE.bounds;
-          const blocks = room ? DORM.blocks : plat ? STATION.blocks : inside ? this.stages.care.blocks : ROUTE.blocks;
+          const B = room ? DORM.bounds : plat ? STATION.bounds : inside ? this.walkin.bounds : ROUTE.bounds;
+          const blocks = room ? DORM.blocks : plat ? STATION.blocks : inside ? (this.walkin.blocks || []) : ROUTE.blocks;
           const sp = WALK * (this.running && s.phase === 'street' ? RUN_MUL : 1) * (room ? 0.6 : inside ? 0.75 : 1) * mag * dt;
           pos.x += this.dir.x * sp; pos.z += this.dir.z * sp;
           for (const o of blocks) {
@@ -356,8 +404,8 @@ export class MorningWalk {
       if (s.phase === 'street' && this.commute !== 'train' && this.near(ROUTE.gate, 1.9)) this.finish();
       if (s.phase === 'street' && this.commute === 'train' && this.near(ROUTE.station, 1.6)) { toPlatform(s); this.fadeTo(() => this.enterPlatform()); }
       if (s.phase === 'platform') this.platform(dt);
-      if (this.pendingGreet && !c.target) { this.pendingGreet = false; if (this.near(NURSE_AT, 2.2)) this.greetNurse(); }
-      if (s.phase === 'walkin' && this.greetT < 0 && this.near(NURSE_AT, 1.3)) this.greetNurse();
+      if (this.pendingGreet && !c.target) { this.pendingGreet = false; if (this.near(this.walkin.greeterAt, 2.2)) this.greetNurse(); }
+      if (s.phase === 'walkin' && this.greetT < 0 && this.near(this.walkin.greeterAt, 1.3)) this.greetNurse();
     }
     if (this.greetT >= 0 && !this.paused) { this.greetT += dt; if (this.greetT > 2.4 && !s.over) { this.greetT = -1; this.finish(); } }
     if (this.rideT >= 0 && !this.paused) { this.rideT += dt; if (this.rideT > 3.4) { this.rideT = -1; this.fadeTo(() => this.enterCare()); } }
