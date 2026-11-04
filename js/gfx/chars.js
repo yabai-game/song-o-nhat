@@ -142,9 +142,12 @@ export class Character {
     this.reach = 0; this.reachTo = 0; // 0..1 both arms reaching forward (~55°) with forearms bent (~35°)
     this.wristSway = 0; this.swayT = 0; // 2 Hz left-right wrist sway during water-jet washing
     this.shoulder = 0; this.shoulderTo = 0; // 0..1 right hand up on the shoulder (shoulder carry)
-    // bones posed procedurally: clips exported with optimised (constant-track-free) animation may
-    // not write these every frame, so restore their rest rotation before each mixer update —
-    // otherwise the extra rotation piles up frame after frame and the body folds over
+    // bones posed procedurally on top of the clip. three.js's PropertyMixer only writes a bone when the
+    // blended value differs from the value IT wrote last frame, so it does not rewrite a bone whose
+    // clip value did not change (a loop wrap holds the first key for a frame, constant stretches).
+    // Each frame these bones get back exactly the mixer's own last output before mixer.update — never
+    // the rest pose (that showed the A-pose for a frame whenever the mixer skipped the write: the
+    // "T-pose flicker"), and never the tilted pose (the extra rotation would pile up).
     this.posed = [this.spine, this.spine1, this.chest, this.armL, this.armR, this.foreL, this.foreR, this.handL, this.handR, this.thighL, this.thighR, this.shinL, this.shinR]
       .filter(Boolean).map((b) => [b, b.quaternion.clone()]);
     this.sit = 0; // 1 = seated (wheelchair): thighs forward, shins down, forearms on the lap
@@ -183,7 +186,7 @@ export class Character {
   unpinAll() { for (const a of this.attach) a.obj.parent?.remove(a.obj); this.attach.length = 0; }
   update(dt) {
     this.holder.rotation.y = this.yaw;
-    for (const [b, q] of this.posed) b.quaternion.copy(q);
+    for (const [b, q] of this.posed) b.quaternion.copy(q); // the mixer's output from last frame
     // weights: current clip → 1, others → 0 at 1/fade per second, then normalised to sum 1
     const step = dt / this.fade;
     let sum = 0;
@@ -194,6 +197,7 @@ export class Character {
     }
     if (sum > 1e-4 && Math.abs(sum - 1) > 1e-4) for (const a of Object.values(this.acts)) a.setEffectiveWeight(a.getEffectiveWeight() / sum);
     this.mixer.update(dt);
+    for (const [b, q] of this.posed) q.copy(b.quaternion); // remember it before the procedural poses
     // procedural forward bend on top of the clip. The spine bones' local axes differ between Meshy
     // rigs and change with the clip pose, so the bend turns each bone about the character's own
     // left–right axis in world space (converted into the bone's parent frame), never a local axis.

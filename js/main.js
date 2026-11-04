@@ -728,7 +728,7 @@ const CREDITS = [
   ['Bếp ga', 'Gas Stove', 'Xin', 'acf506540b6a4c25b6836d6e12aac57b', 'CC BY 4.0'],
   ['Cổng torii', 'Japanese Torii gate Game Asset', 'Bazylonator', 'e12d2fa1b2b94928b8b87cb7787e2462', 'CC BY 4.0'],
   ['Đèn đá', 'Japanese Stone Lantern', 'Sahir Virmani', 'e0417d1e05984727a50f9ab1451d162d', 'CC BY 4.0'],
-  ['Đền', 'Japanese shrine', 'GreenG', '56baeb7b13ba4238a2f54c363e0b', 'CC BY 4.0'],
+  ['Đền', 'Japanese shrine', 'GreenG', '56baeb7b13ba4238a2f54c363e7a3e0b', 'CC BY 4.0'],
 ];
 function creditsScreen() {
   hideAll();
