@@ -8,8 +8,11 @@ import { Controls } from './gfx/controls.js';
 import { SiteShift } from './work/site_shift.js';
 import { MorningWalk } from './work/morning_walk.js';
 import { EveningWalk } from './work/evening_walk.js';
-import { spotFor } from './core/evening.js';
+import { MarketShop } from './work/market_shop.js';
+import { spotFor, createEvening } from './core/evening.js';
+import { spoil, goodOf } from './core/market_rules.js';
 import { buildDorm } from './gfx/dorm.js';
+import { buildMarket } from './gfx/market.js';
 import { buildCare } from './gfx/care.js';
 import { buildBento, BENTO_ROOM } from './gfx/bento.js';
 import { buildLotus, LOTUS_FIELD } from './gfx/lotus.js';
@@ -59,12 +62,14 @@ async function boot() {
     G.stages.care = care;
     G.stages.bento = bento;
     G.stages.lotus = lotus;
-    G.stages.dorm = buildDorm({ lowtable: await loadModel('lowtable') });
+    const [lowtable, gas_stove] = await Promise.all([loadModel('lowtable'), loadModel('gas_stove')]);
+    G.stages.dorm = buildDorm({ lowtable, gas_stove });
     $('bar').style.width = '100%';
     G.controls = new Controls($('joy'));
     G.shift = new SiteShift({ site: G.stages.site, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.morning = new MorningWalk({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.evening = new EveningWalk({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
+    G.market = new MarketShop({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.care = new CareShift({ stage: G.stages.care, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.bento = new BentoShift({ stage: G.stages.bento, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.lotus = new LotusShift({ stage: G.stages.lotus, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
@@ -328,10 +333,16 @@ async function runStep() {
 
 function finishStep(extraHtml = '') {
   const r = completeStep(G.S);
+  const spoiled = r.dayEnd ? spoil(G.S) : [];
   save(G.S, storage);
   if (r.levels) toast(`⬆️ Lên cấp ${G.S.lv}!`, 'Hồi ❤️ 🧠 +15 · làm việc bớt mệt hơn');
   else toast(`⭐ +${r.xp} XP`, extraHtml);
-  if (r.dayEnd && !r.weekEnd) toast('🌅 Sáng hôm sau · おはようございます！', `Ngày ${G.S.story + 1}/5`);
+  if (r.dayEnd && !r.weekEnd) {
+    const spoilNote = spoiled.length
+      ? ` · 🥀 Hỏng: ${spoiled.map((id) => `${goodOf(id)?.icon || ''} ${goodOf(id)?.vi || id}`).join(', ')}`
+      : '';
+    toast('🌅 Sáng hôm sau · おはようございます！', `Ngày ${G.S.story + 1}/5${spoilNote}`);
+  }
   runStep();
 }
 
@@ -346,6 +357,36 @@ function ensureStation() {
     });
   }
   return stationP;
+}
+
+/** The supermarket interior is built the first time the player enters スーパー さくら. */
+let marketP = null;
+function ensureMarket() {
+  if (!marketP) {
+    marketP = buildMarket().then((m) => {
+      G.stages.market = m;
+      return m;
+    });
+  }
+  return marketP;
+}
+
+async function openMarket(ev, onExit) {
+  if (!G.stages.market) { toast('🛒 Đang vào siêu thị…', 'スーパー さくら'); await ensureMarket(); }
+  hideNpcs();
+  await dress(false);
+  const clerk = await npc('clerk', 'market');
+  G.mode = 'market';
+  G.market.start({
+    S: G.S,
+    ev,
+    stage: G.stages.market,
+    who: { player: G.player, clerk },
+    setStage,
+    storage,
+    dayLabel: `📅 Ngày ${(G.S.story || 0) + 1}/5 · Siêu thị`,
+    onExit,
+  });
 }
 
 async function morningStep(st) {
@@ -384,8 +425,10 @@ async function eveningStep(st) {
   await spawnWorkers();
   G.evening.start({
     S, spot: spotFor(st.data), stages: G.stages, who: { player: G.player }, setStage,
+    storage,
     from: job === 'care' || job === 'bento' || job === 'lotus' ? 'station' : 'gate',
     dayLabel: `📅 Ngày ${S.story + 1}/5 · Buổi tối`,
+    onMarket: (ev) => openMarket(ev, () => { hideNpcs(); G.mode = 'evening'; G.evening.resumeFromMarket(); }),
     onArrive: () => { S.flags.eveningDay = S.story; save(S, storage); talkStep(st, eveningPlace(st)); },
   });
 }
@@ -595,7 +638,9 @@ async function sleepStep(st) {
   const after = daysOf(jobOf())[G.S.story].story.after;
   G.evening.home({
     S: G.S, stages: G.stages, who: { player: G.player }, setStage,
+    storage,
     dayLabel: `📅 Ngày ${G.S.story + 1}/5 · ${st.label}`,
+    onMarket: (ev) => openMarket(ev, () => { hideNpcs(); G.mode = 'evening'; G.evening.resumeFromMarket(); }),
     onSleep: () => {
       const d = sleep(G.S);
       toast('😴 Ngủ một giấc · おやすみなさい', d.map(([k, v]) => `${k === 'health' ? '❤️' : '🧠'} +${v}`).join(' · '), 4);
@@ -644,6 +689,9 @@ const CREDITS = [
   ['Lá sen', 'Water lily', 'Mariia Melnik', '04dd636204cd4b0db45a4fc82efa4385', 'CC BY 4.0'],
   ['Củ sen', 'Scan Lotus Root-Freepoly.org', 'Freepoly.org', 'f4fa4b58b6514440bdc2d90817a42083', 'CC BY 4.0'],
   ['Túi rác', 'Garbage bags', 'DJMaesen', '9e769751ac3a4b6a893a5719349b78ca', 'CC BY 4.0'],
+  ['Kệ siêu thị', 'Low Poly Store Shelves and Supermarket Rack Pack', 'Ankitimation', '3c5ec087909140c2a9483bb9bb838a25', 'CC BY 4.0'],
+  ['Đồ siêu thị', 'Super market asset [low poly] [pixel]', 'Kanna-Nakajima', '9d6158220c894c2a8e28e48178f72a6c', 'CC BY 4.0'],
+  ['Bếp ga', 'Gas Stove', 'Xin', 'acf506540b6a4c25b6836d6e12aac57b', 'CC BY 4.0'],
 ];
 function creditsScreen() {
   hideAll();
@@ -661,12 +709,50 @@ function demoScreen() {
   const name = (d) => d.b.label.replace(/^Ca chiều: |^Thử thách cuối tuần: /, '');
   const rows = [
     { label: '🗑️ Phân loại rác', on: () => demoTrash() },
+    { label: '🛒 Siêu thị (20:05)', on: () => demoMarket() },
+    { label: '🍳 Nấu cơm', on: () => demoCook() },
     ...daysOf('site').map((d, i) => ({ label: `👷 Ngày ${i + 1}: ${name(d)}${d.b.wind ? ' 💨' : ''}${d.b.rain ? ' 🌧️' : ''}`, on: () => demoShift('site', i) })),
     ...daysOf('care').map((d, i) => ({ label: `👵 Ngày ${i + 1}: ${name(d)}`, on: () => demoShift('care', i) })),
     ...daysOf('bento').map((d, i) => ({ label: `🍱 Ngày ${i + 1}: ${name(d)}`, on: () => demoShift('bento', i) })),
     ...daysOf('lotus').map((d, i) => ({ label: `🪷 Ngày ${i + 1}: ${name(d)}${d.b.rain ? ' 🌧️' : ''}`, on: () => demoShift('lotus', i) })),
   ];
-  card('<h2>🎮 Thử ca làm 3D</h2><p>🗑️ Phân loại rác · 👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · 🪷 Ruộng sen · không tính điểm.</p>', [...rows, { label: '← Quay lại', cls: 'ghost', on: titleScreen }]);
+  card('<h2>🎮 Thử ca làm 3D</h2><p>🗑️ Phân loại rác · 🛒 Siêu thị · 🍳 Nấu cơm · 👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · 🪷 Ruộng sen · không tính điểm.</p>', [...rows, { label: '← Quay lại', cls: 'ghost', on: titleScreen }]);
+}
+async function demoMarket() {
+  hideAll(); hideNpcs();
+  await dress(false);
+  if (!G.stages.market) { toast('🛒 Đang vào siêu thị…', 'スーパー さくら'); await ensureMarket(); }
+  const clerk = await npc('clerk', 'market');
+  const demoS = newState({ name: G.draft.name || 'Bạn', job: 'site', look: { gender: G.draft.gender, outfit: G.draft.outfit, colors: { ...G.draft.colors } } });
+  const ev = createEvening('room');
+  ev.min = 20 * 60 + 5; // 20:05 -> 半額 (50% off)
+  G.mode = 'market';
+  G.market.start({
+    S: demoS,
+    ev,
+    stage: G.stages.market,
+    who: { player: G.player, clerk },
+    setStage,
+    dayLabel: '🎮 Thử nhanh · 🛒 Siêu thị (20:05 · 半額)',
+    onExit: () => { hideNpcs(); demoScreen(); },
+  });
+}
+async function demoCook() {
+  hideAll(); hideNpcs();
+  await dress(false);
+  const demoS = newState({ name: G.draft.name || 'Bạn', job: 'site', look: { gender: G.draft.gender, outfit: G.draft.outfit, colors: { ...G.draft.colors } } });
+  demoS.pantry = ['eggs', 'eggplant', 'meat', 'cucumber', 'banana', 'apple'];
+  G.mode = 'evening';
+  G.evening.ev = null;
+  G.evening.home({
+    S: demoS,
+    stages: G.stages,
+    who: { player: G.player },
+    setStage,
+    demoCook: true,
+    dayLabel: '🎮 Thử nhanh · 🍳 Nấu cơm ký túc xá',
+    onSleep: () => demoScreen(),
+  });
 }
 async function demoTrash() {
   hideAll(); hideNpcs();
@@ -751,6 +837,7 @@ function frame() {
   if (G.mode === 'shift') (G.activeShift || G.shift).update(dt, t);
   if (G.mode === 'morning') G.morning.update(dt, t);
   if (G.mode === 'evening') G.evening.update(dt, t);
+  if (G.mode === 'market') G.market.update(dt, t);
   if (G.streetCrowd) {
     const onStreet = G.stageId === 'site' && (G.mode === 'morning' || G.mode === 'evening');
     G.streetCrowd.setVisible(onStreet);

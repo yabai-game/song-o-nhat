@@ -53,6 +53,7 @@ export const ROUTE = {
   hung: { x: 5.2, z: 22.6 },
   gate: { x: 3, z: 22.1 },
   konbini: { x: -1, z: 28.5 },   // in front of the konbini, facing the street
+  market: { x: -5.5, z: 22.2 },  // across the street from the konbini: スーパー さくら
   station: { x: 8.4, z: 24.6 },  // east end of the street: the way to さくら駅 (care home commute)
   bounds: { x0: -31, x1: 9, z0: 21.8, z1: 28.7 },
   blocks: [{ x: -22.7, z: 29.45, r: 0.55 }, { x: -20.6, z: 29.5, r: 0.45 }, { x: -19.45, z: 29.5, r: 0.45 }],
@@ -295,7 +296,7 @@ export async function buildSite() {
 
   // ---- site fence: white panels with a green band, 安全第一 banners, gate on the south side ----
   for (let x = -26; x <= 26; x += 2) { put(B(1.95, 2, 0.06), '#f2f2ee', x, 1, -29); put(B(1.95, 0.25, 0.07), '#2f8f57', x, 1.65, -28.96); }
-  for (let x = -26; x <= 26; x += 2) { if (x >= 0 && x <= 6) continue; put(B(1.95, 2, 0.06), '#f2f2ee', x, 1, 21); put(B(1.95, 0.25, 0.07), '#2f8f57', x, 1.65, 20.96); }
+  for (let x = -26; x <= 26; x += 2) { if ((x >= 0 && x <= 6) || (x >= -8 && x <= -2)) continue; put(B(1.95, 2, 0.06), '#f2f2ee', x, 1, 21); put(B(1.95, 0.25, 0.07), '#2f8f57', x, 1.65, 20.96); }
   for (let z = -27; z <= 20; z += 2) for (const sx of [-27, 27]) { put(B(0.06, 2, 1.95), '#f2f2ee', sx, 1, z); put(B(0.07, 0.25, 1.95), '#2f8f57', sx - Math.sign(sx) * 0.04, 1.65, z); }
   for (const [x, z, ry] of [[-14, -28.9, 0], [10, -28.9, 0], [26.9, -6, -Math.PI / 2], [-26.9, 2, Math.PI / 2], [-12, 20.9, Math.PI], [14, 20.9, Math.PI]]) {
     const ban = new THREE.Mesh(new THREE.PlaneGeometry(5, 1), new THREE.MeshStandardMaterial({ map: signTexture('安全第一', 640, 128, '#2f8f57', '#ffffff'), roughness: 0.8 }));
@@ -445,6 +446,68 @@ export async function buildSite() {
     });
     placeModel(gl.minimart, [[K.x, KONBINI_Z, Math.PI, 1]], { cast: true, y: 0 });
   }
+  // supermarket storefront (スーパー さくら) on the opposite side of the street from the konbini,
+  // clear of houses and pedestrian lanes, with canvas sign + タイムセール 19:30〜 board and night glow
+  {
+    const mx = ROUTE.market.x, mz = 20.05, mw = 5.4, mh = 3.5, md = 2.0;
+    put(B(mw, mh, md), '#f5f2e9', mx, mh / 2, mz);
+    put(B(mw + 0.2, 0.24, md + 0.25), '#277a46', mx, mh + 0.1, mz + 0.06);
+    put(B(mw + 0.16, 0.56, 0.34), '#277a46', mx, 2.75, mz + md / 2 + 0.14);
+    // sliding glass entrance and bright display windows (lit at dusk/night)
+    put(B(1.65, 2.2, 0.08), '#2c3e50', mx - 0.85, 1.1, mz + md / 2 + 0.02);
+    const winTex = canvasTexture(256, 128, (g) => {
+      g.fillStyle = '#fff5d6'; g.fillRect(0, 0, 256, 128);
+      g.fillStyle = '#e8dfc4'; g.fillRect(0, 92, 256, 36);
+      g.fillStyle = '#277a46'; g.fillRect(14, 18, 96, 22);
+      g.fillStyle = '#d93829'; g.beginPath(); g.arc(196, 48, 24, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#ffffff'; g.font = '800 18px "Zen Maru Gothic", sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('半額', 196, 48);
+    });
+    const winMat = new THREE.MeshStandardMaterial({
+      map: winTex, emissiveMap: winTex, emissive: '#fff2c2', emissiveIntensity: 0, roughness: 0.35,
+    });
+    glow.push(winMat);
+    const doorPane = new THREE.Mesh(new THREE.PlaneGeometry(1.48, 2.04), winMat);
+    doorPane.position.set(mx - 0.85, 1.1, mz + md / 2 + 0.07); scene.add(doorPane);
+    const showPane = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 1.45), winMat);
+    showPane.position.set(mx + 1.25, 1.35, mz + md / 2 + 0.05); scene.add(showPane);
+    // main illuminated fascia sign: スーパー さくら
+    const mktSignTex = canvasTexture(640, 140, (g) => {
+      g.fillStyle = '#ffffff'; g.fillRect(0, 0, 640, 140);
+      g.strokeStyle = '#277a46'; g.lineWidth = 10; g.strokeRect(5, 5, 630, 130);
+      g.fillStyle = '#277a46'; g.fillRect(14, 14, 165, 112);
+      g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '800 38px "Zen Maru Gothic", "Yu Gothic", sans-serif'; g.fillText('スーパー', 96, 70);
+      g.fillStyle = '#c92a1d'; g.font = '900 58px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+      g.fillText('さくら', 395, 72);
+    });
+    const mktSignMat = new THREE.MeshStandardMaterial({
+      map: mktSignTex, emissiveMap: mktSignTex, emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.5,
+    });
+    glow.push(mktSignMat);
+    const mktSign = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 0.82), mktSignMat);
+    mktSign.position.set(mx, 3.22, mz + md / 2 + 0.18); scene.add(mktSign);
+    // small sidewalk sale board: タイムセール 19:30〜
+    const saleTex = canvasTexture(256, 320, (g) => {
+      g.fillStyle = '#ffd426'; g.fillRect(0, 0, 256, 320);
+      g.strokeStyle = '#c92a1d'; g.lineWidth = 10; g.strokeRect(6, 6, 244, 308);
+      g.fillStyle = '#c92a1d'; g.fillRect(14, 18, 228, 66);
+      g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '900 32px "Zen Maru Gothic", "Yu Gothic", sans-serif'; g.fillText('タイムセール', 128, 52);
+      g.fillStyle = '#1d1d1d'; g.font = '900 40px "Be Vietnam Pro", sans-serif'; g.fillText('19:30〜', 128, 128);
+      g.fillStyle = '#c92a1d'; g.font = '900 34px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+      g.fillText('2割引・半額', 128, 200);
+      g.fillStyle = '#277a46'; g.font = '800 24px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+      g.fillText('お惣菜・精肉', 128, 266);
+    });
+    const saleMat = new THREE.MeshStandardMaterial({
+      map: saleTex, emissiveMap: saleTex, emissive: '#fff4c8', emissiveIntensity: 0, roughness: 0.55, side: THREE.DoubleSide,
+    });
+    glow.push(saleMat);
+    put(B(0.56, 0.72, 0.06), '#8a5a34', mx + 2.25, 0.38, mz + md / 2 + 0.32);
+    const saleBoard = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.65), saleMat);
+    saleBoard.position.set(mx + 2.25, 0.4, mz + md / 2 + 0.36); scene.add(saleBoard);
+  }
   // signpost at the east end of the street: the way to the station (the platform is its own stage)
   {
     const tex = canvasTexture(384, 128, (g) => {
@@ -470,6 +533,7 @@ export async function buildSite() {
     const l = new THREE.PointLight(0xffc98a, 0, 16, 1.6); l.position.set(x, 4.4, 27.3); l.visible = false; scene.add(l); lampLights.push(l);
   }
   { const l = new THREE.PointLight(0xf2f6ff, 0, 10, 1.5); l.position.set(ROUTE.konbini.x, 2.4, KONBINI_SIGN.z - 1.2); l.visible = false; scene.add(l); lampLights.push(l); } // shop light spilling out
+  { const l = new THREE.PointLight(0xfff4d6, 0, 10, 1.5); l.position.set(ROUTE.market.x, 2.5, 22.1); l.visible = false; scene.add(l); lampLights.push(l); } // supermarket light spilling out
   // a second row of light houses behind the near rows, so the street does not end at one row
   placeModel(gl.house_modern, [
     ...[-5.5, 8, 21.5].map((z, i) => [58.5, z, -Math.PI / 2 + (i % 2) * Math.PI, 1]),

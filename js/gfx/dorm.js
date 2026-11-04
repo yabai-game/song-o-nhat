@@ -7,12 +7,13 @@ import { canvasTexture, signTexture, makeSun } from './stage.js';
 export const DORM = {
   bed: { x: -0.5, z: -0.95 },      // player's futon (head towards the back wall)
   table: { x: 1.25, z: 0.75 },     // low table with breakfast
+  stove: { x: 1.78, z: -1.25 },    // in front of the kitchenette gas stove
   door: { x: 2.2, z: 1.65 },       // genkan
   bounds: { x0: -2.4, x1: 2.45, z0: -1.95, z1: 2.1 },
-  blocks: [{ x: 1.25, z: 0.75, r: 0.62 }, { x: -2.0, z: -1.75, r: 0.55 }],
+  blocks: [{ x: 1.25, z: 0.75, r: 0.62 }, { x: -2.0, z: -1.75, r: 0.55 }, { x: 1.96, z: -1.88, r: 0.48 }],
 };
 
-/** models = { lowtable } (glTF, optional): community models placed in the room */
+/** models = { lowtable, gas_stove } (glTF, optional): community models placed in the room */
 export function buildDorm(models = {}) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#2a211b');
@@ -73,7 +74,46 @@ export function buildDorm(models = {}) {
   put(B(1.0, 0.08, 1.35), blanket, DORM.bed.x, 0.14, DORM.bed.z + 0.38);
   put(B(0.5, 0.12, 0.32), pillow, DORM.bed.x, 0.16, DORM.bed.z - 0.78);
   for (let k = 0; k < 4; k++) put(B(0.95, 0.12, 0.7), k % 2 ? col('#e9b8c2') : futon, -1.95, 0.06 + k * 0.12, -1.75, 0.05 * k);
-  put(B(1.0, 0.06, 2.0), col('#d9cfb8'), 1.05, 0.03, -1.0);                      // roommate's empty sleeping spot
+  put(B(0.88, 0.06, 1.9), col('#d9cfb8'), 0.78, 0.03, -0.95);                     // roommate's empty sleeping spot
+  // kitchenette in the back-right corner: wooden cabinet + stainless top + sink + gas_stove on top
+  const kx = 1.96, kz = -1.88, kw = 1.04, kh = 0.72, kd = 0.54;
+  put(B(kw, kh, kd), col('#b88958'), kx, kh / 2, kz);                             // lower cabinet
+  put(B(0.46, 0.56, 0.02), col('#9e7144'), kx - 0.25, 0.35, kz + kd / 2 + 0.01);  // left cabinet door
+  put(B(0.46, 0.56, 0.02), col('#9e7144'), kx + 0.25, 0.35, kz + kd / 2 + 0.01);  // right cabinet door
+  put(B(0.03, 0.12, 0.03), col('#7c8288', { metalness: 0.5 }), kx - 0.06, 0.42, kz + kd / 2 + 0.025);
+  put(B(0.03, 0.12, 0.03), col('#7c8288', { metalness: 0.5 }), kx + 0.06, 0.42, kz + kd / 2 + 0.025);
+  put(B(kw + 0.04, 0.04, kd + 0.04), col('#d6dce2', { metalness: 0.35, roughness: 0.4 }), kx, kh + 0.02, kz); // countertop
+  put(B(kw + 0.04, 0.18, 0.03), col('#e4e8ec', { roughness: 0.5 }), kx, kh + 0.13, kz - kd / 2 + 0.015);      // backsplash
+  // inset sink & faucet on the right side of the counter
+  put(B(0.32, 0.03, 0.34), col('#88929b', { metalness: 0.5, roughness: 0.35 }), kx + 0.3, kh + 0.042, kz);
+  put(new THREE.CylinderGeometry(0.016, 0.016, 0.18, 10), col('#bcc4cc', { metalness: 0.6, roughness: 0.3 }), kx + 0.3, kh + 0.13, kz - 0.16);
+  put(B(0.03, 0.025, 0.12), col('#bcc4cc', { metalness: 0.6, roughness: 0.3 }), kx + 0.3, kh + 0.21, kz - 0.11);
+  // gas_stove on the left side of the counter
+  const stovePos = { x: kx - 0.18, y: kh + 0.04, z: kz + 0.01 };
+  if (models.gas_stove) {
+    const st = models.gas_stove.scene.clone(true);
+    st.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    st.position.set(stovePos.x, stovePos.y, stovePos.z);
+    scene.add(st);
+  } else {
+    put(B(0.58, 0.14, 0.44), col('#3a3f45'), stovePos.x, stovePos.y + 0.07, stovePos.z);
+  }
+  // rising steam particles above the stove pots (visible during stir-frying)
+  const steamGroup = new THREE.Group();
+  steamGroup.position.set(stovePos.x, stovePos.y + 0.36, stovePos.z);
+  steamGroup.visible = false;
+  scene.add(steamGroup);
+  const steamMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false });
+  const steamGeo = new THREE.SphereGeometry(0.055, 8, 6);
+  const steamPuffs = [];
+  for (let i = 0; i < 10; i++) {
+    const m = new THREE.Mesh(steamGeo, steamMat);
+    const ox = (i % 2 === 0 ? -0.11 : 0.11) + ((i * 37) % 11 - 5) * 0.008;
+    const oz = ((i * 53) % 11 - 5) * 0.008;
+    m.position.set(ox, (i / 10) * 0.42, oz);
+    steamGroup.add(m);
+    steamPuffs.push({ mesh: m, ox, oz, phase: i / 10 });
+  }
   // alarm clock beside the pillow
   const clockTex = signTexture('6:30', 128, 64, '#fffbe8', '#c0392b');
   put(B(0.18, 0.14, 0.08), col('#e2574c'), DORM.bed.x + 0.48, 0.07, DORM.bed.z - 0.78);
@@ -121,7 +161,7 @@ export function buildDorm(models = {}) {
   for (const [m, list] of batch) { const mesh = new THREE.Mesh(mergeGeometries(list, false), m); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); }
 
   return {
-    scene, sun, onigiri,
+    scene, sun, onigiri, steamGroup,
     /** 'day' (morning light through the window) or 'night' (dark window, ceiling lamp on) */
     setTime(which) {
       const night = which === 'night';
@@ -131,6 +171,20 @@ export function buildDorm(models = {}) {
       lampMat.emissiveIntensity = night ? 1.4 : 0; lampLight.visible = night; lampLight.intensity = night ? 3.2 : 0;
       if (night) onigiri.visible = false; // breakfast is set out again in the morning
     },
-    update() {},
+    setSteam(on) {
+      steamGroup.visible = !!on;
+    },
+    update(dt = 0.016, t = 0) {
+      if (!steamGroup.visible) return;
+      for (let i = 0; i < steamPuffs.length; i++) {
+        const p = steamPuffs[i];
+        p.phase = (p.phase + dt * 0.85) % 1;
+        p.mesh.position.y = p.phase * 0.48;
+        p.mesh.position.x = p.ox + Math.sin(t * 4 + i) * 0.025;
+        p.mesh.position.z = p.oz + Math.cos(t * 3.5 + i) * 0.02;
+        const s = 0.65 + Math.sin(p.phase * Math.PI) * 0.75;
+        p.mesh.scale.setScalar(s);
+      }
+    },
   };
 }

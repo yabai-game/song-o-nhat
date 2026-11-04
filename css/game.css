@@ -189,3 +189,13 @@ button.small { font-size: 13px; padding: 8px 12px; }
 .trash-btn .ic { font-size: 26px; line-height: 30px; }
 .trash-btn .jp { font-family: var(--font-jp); font-size: 15px; font-weight: 800; color: #fff; }
 .trash-btn .vi { font-size: 12px; color: var(--ink-dim); text-align: center; line-height: 1.2; }
+
+/* supermarket shopping cart bar */
+.market-bar { position: absolute; left: 50%; transform: translateX(-50%); top: calc(136px + env(safe-area-inset-top, 0px)); display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: min(440px, calc(100% - 24px)); padding: 6px 10px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); pointer-events: auto; z-index: 6; }
+.market-hint { font-size: 12px; color: var(--ink-dim); text-align: center; }
+.market-chip { appearance: none; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.12); color: var(--ink); font-size: 12.5px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; touch-action: manipulation; }
+.market-chip b { color: var(--gold); font-weight: 800; }
+.market-chip span { color: var(--bad); font-weight: 800; margin-left: 2px; }
+@media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  .market-bar { top: calc(52px + env(safe-area-inset-top, 0px)); max-width: min(360px, calc(100% - 380px)); }
+}

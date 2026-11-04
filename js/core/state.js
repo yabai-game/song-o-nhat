@@ -40,7 +40,7 @@ export function newState(draft, rng = Math.random) {
     route: 'tts', job: draft.job || null, name: (draft.name || '').trim(), look: { ...draft.look },
     nation: draft.nation || 'vn', city: 'saitama',
     week: 0, story: 0, sStep: 0, ally: 0, watch: 0, wins: 0, fails: 0,
-    flags: {}, certs: [jpLevel(START_TTS.jp)], log: [],
+    flags: {}, certs: [jpLevel(START_TTS.jp)], log: [], pantry: [],
   };
 }
 

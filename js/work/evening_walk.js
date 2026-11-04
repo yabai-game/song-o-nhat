@@ -1,21 +1,34 @@
 // Evening after the afternoon shift: walk out of the site gate at dusk to the evening story's place
-// (konbini, dorm front or the room), then home at night, bath / call home, and sleep.
-// Rules live in core/evening.js; this module drives the 3D scenes and the HUD.
+// (konbini, dorm front or the room), optionally stop by スーパー さくら on the street, then home at night,
+// cook dinner at the dorm kitchenette, bath / call home, and sleep.
+// Rules live in core/evening.js and core/market_rules.js; this module drives the 3D scenes and the HUD.
 import * as THREE from 'three';
 import { EVENING, createEvening, tick, talked, enterRoom, act, toBed } from '../core/evening.js';
+import {
+  COOK_STEPS, goodOf, cookable, canCookTonight, cook, savingVsKonbini,
+} from '../core/market_rules.js';
+import { yen, save } from '../core/state.js';
 import { clock } from '../core/morning.js';
 import { DORM } from '../gfx/dorm.js';
 import { ROUTE } from '../gfx/site.js';
 import { camera, isPortrait } from '../gfx/stage.js';
-import { $, show, deltaText, toast } from '../ui/ui.js';
+import { $, show, card, esc, deltaText, toast } from '../ui/ui.js';
 
 const BUTTONS = [
-  { id: 'sleep', icon: '🛏️', label: 'Đi ngủ', jp: 'おやすみ', main: true },
-  { id: 'bath', icon: '🛁', label: 'Tắm', jp: 'お風呂' },
-  { id: 'call', icon: '📱', label: 'Gọi về nhà', jp: '電話' },
-  { id: 'run', icon: '🏃', label: 'Chạy', jp: '走る' },
+  { id: 'sleep',  icon: '🛏️', label: 'Đi ngủ',     jp: 'おやすみ', main: true },
+  { id: 'cook',   icon: '🍳', label: 'Nấu cơm',    jp: '自炊' },
+  { id: 'bath',   icon: '🛁', label: 'Tắm',        jp: 'お風呂' },
+  { id: 'call',   icon: '📱', label: 'Gọi về nhà', jp: '電話' },
+  { id: 'market', icon: '🛒', label: 'Siêu thị',   jp: 'スーパー' },
+  { id: 'run',    icon: '🏃', label: 'Chạy',       jp: '走る' },
 ];
-const SHOW = { toSpot: ['run'], toDorm: ['run'], talk: [], room: ['sleep', 'bath', 'call'], bed: [] };
+const SHOW = {
+  toSpot: ['market', 'run'],
+  toDorm: ['market', 'run'],
+  talk:   [],
+  room:   ['sleep', 'cook', 'bath', 'call'],
+  bed:    [],
+};
 const WALK = 3.0, RUN_MUL = 1.6;
 const SPOT = {
   konbini: { ...ROUTE.konbini, name: 'Konbini サクラマート' },
@@ -41,6 +54,7 @@ export class EveningWalk {
       if (e.code === 'Space' || e.code === 'Digit1') { e.preventDefault(); this.action('sleep'); }
       if (e.code === 'Digit2' || e.code === 'ShiftLeft') this.action(this.ev.phase === 'room' ? 'bath' : 'run');
       if (e.code === 'Digit3') this.action('call');
+      if (e.code === 'Digit4') this.action(this.ev.phase === 'room' ? 'cook' : 'market');
     });
   }
 
@@ -50,39 +64,54 @@ export class EveningWalk {
     box.replaceChildren(...this.mine);
     show('dayhud', false); show('shifthud'); show('sh-gust', false);
     $('sh-rank').textContent = dayLabel;
-    this.active = true; this.paused = false; this.busy = 0; this.bestD = Infinity; this.stuckT = 0; this.running = false; this.lie = -1; this.toFuton = false;
+    this.active = true; this.paused = false; this.busy = 0; this.bestD = Infinity; this.stuckT = 0;
+    this.running = false; this.lie = -1; this.toFuton = false; this.toMarket = false; this.cookState = null;
+    if (this.stages?.dorm?.setSteam) this.stages.dorm.setSteam(false);
     this.btn.run.classList.remove('on');
   }
   _hide() {
     this.active = false; this.controls.enabled = false;
+    if (this.stages?.dorm?.setSteam) this.stages.dorm.setSteam(false);
     if (this.saved) { $('acts').replaceChildren(...this.saved); this.saved = null; }
     show('shifthud', false); show('sh-tip', false);
   }
 
   /** After the afternoon shift: walk from the gate to the evening story. */
   /** from: 'gate' (out of the site gate) or 'station' (off the train at the east end of the street) */
-  start({ S, spot, stages, who, setStage, dayLabel, onArrive, from = 'gate' }) {
-    Object.assign(this, { S, stages, who, setStage, onArrive, dayLabel });
+  start({ S, spot, stages, who, setStage, dayLabel, onArrive, onMarket = null, storage = null, from = 'gate' }) {
+    Object.assign(this, { S, stages, who, setStage, onArrive, onMarket, storage, dayLabel });
     this.ev = createEvening(spot);
     this._show(dayLabel);
     if (spot === 'room') this.target = { ...ROUTE.start, name: 'Ký túc xá さくら寮', enter: true };
     else this.target = SPOT[spot];
     if (from === 'station') this.street('dusk', ROUTE.bounds.x1 - 0.5, 24.6, -Math.PI / 2);
     else this.street('dusk', ROUTE.gate.x - 0.5, ROUTE.gate.z + 0.9, -Math.PI / 2);
-    this.tip('お疲れ様でした！', spot === 'room' ? 'Hết ca rồi. Về ký túc xá thôi.' : `Hết ca rồi. Ghé ${this.target.name} trên đường về.`, 5);
+    this.tip('お疲れ様でした！', spot === 'room' ? 'Hết ca rồi. Về ký túc xá thôi (có thể ghé 🛒 Siêu thị).' : `Hết ca rồi. Ghé ${this.target.name} trên đường về.`, 5);
   }
 
   /** After the evening story: walk home at night (or stay in the room), then sleep. */
-  home({ S, stages, who, setStage, dayLabel, onSleep }) {
-    Object.assign(this, { S, stages, who, setStage, onSleep, dayLabel });
-    if (!this.ev) { this.ev = createEvening('room'); this.ev.talked = true; this.ev.phase = 'room'; this.ev.min = 21 * 60; }
+  home({ S, stages, who, setStage, dayLabel, onSleep, onMarket = null, storage = null, demoCook = false }) {
+    Object.assign(this, { S, stages, who, setStage, onSleep, onMarket, storage, dayLabel });
+    if (!this.ev) { this.ev = createEvening('room'); this.ev.talked = true; this.ev.phase = 'room'; this.ev.min = 20 * 60 + 30; }
     else if (!this.ev.talked) talked(this.ev);
     this._show(dayLabel);
-    if (this.ev.phase === 'room') { this.room(); return; }
+    if (this.ev.phase === 'room') {
+      this.room();
+      if (demoCook) setTimeout(() => this.active && this.action('cook'), 250);
+      return;
+    }
     this.target = { ...ROUTE.start, name: 'Ký túc xá さくら寮', enter: true };
     const p = this.who.player.holder.position;
     this.street('night', p.x, p.z, this.who.player.yaw);
-    this.tip('ただいま', 'Trời tối rồi. Về ký túc xá nghỉ ngơi.', 4);
+    this.tip('ただいま', 'Trời tối rồi. Ghé 🛒 Siêu thị săn sale hoặc về ký túc xá nghỉ ngơi.', 4);
+  }
+
+  /** Resume walking on the street after exiting スーパー さくら. */
+  resumeFromMarket() {
+    this._show(this.dayLabel);
+    const tone = this.ev.min >= 19 * 60 + 45 || this.ev.talked ? 'night' : 'dusk';
+    this.street(tone, ROUTE.market.x, ROUTE.market.z + 0.45, -Math.PI / 2);
+    this.tip('スーパー さくら', 'Đã rời siêu thị. Tiếp tục đi về ký túc xá.', 3.5);
   }
 
   street(time, x, z, yaw) {
@@ -101,6 +130,7 @@ export class EveningWalk {
   room() {
     const P = this.who.player;
     this.setStage('dorm'); this.stages.dorm.setTime('night');
+    if (this.stages.dorm.setSteam) this.stages.dorm.setSteam(false);
     P.look(this.S.look.colors); P.unpinAll(); if (P.helmet) P.helmet.visible = false;
     P.holder.rotation.x = 0; P.holder.position.set(DORM.door.x - 0.3, 0, DORM.door.z); P.yaw = -Math.PI / 2; P.play('idle');
     enterRoom(this.ev);
@@ -108,22 +138,42 @@ export class EveningWalk {
     this.controls.enabled = true; this.controls.onTap = null;
     $('sh-place').querySelector('span').textContent = 'Ký túc xá さくら寮';
     this.camRig.init = false;
-    if (this.ev.talked) this.tip('ただいま！', 'Tắm 🛁, gọi về nhà 📱, rồi lên futon đi ngủ 🛏️', 6);
-    else { this.paused = true; this._hide(); this.onArrive(); } // the evening story happens in the room
+    if (this.ev.talked) {
+      const hasCook = canCookTonight(this.S);
+      this.tip('ただいま！', hasCook ? 'Có nguyên liệu trong bếp! Bấm 🍳 Nấu cơm, 🛁 Tắm, 📱 Gọi về nhà, rồi 🛏️ Đi ngủ' : 'Tắm 🛁, gọi về nhà 📱, rồi lên futon đi ngủ 🛏️', 6);
+    } else {
+      this.paused = true; this._hide(); this.onArrive();
+    }
   }
 
   tip(jp, vi, sec = 6) {
     const t = $('sh-tip'); t.querySelector('b').textContent = jp; t.querySelector('span').textContent = vi;
     t.hidden = false; clearTimeout(this.tipT); this.tipT = setTimeout(() => { t.hidden = true; }, sec * 1000);
   }
+
   hud() {
     const e = this.ev, g = $('sh-goal');
     const icon = e.min >= 21 * 60 ? '🌙' : '🌆';
-    const txt = `${icon} ${clock(e.min)}${e.phase === 'room' ? (e.min >= EVENING.LATE ? ' · khuya rồi!' : ' · nghỉ ngơi') : ' · về nhà'}`;
+    let suffix = e.phase === 'room' ? (e.min >= EVENING.LATE ? ' · khuya rồi!' : ' · nghỉ ngơi') : ' · về nhà';
+    if (this.cookState && this.cookState.phase === 'step') {
+      const st = COOK_STEPS[this.cookState.stepIdx];
+      if (st) suffix = ` · ${st.icon} ${st.vi} ${st.jp} (${this.cookState.stepIdx + 1}/${COOK_STEPS.length})`;
+    }
+    const txt = `${icon} ${clock(e.min)}${suffix}`;
     if (g.textContent !== txt) g.textContent = txt;
     g.classList.toggle('warn', e.min >= EVENING.LATE);
-    for (const a of BUTTONS) this.btn[a.id].hidden = !SHOW[e.phase].includes(a.id);
-    this.btn.bath.disabled = e.bath; this.btn.call.disabled = e.call;
+    for (const a of BUTTONS) {
+      if (a.id === 'cook') {
+        this.btn.cook.hidden = e.phase !== 'room' || !canCookTonight(this.S) || !!this.cookState;
+      } else if (a.id === 'market') {
+        this.btn.market.hidden = !SHOW[e.phase]?.includes('market') || !this.onMarket;
+      } else {
+        this.btn[a.id].hidden = !SHOW[e.phase]?.includes(a.id);
+      }
+    }
+    this.btn.bath.disabled = e.bath || !!this.cookState;
+    this.btn.call.disabled = e.call || !!this.cookState;
+    this.btn.sleep.disabled = !!this.cookState;
   }
 
   fadeTo(fn) {
@@ -132,9 +182,25 @@ export class EveningWalk {
   }
 
   action(id) {
-    if (!this.active || this.paused || this.busy > 0 || this.lie >= 0) return;
+    if (!this.active || this.paused || this.busy > 0 || this.lie >= 0 || this.cookState) return;
     const e = this.ev, P = this.who.player;
     if (id === 'run') { this.running = !this.running; this.btn.run.classList.toggle('on', this.running); return; }
+    if (id === 'market') {
+      if (!this.onMarket) return;
+      const pos = P.holder.position;
+      if (Math.hypot(pos.x - ROUTE.market.x, pos.z - ROUTE.market.z) < 1.8) {
+        this.enterMarket();
+      } else {
+        this.toMarket = true;
+        this.controls.target = new THREE.Vector3(ROUTE.market.x, 0, ROUTE.market.z);
+        this.tip('スーパー さくら', 'Đang đi tới siêu thị… (19:30 giảm 20%, 20:00 giảm 50%)', 4);
+      }
+      return;
+    }
+    if (id === 'cook') {
+      this.openCookMenu();
+      return;
+    }
     if (id === 'bath' || id === 'call') {
       const r = act(this.S, e, id); if (!r.ok) return;
       this.busy = 1.4;
@@ -151,12 +217,109 @@ export class EveningWalk {
     }
   }
 
+  enterMarket() {
+    if (!this.onMarket || this.paused) return;
+    this.toMarket = false;
+    this.controls.target = null;
+    this.paused = true;
+    this._hide();
+    this.onMarket(this.ev);
+  }
+
+  openCookMenu() {
+    const avail = cookable(this.S.pantry);
+    if (!avail.length) return;
+    this.paused = true;
+    const pantrySummary = (this.S.pantry || [])
+      .map((id) => goodOf(id))
+      .filter(Boolean)
+      .map((g) => `${g.icon} ${g.vi}`)
+      .join(', ');
+    const btns = avail.map((r) => {
+      const ing = r.items.map((id) => `${goodOf(id).icon} ${goodOf(id).vi}`).join(' + ');
+      const sav = savingVsKonbini(r);
+      return {
+        label: `${r.icon} ${r.vi} · ${r.jp} (${ing} · tiết kiệm ~${yen(sav)})`,
+        on: () => {
+          show('modal', false);
+          this.paused = false;
+          this.beginCook(r);
+        },
+      };
+    });
+    btns.push({
+      label: 'Đóng',
+      cls: 'ghost',
+      on: () => { show('modal', false); this.paused = false; },
+    });
+    card(`<h2>🍳 Tự nấu cơm tại ký túc xá · 自炊</h2>
+      <p>Chọn món muốn nấu từ nguyên liệu trong tủ bếp:</p>
+      <p class="lesson">🧺 Đang có: <b>${esc(pantrySummary)}</b><br>⏱ Nấu trên bếp ga gồm 3 bước (🔪 Thái → 🔥 Xào → 🍚 Dọn ra), tốn 15 phút.</p>`, btns);
+  }
+
+  beginCook(recipe) {
+    show('sh-tip', false);
+    if (recipe.stove) {
+      this.cookState = { recipe, phase: 'toStove', stepIdx: 0, timer: 0 };
+      this.controls.target = new THREE.Vector3(DORM.stove.x, 0, DORM.stove.z);
+    } else {
+      this.cookState = { recipe, phase: 'toTable', stepIdx: 0, timer: 0 };
+      this.controls.target = new THREE.Vector3(DORM.table.x - 0.35, 0, DORM.table.z + 0.35);
+    }
+    this.hud();
+  }
+
+  startStoveStep(idx) {
+    const cs = this.cookState;
+    if (!cs) return;
+    if (idx >= COOK_STEPS.length) {
+      if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(false);
+      cs.phase = 'toTable';
+      this.controls.target = new THREE.Vector3(DORM.table.x - 0.35, 0, DORM.table.z + 0.35);
+      return;
+    }
+    cs.phase = 'step';
+    cs.stepIdx = idx;
+    const step = COOK_STEPS[idx];
+    cs.timer = step.sec;
+    const P = this.who.player;
+    P.yaw = Math.PI;
+    P.play('pick');
+    if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(step.id === 'fry');
+    this.overhead.say(P, `${step.icon} ${step.jp} — ${step.vi}… (${idx + 1}/${COOK_STEPS.length})`, step.sec + 0.2);
+    this.hud();
+  }
+
+  finishCookAtTable() {
+    const cs = this.cookState;
+    if (!cs) return;
+    const recipe = cs.recipe;
+    this.cookState = null;
+    if (this.stages.dorm?.setSteam) this.stages.dorm.setSteam(false);
+    if (!recipe.stove) this.ev.min += 5;
+    const res = cook(this.S, this.S.pantry, recipe.id);
+    if (this.storage) save(this.S, this.storage);
+    const P = this.who.player;
+    P.yaw = Math.atan2(DORM.table.x - P.holder.position.x, DORM.table.z - P.holder.position.z);
+    P.play('idle');
+    this.busy = 1.2;
+    this.overhead.say(P, `いただきます！ — ${recipe.vi} ngon quá!`, 3);
+    if (res.ok) {
+      toast(
+        `${recipe.icon} ${recipe.vi} · ${recipe.jp}`,
+        `${deltaText(res.delta)} · Tiết kiệm ~${yen(res.saved)} so với ăn konbini`,
+        4.5,
+      );
+    }
+    this.hud();
+  }
+
   skip() {
     if (this.paused) return;
     const e = this.ev;
     if (e.phase === 'toSpot') { this.who.player.holder.position.set(this.target.x, 0, this.target.z); }
     else if (e.phase === 'toDorm') this.fadeTo(() => this.room());
-    else if (e.phase === 'room') this.action('sleep');
+    else if (e.phase === 'room' && !this.cookState) this.action('sleep');
   }
 
   arrived() {
@@ -181,15 +344,28 @@ export class EveningWalk {
       P.holder.position.set(DORM.bed.x, hipY - h * Math.cos(a), hipZ + h * Math.sin(a));
       if (this.lie >= 1) { this.lie = -1; this.paused = true; setTimeout(() => this.fadeTo(() => { this._hide(); this.ev = null; this.onSleep(); }), 700); }
     } else if (!this.paused) {
-      if (this.busy > 0) { this.busy -= dt; if (this.busy <= 0 && P.cur === 'talk') P.play('idle'); }
-      else {
+      if (this.cookState && this.cookState.phase === 'step') {
+        this.cookState.timer -= dt;
+        P.yaw = Math.PI;
+        if (this.cookState.timer <= 0) {
+          const doneStep = COOK_STEPS[this.cookState.stepIdx];
+          if (doneStep) e.min += doneStep.min;
+          this.startStoveStep(this.cookState.stepIdx + 1);
+        }
+      } else if (this.busy > 0) {
+        this.busy -= dt;
+        if (this.busy <= 0 && P.cur === 'talk') P.play('idle');
+      } else {
         let mag = c.input(this.dir);
         if (mag < 0.05 && c.target) {
           this.dir.set(c.target.x - pos.x, 0, c.target.z - pos.z);
           const d = this.dir.length();
           if (d < this.bestD - 0.02) { this.bestD = d; this.stuckT = 0; } else this.stuckT += dt;
           if (d < 0.1 || this.stuckT > 0.4) { c.target = null; mag = 0; this.bestD = Infinity; this.stuckT = 0; } else { this.dir.multiplyScalar(1 / d); mag = 1; }
-        } else if (mag >= 0.05) this.dir.multiplyScalar(1 / Math.max(mag, 1e-4));
+        } else if (mag >= 0.05) {
+          this.dir.multiplyScalar(1 / Math.max(mag, 1e-4));
+          if (!this.cookState) this.toMarket = false;
+        }
         if (mag >= 0.05) {
           moving = true;
           const ox = pos.x, oz = pos.z;
@@ -207,7 +383,20 @@ export class EveningWalk {
           tick(e, dt);
         }
       }
-      if ((e.phase === 'toSpot' || e.phase === 'toDorm') && Math.hypot(pos.x - this.target.x, pos.z - this.target.z) < 1.6) this.arrived();
+      if (this.toMarket && (!c.target || Math.hypot(pos.x - ROUTE.market.x, pos.z - ROUTE.market.z) < 1.5)) {
+        this.enterMarket();
+        return;
+      }
+      if (this.cookState) {
+        if (this.cookState.phase === 'toStove' && (!c.target || Math.hypot(pos.x - DORM.stove.x, pos.z - DORM.stove.z) < 0.32)) {
+          c.target = null;
+          this.startStoveStep(0);
+        } else if (this.cookState.phase === 'toTable' && (!c.target || Math.hypot(pos.x - (DORM.table.x - 0.35), pos.z - (DORM.table.z + 0.35)) < 0.35)) {
+          c.target = null;
+          this.finishCookAtTable();
+        }
+      }
+      if ((e.phase === 'toSpot' || e.phase === 'toDorm') && !this.toMarket && Math.hypot(pos.x - this.target.x, pos.z - this.target.z) < 1.6) this.arrived();
       if (this.toFuton && !c.target) { this.toFuton = false; this.lie = 0; }
     }
     if (this.lie < 0) P.moveAt(speed);
@@ -215,7 +404,7 @@ export class EveningWalk {
     // camera: over-the-back on the street, diorama view in the room
     camera.fov = portrait ? 56 : 46; camera.updateProjectionMatrix();
     if (e.phase === 'room' || e.phase === 'bed') {
-      const fx = pos.x * 0.5, fz = THREE.MathUtils.clamp(pos.z, -1, 1.4);
+      const fx = pos.x * 0.5, fz = THREE.MathUtils.clamp(pos.z, -1.2, 1.4);
       this.camPos.set(fx, 2.9 * (portrait ? 1.25 : 1), fz + (portrait ? 4.9 : 3.9));
       this.camLook.set(fx * 1.2, 0.55, fz - 0.7);
       this.camRig.to(this.camPos, this.camLook, dt, 4);
