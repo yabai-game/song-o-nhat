@@ -24,6 +24,8 @@ export const OUTFITS = {
     ref: { top: [0.717, 0.594, 0.796], bottom: [0.291, 0.257, 0.282], skin: [0.979, 0.774, 0.694], a: [0.863, 0.854, 0.866], b: [0.02, 0.02, 0.02] } },
   elder_m: { g: 'm', file: 'elder_m', name: 'Cụ ông', npc: true,
     ref: { top: [0.772, 0.685, 0.582], bottom: [0.433, 0.307, 0.225], skin: [0.955, 0.746, 0.656], a: [0.932, 0.932, 0.94], b: [0.02, 0.02, 0.02] } },
+  npc_black: { g: 'm', file: 'npc_black', name: 'Người qua đường', npc: true, fixedColors: true,
+    ref: { top: [0.807, 0.631, 0.416], bottom: [0.194, 0.19, 0.187], skin: [0.904, 0.782, 0.574], a: [0.596, 0.435, 0.264], b: [0.02, 0.02, 0.02] } },
 };
 export const SWATCH = {
   top:    [null, '#c8423b', '#3f8f5a', '#d9a43b', '#6b6f78', '#e59bb0', '#f2efe9'],

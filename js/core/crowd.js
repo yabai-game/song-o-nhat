@@ -9,7 +9,8 @@ export const CROWD = {
   AVOID: 0.9,
 };
 
-export const KINDS = ['hoodie', 'suit', 'f_casual', 'f_office', 'elder_m', 'elder_f'];
+export const KINDS = ['hoodie', 'suit', 'f_casual', 'f_office', 'elder_m', 'elder_f', 'npc_black'];
+export const FIXED_KINDS = ['npc_black'];
 
 export const TOPS = [
   '#3c5a86', '#2e5a44', '#a0605f', '#6b8f9e',
@@ -55,13 +56,19 @@ export function pickLooks(n, rand = Math.random, kinds = KINDS) {
   let prevKind, prevTop;
   for (let i = 0; i < n; i++) {
     const kind = pickFrom(kinds, rand, prevKind);
-    const top = pickFrom(TOPS, rand, prevTop);
-    const bottom = pickFrom(BOTTOMS, rand);
-    const hair = pickFrom(HAIR, rand);
-    const skin = pickFrom(SKIN, rand);
-    out.push({ kind, colors: { top, bottom, hair, skin } });
-    prevKind = kind;
-    prevTop = top;
+    if (FIXED_KINDS.includes(kind)) {
+      out.push({ kind, colors: {} });
+      prevKind = kind;
+      prevTop = undefined;
+    } else {
+      const top = pickFrom(TOPS, rand, prevTop);
+      const bottom = pickFrom(BOTTOMS, rand);
+      const hair = pickFrom(HAIR, rand);
+      const skin = pickFrom(SKIN, rand);
+      out.push({ kind, colors: { top, bottom, hair, skin } });
+      prevKind = kind;
+      prevTop = top;
+    }
   }
   return out;
 }

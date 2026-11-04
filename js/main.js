@@ -58,7 +58,7 @@ async function boot() {
     G.morning = new MorningWalk({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.evening = new EveningWalk({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.care = new CareShift({ stage: G.stages.care, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
-    G.streetCrowd = await new Crowd(G.stages.site.scene, { mode: 'street', seed: 836 }).spawnStreet();
+    G.streetCrowd = await new Crowd(G.stages.site.scene, { mode: 'street', seed: 331 }).spawnStreet();
     G.streetCrowd.setVisible(false);
     await setPlayer();
     setStage('town');

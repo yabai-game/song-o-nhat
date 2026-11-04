@@ -22,7 +22,7 @@ function nearestX(x, list) {
 }
 
 export class Crowd {
-  constructor(scene, { mode = 'street', stage = null, seed = 836 } = {}) {
+  constructor(scene, { mode = 'street', stage = null, seed = 331 } = {}) {
     this.scene = scene;
     this.stage = stage;
     this.mode = mode;
