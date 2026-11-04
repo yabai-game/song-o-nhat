@@ -5,9 +5,12 @@
 export const GAIT = {
   WALK_CLIP: 0.93,
   RUN_CLIP: 1.51,
-  WALK_MAX: 2.0,
+  // ordinary moving (street 3.0 m/s, site 3.4 m/s) must LOOK like walking: the walk clip is used up to
+  // WALK_MAX, played up to WALK_TS_MAX (a brisk walk); only the 🏃 run toggle goes past it.
+  WALK_MAX: 3.5,
   TS_MIN: 0.6,
-  TS_MAX: 2.0,
+  WALK_TS_MAX: 1.8, // faster than this the legs look frantic; a little foot slide reads better
+  TS_MAX: 2.2,       // run clip ceiling
   TURN_RATE: 6, // rad/s max turning speed for pedestrians and passengers
 };
 
@@ -21,7 +24,7 @@ export function gait(speed) {
   if (speed <= GAIT.WALK_MAX) {
     return {
       clip: 'walk',
-      timeScale: clamp(speed / GAIT.WALK_CLIP, GAIT.TS_MIN, GAIT.TS_MAX),
+      timeScale: clamp(speed / GAIT.WALK_CLIP, GAIT.TS_MIN, GAIT.WALK_TS_MAX),
     };
   }
   return {

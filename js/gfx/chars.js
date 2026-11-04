@@ -129,7 +129,13 @@ export class Character {
     // clips this model lacks (e.g. "carry") are borrowed from another model: every Meshy rig uses
     // the same Mixamo bone names and A-pose rest, so the tracks bind by name.
     for (const c of [...src.clips, ...shared.filter((s) => !src.clips.some((c) => c.name === s.name))]) this.acts[c.name] = this.mixer.clipAction(c);
-    this.cur = 'idle'; this.acts.idle.play();
+    // every action keeps playing; update() moves their weights towards the current clip and keeps
+    // the sum at exactly 1. three.js crossFadeTo chains left the sum below 1 when clips changed
+    // quickly (bumping into a wall flips idle/run every frame), and the missing weight blended in
+    // the A-pose rest: an arm flicked out sideways now and then while running.
+    for (const a of Object.values(this.acts)) { a.play(); a.setEffectiveWeight(0); }
+    this.cur = 'idle'; this.acts.idle.setEffectiveWeight(1);
+    this.fade = 0.25;
     this.attach = []; // { obj, bone, bone2, up, side, fwd }
     this.yaw = 0;
     this.bend = 0; this.bendTo = 0; // 0..1 procedural forward bend (pick up, bow)
@@ -149,9 +155,9 @@ export class Character {
       if (a) a.timeScale = 1;
     }
     if (this.cur === name || !this.acts[name]) return;
-    const next = this.acts[name], prev = this.acts[this.cur];
-    next.reset().setEffectiveWeight(1).play();
-    prev.crossFadeTo(next, fade, false);
+    const next = this.acts[name];
+    if (next.getEffectiveWeight() < 0.02) next.time = 0; // a clip coming back from silence starts at its beginning
+    this.fade = Math.max(0.05, fade);
     this.cur = name;
   }
   /** Select walk/run/idle and match clip playback speed to actual ground speed (m/s). */
@@ -178,6 +184,15 @@ export class Character {
   update(dt) {
     this.holder.rotation.y = this.yaw;
     for (const [b, q] of this.posed) b.quaternion.copy(q);
+    // weights: current clip → 1, others → 0 at 1/fade per second, then normalised to sum 1
+    const step = dt / this.fade;
+    let sum = 0;
+    for (const [n, a] of Object.entries(this.acts)) {
+      const w = a.getEffectiveWeight(), t = n === this.cur ? 1 : 0;
+      const nw = w + Math.max(-step, Math.min(step, t - w));
+      a.setEffectiveWeight(nw); sum += nw;
+    }
+    if (sum > 1e-4 && Math.abs(sum - 1) > 1e-4) for (const a of Object.values(this.acts)) a.setEffectiveWeight(a.getEffectiveWeight() / sum);
     this.mixer.update(dt);
     // procedural forward bend on top of the clip. The spine bones' local axes differ between Meshy
     // rigs and change with the clip pose, so the bend turns each bone about the character's own
