@@ -1,0 +1,86 @@
+// First-week story runner logic — pure module (spec §4.4, original 5771–5855).
+import { daysOf, EVENINGS, rankOf } from './jobs.js';
+import { applyFx, lessTired, gainXp } from './state.js';
+
+export const DAYS = 5;
+
+/** The six steps of day i for a job (site, care, …). */
+export function daySteps(i, job = 'site') {
+  const W = daysOf(job)[i], E = EVENINGS[i];
+  return [
+    { t: 'talk', label: `Sáng: ${W.story.title}`, xp: 5, data: W.story, at: 'work' },
+    { t: 'shift', label: W.a.label, xp: 15, data: W.a, hard: false },
+    { t: 'talk', label: `⚠️ Sự cố: ${W.drama.title}`, xp: 10, data: W.drama, at: 'work' },
+    { t: 'shift', label: `🔥 ${W.b.label}`, xp: 25, data: W.b, hard: true },
+    { t: 'talk', label: `Tối: ${E.title}`, xp: 10, data: E, at: E.place },
+    { t: 'sleep', label: 'Về giường đi ngủ', xp: 5 },
+  ];
+}
+
+/**
+ * Shift options adjusted by helpers (ally) and being watched (watch) — rankOpts in the original.
+ * Morning shifts at rank 1 have no limit and no miss cap, so they cannot be lost.
+ */
+export function shiftOpts(W, hard, S) {
+  const o = { goal: W.goal, limit: 0, maxMiss: 0, rain: !!W.rain, wind: !!W.wind, walk: W.walk || 1, jp: W.jp, vi: W.vi, label: W.label, hard };
+  if (!hard) return o;
+  o.limit = W.limit ? W.limit + (S.ally || 0) * 6 - (S.watch || 0) * 5 : 0;
+  let mm = W.maxMiss || 3;
+  if ((S.ally || 0) >= 2) mm += 1;
+  if ((S.watch || 0) >= 2) mm -= 1;
+  o.maxMiss = Math.max(0, mm);
+  return o;
+}
+
+/** Applies a talk choice; returns the applied deltas. */
+export function chooseTalk(S, c) {
+  const d = applyFx(S, c.fx || {}); // original storyChoose: plain applyFx (no boss scaling)
+  if (c.ally) S.ally = (S.ally || 0) + 1;
+  if (c.watch) S.watch = (S.watch || 0) + 1;
+  return d;
+}
+
+/**
+ * Result of a finished shift (storyShiftEnd). f = completed fraction 0..1, done = units done.
+ * Returns { deltas, jobXp, rankUp, title }.
+ */
+export function shiftEnd(S, { f, done, fail }, hard) {
+  const deltas = applyFx(S, lessTired(S, {
+    health: hard ? -6 : -4,
+    mental: fail ? -6 : hard ? -3 : -2,
+    boss: fail ? -5 : Math.round((hard ? 5 : 3) * f),
+    money: hard && !fail ? 3000 : 0,
+  }));
+  if (hard) S[fail ? 'fails' : 'wins'] = (S[fail ? 'fails' : 'wins'] || 0) + 1;
+  const before = rankOf(S.jobXp || 0);
+  const jobXp = Math.round((done || 0) * (hard && !fail ? 1.5 : 1));
+  S.jobXp = (S.jobXp || 0) + jobXp;
+  const after = rankOf(S.jobXp);
+  return { deltas, jobXp, rankUp: after > before ? after : 0, title: fail ? '❌ Chưa đạt' : hard ? '🏆 Vượt qua thử thách!' : '✅ Xong ca' };
+}
+
+/** Retrying a lost shift costs 4 mental. */
+export function retryCost(S) { return applyFx(S, { mental: -4 }); }
+
+export function sleep(S) { return applyFx(S, { health: 9, mental: 7 }); }
+
+/** Marks the current step done and advances; returns { levels, dayEnd, weekEnd }. */
+export function completeStep(S) {
+  const st = daySteps(S.story, S.job || 'site')[S.sStep];
+  const levels = gainXp(S, st.xp);
+  S.sStep++;
+  let dayEnd = false, weekEnd = false;
+  if (S.sStep >= 6) { S.sStep = 0; S.story++; dayEnd = true; if (S.story >= DAYS) weekEnd = true; }
+  return { levels, dayEnd, weekEnd, xp: st.xp };
+}
+
+/** End-of-week evaluation (storyWeekEnd). */
+export function weekEval(S) {
+  const win = S.wins || 0, ally = S.ally || 0, watch = S.watch || 0;
+  const score = win * 2 + ally - watch - (S.fails || 0);
+  const g = score >= 11 ? { grade: '🌟 Xuất sắc', jp: '素晴らしい！来月からも期待してるよ。', bonus: 15000 }
+    : score >= 7 ? { grade: '👍 Tốt', jp: 'よくやったね。', bonus: 8000 }
+    : score >= 3 ? { grade: '🙂 Tạm ổn', jp: 'もう少し頑張ろう。', bonus: 0 }
+    : { grade: '😓 Cần cố gắng', jp: '来週は気をつけてね。', bonus: 0 };
+  return { ...g, score, win, ally, watch, fails: S.fails || 0 };
+}

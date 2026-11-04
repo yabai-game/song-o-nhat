@@ -1,0 +1,98 @@
+// Player state and stat rules — pure module (no DOM, no three.js), tested with `node --test`.
+// Numbers follow the original game (docs/ORIGINAL_SPEC.md §2, original lines 606–617, 1887–1915, 2056, 2603, 2616).
+
+export const SAVE_KEY = 'song-o-nhat-3d';
+export const LV_HEAL = 15;
+export const CULTURE_GAIN = 0.5;
+export const LOVE_MAX = 30;
+export const JP_GAIN_TTS = 0.6;
+
+// Thực tập sinh (TTS) start values after the route override (spec §2.1)
+export const START_TTS = {
+  money: 50000, health: 85, mental: 65, jp: 15, culture: 5, boss: 40, senpai: 45, team: 25,
+  love: 0, lv: 1, xp: 0, debt: 700000, jobXp: 0,
+};
+
+export const BOSS_TYPES = {
+  kind:   { label: 'Dễ tính',     start: 55, gain: 1.2, loss: 0.8, weekly: 0.3,  chance: 0.3 },
+  normal: { label: 'Bình thường', start: 40, gain: 1,   loss: 1,   weekly: 0.2,  chance: 0.4 },
+  strict: { label: 'Khó tính',    start: 22, gain: 0.7, loss: 1.4, weekly: 0.55, chance: 0.3 },
+};
+
+export const STAT_LABELS = {
+  money: '💴 Tiền', health: '❤️ Sức khỏe', mental: '🧠 Tinh thần', jp: '🗣️ Tiếng Nhật', culture: '🎌 Văn hóa',
+  boss: '👷 Quản lý', team: '🤝 Đồng nghiệp', senpai: '🫂 Senpai', love: '💕 Tình cảm',
+};
+
+export const clamp = (v) => Math.max(0, Math.min(100, v));
+
+export function pickBossType(rng = Math.random) {
+  let r = rng();
+  for (const [id, b] of Object.entries(BOSS_TYPES)) { if ((r -= b.chance) < 0) return id; }
+  return 'normal';
+}
+
+/** New game state from the character-creator draft. */
+export function newState(draft, rng = Math.random) {
+  const bossType = pickBossType(rng);
+  return {
+    v: 1, ...START_TTS, boss: BOSS_TYPES[bossType].start, bossType,
+    route: 'tts', job: draft.job || null, name: (draft.name || '').trim(), look: { ...draft.look },
+    nation: draft.nation || 'vn', city: 'saitama',
+    week: 0, story: 0, sStep: 0, ally: 0, watch: 0, wins: 0, fails: 0,
+    flags: {}, certs: [jpLevel(START_TTS.jp)], log: [],
+  };
+}
+
+export function jpLevel(v) { return v >= 85 ? 'N1' : v >= 70 ? 'N2' : v >= 50 ? 'N3' : v >= 30 ? 'N4' : 'N5'; }
+export const xpNeed = (lv) => 50 + lv * 30;
+export const tireMul = (S) => Math.max(0.5, 1 - ((S && S.lv || 1) - 1) * 0.07);
+
+/** Boss points are scaled by the boss's personality. */
+export function bossAdjust(S, fx) {
+  if (!fx.boss) return fx;
+  const b = BOSS_TYPES[S.bossType] || BOSS_TYPES.normal;
+  return { ...fx, boss: Math.round(fx.boss * (fx.boss > 0 ? b.gain : b.loss)) };
+}
+
+/** Losses of health/mental shrink with level, but always cost at least 1. */
+export function lessTired(S, fx) {
+  const o = { ...fx }, m = tireMul(S);
+  for (const k of ['health', 'mental']) if (o[k] < 0) o[k] = Math.min(-1, Math.round(o[k] * m));
+  return o;
+}
+
+/** Applies an effect; returns the list of [stat, applied delta]. */
+export function applyFx(S, fx) {
+  const out = [];
+  for (const k in fx) {
+    let v = fx[k];
+    if (!v) continue;
+    if (k === 'culture' && v > 0) v = Math.max(1, Math.round(v * CULTURE_GAIN));
+    if (k === 'jp' && v > 0) v = Math.max(1, Math.round(v * JP_GAIN_TTS));
+    if (k === 'money') S.money += v;
+    else if (k === 'love') S.love = Math.max(0, Math.min(LOVE_MAX, (S.love || 0) + v));
+    else S[k] = clamp((S[k] || 0) + v);
+    out.push([k, v]);
+  }
+  return out;
+}
+
+/** Character XP; returns how many levels were gained (each heals health and mental). */
+export function gainXp(S, n) {
+  S.xp = (S.xp || 0) + n; S.lv = S.lv || 1;
+  let up = 0;
+  while (S.xp >= xpNeed(S.lv)) { S.xp -= xpNeed(S.lv); S.lv++; up++; }
+  if (up) applyFx(S, { health: LV_HEAL * up, mental: LV_HEAL * up });
+  return up;
+}
+
+export const yen = (v) => Math.round(v).toLocaleString('ja-JP') + ' ¥';
+
+export function save(S, storage) {
+  try { storage.setItem(SAVE_KEY, JSON.stringify(S)); return true; } catch { return false; }
+}
+export function load(storage) {
+  try { const t = storage.getItem(SAVE_KEY); if (!t) return null; const S = JSON.parse(t); return S && S.v === 1 ? S : null; } catch { return null; }
+}
+export function clearSave(storage) { try { storage.removeItem(SAVE_KEY); } catch { /* storage blocked */ } }

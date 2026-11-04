@@ -1,0 +1,141 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Sống ở Nhật 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&family=Zen+Maru+Gothic:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/game.css?v=297c8f54a4">
+
+<div id="app">
+  <canvas id="c" aria-label="Thế giới 3D"></canvas>
+
+  <div id="loading" role="status">
+    <div class="box">
+      <div class="jp">日本で生きる</div>
+      <h1>Sống ở Nhật</h1>
+      <div class="bar"><i id="bar"></i></div>
+      <div class="msg" id="loadmsg">Đang tải thị trấn và nhân vật…</div>
+    </div>
+  </div>
+
+  <!-- title -->
+  <section id="title" class="screen" hidden>
+    <div class="title-card">
+      <div class="jp">日本で生きる</div>
+      <h1>Sống ở Nhật</h1>
+      <p class="sub">Trải nghiệm công việc của thực tập sinh nước ngoài tại Nhật Bản</p>
+      <div class="col">
+        <button class="go" id="btn-new">▶ Bắt đầu mới</button>
+        <button class="ghost" id="btn-continue" hidden>⏯ Chơi tiếp</button>
+        <button class="ghost" id="btn-demo">🎮 Thử ca làm 3D</button>
+        <button class="ghost small" id="btn-credits">📜 Ghi công mô hình 3D</button>
+      </div>
+      <p class="fine">Bản dựng lại 3D · Chơi được: Xây dựng, Chăm sóc người già · Đào củ sen và Làm cơm hộp sắp mở</p>
+    </div>
+  </section>
+
+  <!-- character creator -->
+  <section id="creator" class="sheet" hidden aria-label="Tạo nhân vật">
+    <header><h2>Tạo nhân vật</h2><span class="jp">キャラ作成</span></header>
+    <div class="row">
+      <label for="name">Tên của bạn</label>
+      <input id="name" class="name-in" maxlength="16" placeholder="Ví dụ: Minh" autocomplete="off">
+    </div>
+    <div class="row">
+      <span class="lbl">Giới tính</span>
+      <div class="seg" id="gender"><button type="button" data-g="m" aria-pressed="true">Nam</button><button type="button" data-g="f" aria-pressed="false">Nữ</button></div>
+    </div>
+    <div class="row"><span class="lbl">Kiểu đồ</span><div class="outfits" id="outfits"></div></div>
+    <div class="row"><span class="lbl" id="lbl-top">Màu áo</span><div class="sw" id="sw-top"></div></div>
+    <div class="row"><span class="lbl" id="lbl-bottom">Màu quần</span><div class="sw" id="sw-bottom"></div></div>
+    <div class="row"><span class="lbl" id="lbl-hair">Màu tóc</span><div class="sw" id="sw-hair"></div></div>
+    <div class="row"><span class="lbl" id="lbl-skin">Màu da</span><div class="sw" id="sw-skin"></div></div>
+    <div class="hint-rot">Kéo nhân vật để xoay</div>
+    <div class="two"><button class="ghost" id="cr-back">← Quay lại</button><button class="go" id="cr-next">Tiếp: Chọn nghề →</button></div>
+  </section>
+
+  <!-- job choice -->
+  <section id="jobs" class="sheet tall" hidden aria-label="Chọn nghề">
+    <header><h2>🧰 Bạn sang Nhật làm nghề gì?</h2></header>
+    <p class="sub">Bạn là thực tập sinh. Chọn nghề xong là vào câu chuyện ngày đi làm đầu tiên.</p>
+    <div class="jobs" id="joblist"></div>
+    <button class="ghost" id="jobs-back">← Sửa nhân vật</button>
+  </section>
+
+  <!-- day HUD -->
+  <div id="dayhud" hidden>
+    <div class="top">
+      <div class="pill"><span id="day-label">Ngày 1/5</span></div>
+      <div class="stats" id="stats"></div>
+    </div>
+  </div>
+
+  <!-- talk -->
+  <section id="talk" class="sheet" hidden aria-live="polite">
+    <div class="who"><b id="talk-name"></b><span id="talk-role"></span><span class="tag-step" id="talk-step"></span></div>
+    <h3 id="talk-title"></h3>
+    <p class="jpline" id="talk-jp"></p>
+    <p id="talk-text"></p>
+    <div class="choices" id="talk-choices"></div>
+    <div class="result" id="talk-result" hidden>
+      <p id="talk-r"></p>
+      <div class="deltas" id="talk-deltas"></div>
+      <p class="lesson" id="talk-lesson" hidden></p>
+      <button class="go" id="talk-next">Tiếp →</button>
+    </div>
+  </section>
+
+  <!-- shift HUD -->
+  <div id="shifthud" hidden>
+    <div class="top">
+      <div class="pill goal" id="sh-goal"></div>
+      <button class="pill btn" id="sh-quit" aria-label="Về sớm">✕</button>
+    </div>
+    <div class="pill place" id="sh-place">📍 <span>Công trường Saitama</span> <i class="dot"></i></div>
+    <div class="rank pill" id="sh-rank"></div>
+    <div class="tip" id="sh-tip" hidden><b></b><span></span></div>
+    <div class="gust" id="sh-gust" hidden>💨 突風！ Gió giật, đứng yên!</div>
+    <div class="joy" id="joy"><i></i></div>
+    <div class="acts" id="acts"></div>
+  </div>
+
+  <!-- generic card -->
+  <div id="modal" hidden><div class="card" id="card"></div></div>
+  <div id="toast" hidden></div>
+  <div id="tags"></div>
+</div>
+
+<script type="importmap">
+{
+ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "./js/core/care_data.js": "./js/core/care_data.js?v=297c8f54a4",
+  "./js/core/care_rules.js": "./js/core/care_rules.js?v=297c8f54a4",
+  "./js/core/evening.js": "./js/core/evening.js?v=297c8f54a4",
+  "./js/core/jobs.js": "./js/core/jobs.js?v=297c8f54a4",
+  "./js/core/morning.js": "./js/core/morning.js?v=297c8f54a4",
+  "./js/core/site_rules.js": "./js/core/site_rules.js?v=297c8f54a4",
+  "./js/core/state.js": "./js/core/state.js?v=297c8f54a4",
+  "./js/core/story.js": "./js/core/story.js?v=297c8f54a4",
+  "./js/gfx/backdrop.js": "./js/gfx/backdrop.js?v=297c8f54a4",
+  "./js/gfx/care.js": "./js/gfx/care.js?v=297c8f54a4",
+  "./js/gfx/chars.js": "./js/gfx/chars.js?v=297c8f54a4",
+  "./js/gfx/controls.js": "./js/gfx/controls.js?v=297c8f54a4",
+  "./js/gfx/dorm.js": "./js/gfx/dorm.js?v=297c8f54a4",
+  "./js/gfx/site.js": "./js/gfx/site.js?v=297c8f54a4",
+  "./js/gfx/stage.js": "./js/gfx/stage.js?v=297c8f54a4",
+  "./js/gfx/station.js": "./js/gfx/station.js?v=297c8f54a4",
+  "./js/gfx/town.js": "./js/gfx/town.js?v=297c8f54a4",
+  "./js/main.js": "./js/main.js?v=297c8f54a4",
+  "./js/ui/ui.js": "./js/ui/ui.js?v=297c8f54a4",
+  "./js/work/care_shift.js": "./js/work/care_shift.js?v=297c8f54a4",
+  "./js/work/evening_walk.js": "./js/work/evening_walk.js?v=297c8f54a4",
+  "./js/work/morning_walk.js": "./js/work/morning_walk.js?v=297c8f54a4",
+  "./js/work/site_shift.js": "./js/work/site_shift.js?v=297c8f54a4"
+ }
+}
+</script>
+<script type="module" src="js/main.js?v=297c8f54a4"></script>
+
+</body></html>
