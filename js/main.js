@@ -12,6 +12,7 @@ import { spotFor } from './core/evening.js';
 import { buildDorm } from './gfx/dorm.js';
 import { buildCare } from './gfx/care.js';
 import { buildStation } from './gfx/station.js';
+import { Crowd } from './gfx/crowd.js';
 import { CareShift, seatFolk } from './work/care_shift.js';
 import { $, show, card, toast, deltaChips, esc, Overhead } from './ui/ui.js';
 import { newState, save, load, clearSave, yen, jpLevel, applyFx } from './core/state.js';
@@ -20,7 +21,7 @@ import { daySteps, shiftOpts, shiftEnd, chooseTalk, completeStep, weekEval, slee
 
 const storage = (() => { try { return window.localStorage; } catch { return { getItem: () => null, setItem() {}, removeItem() {} }; } })();
 const G = {
-  S: null, stage: null, stages: {}, player: null, own: null, wardrobe: {}, folk: [], npcs: {}, workers: [], demoJob: null, activeShift: null,
+  S: null, stage: null, stages: {}, player: null, own: null, wardrobe: {}, folk: [], npcs: {}, workers: [], streetCrowd: null, stationCrowd: null, demoJob: null, activeShift: null,
   draft: { gender: 'm', outfit: 'hoodie', colors: { top: null, bottom: null, hair: null, skin: null }, name: '' },
   mode: 'loading', yaw: 0, spin: 0.5, camRig: new CamRig(), overhead: new Overhead(), t: 0,
 };
@@ -57,6 +58,8 @@ async function boot() {
     G.morning = new MorningWalk({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.evening = new EveningWalk({ controls: G.controls, overhead: G.overhead, camRig: G.camRig });
     G.care = new CareShift({ stage: G.stages.care, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
+    G.streetCrowd = await new Crowd(G.stages.site.scene, { mode: 'street', seed: 836 }).spawnStreet();
+    G.streetCrowd.setVisible(false);
     await setPlayer();
     setStage('town');
     bindUi();
@@ -297,7 +300,13 @@ function finishStep(extraHtml = '') {
 /** The station platform is only needed for the care home commute: built the first time. */
 let stationP = null;
 function ensureStation() {
-  if (!stationP) stationP = buildStation().then((s) => { G.stages.station = s; return s; });
+  if (!stationP) {
+    stationP = buildStation().then(async (s) => {
+      G.stages.station = s;
+      G.stationCrowd = await new Crowd(s.scene, { mode: 'station', stage: s, seed: 7 }).spawnStation();
+      return s;
+    });
+  }
   return stationP;
 }
 
@@ -307,6 +316,7 @@ async function morningStep(st) {
   G.mode = 'morning';
   const train = jobOf() === 'care';
   if (train && !G.stages.station) { toast('🚉 Đang tải ga tàu…', 'さくら駅'); await ensureStation(); }
+  if (train && G.stationCrowd) G.stationCrowd.reset();
   const [suzuki, hung] = [await npc('suzuki', 'site'), await npc('hung', 'site')];
   const nurse = train ? await npc('yamada', 'care') : null;
   if (train) await spawnFolk(); // the residents are already at breakfast when the player walks in
@@ -609,6 +619,16 @@ function frame() {
   if (G.mode === 'shift') (G.activeShift || G.shift).update(dt, t);
   if (G.mode === 'morning') G.morning.update(dt, t);
   if (G.mode === 'evening') G.evening.update(dt, t);
+  if (G.streetCrowd) {
+    const onStreet = G.stageId === 'site' && (G.mode === 'morning' || G.mode === 'evening');
+    G.streetCrowd.setVisible(onStreet);
+    if (onStreet) G.streetCrowd.update(dt, P.holder.position);
+  }
+  if (G.stationCrowd) {
+    const onStation = G.stageId === 'station' && G.mode === 'morning';
+    G.stationCrowd.setVisible(onStation);
+    if (onStation) G.stationCrowd.update(dt);
+  }
   if (G.stageId === 'site') { updateWorkers(dt); for (const w of G.workers) w.update(dt); }
   P.update(dt);
   for (const ch of Object.values(G.npcs)) if (ch.holder.parent) ch.update(dt);
