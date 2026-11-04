@@ -363,6 +363,7 @@ async function morningStep(st) {
   G.morning.start({
     S, stages: G.stages, who: { player: G.player, suzuki, hung, nurse, foreman },
     commute: train ? 'train' : 'walk',
+    storage,
     setStage, dayLabel: `📅 Ngày ${S.story + 1}/5 · Buổi sáng`,
     onEnd: () => { S.flags.morningDay = S.story; save(S, storage); hideAll(); talkStep(st); },
   });
@@ -642,6 +643,7 @@ const CREDITS = [
   ['Hộp cơm bento', 'Low Poly Bento 弁当', 'SaltySaveState', 'f27d78a4526a4fe685b5ae2f75f60c11', 'CC BY 4.0'],
   ['Lá sen', 'Water lily', 'Mariia Melnik', '04dd636204cd4b0db45a4fc82efa4385', 'CC BY 4.0'],
   ['Củ sen', 'Scan Lotus Root-Freepoly.org', 'Freepoly.org', 'f4fa4b58b6514440bdc2d90817a42083', 'CC BY 4.0'],
+  ['Túi rác', 'Garbage bags', 'DJMaesen', '9e769751ac3a4b6a893a5719349b78ca', 'CC BY 4.0'],
 ];
 function creditsScreen() {
   hideAll();
@@ -658,12 +660,32 @@ function demoScreen() {
   hideAll(); G.demoJob = null;
   const name = (d) => d.b.label.replace(/^Ca chiều: |^Thử thách cuối tuần: /, '');
   const rows = [
+    { label: '🗑️ Phân loại rác', on: () => demoTrash() },
     ...daysOf('site').map((d, i) => ({ label: `👷 Ngày ${i + 1}: ${name(d)}${d.b.wind ? ' 💨' : ''}${d.b.rain ? ' 🌧️' : ''}`, on: () => demoShift('site', i) })),
     ...daysOf('care').map((d, i) => ({ label: `👵 Ngày ${i + 1}: ${name(d)}`, on: () => demoShift('care', i) })),
     ...daysOf('bento').map((d, i) => ({ label: `🍱 Ngày ${i + 1}: ${name(d)}`, on: () => demoShift('bento', i) })),
     ...daysOf('lotus').map((d, i) => ({ label: `🪷 Ngày ${i + 1}: ${name(d)}${d.b.rain ? ' 🌧️' : ''}`, on: () => demoShift('lotus', i) })),
   ];
-  card('<h2>🎮 Thử ca làm 3D</h2><p>👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · 🪷 Ruộng sen · không tính điểm.</p>', [...rows, { label: '← Quay lại', cls: 'ghost', on: titleScreen }]);
+  card('<h2>🎮 Thử ca làm 3D</h2><p>🗑️ Phân loại rác · 👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · 🪷 Ruộng sen · không tính điểm.</p>', [...rows, { label: '← Quay lại', cls: 'ghost', on: titleScreen }]);
+}
+async function demoTrash() {
+  hideAll(); hideNpcs();
+  await dress(false);
+  G.mode = 'morning';
+  const [suzuki, hung] = [await npc('suzuki', 'site'), await npc('hung', 'site')];
+  await spawnWorkers();
+  const demoS = newState({ name: G.draft.name || 'Bạn', job: 'site', look: { gender: G.draft.gender, outfit: G.draft.outfit, colors: { ...G.draft.colors } } });
+  demoS.story = 0;
+  G.morning.start({
+    S: demoS,
+    stages: G.stages,
+    who: { player: G.player, suzuki, hung },
+    commute: 'walk',
+    demoTrash: true,
+    setStage,
+    dayLabel: '🎮 Thử nhanh · 🗑️ Phân loại rác (Ngày 1)',
+    onEnd: () => demoScreen(),
+  });
 }
 async function demoShift(job, i) {
   G.demoJob = job;

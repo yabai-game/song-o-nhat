@@ -171,3 +171,21 @@ button:focus-visible { outline: 2.5px solid var(--sakura); outline-offset: 2px; 
 .credits li { margin: 2px 0; }
 .credits a { color: inherit; text-decoration: underline; }
 button.small { font-size: 13px; padding: 8px 12px; }
+
+/* morning trash sorting card */
+.trash-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--ink-dim); }
+.trash-item { border: 2px solid var(--line); border-radius: 14px; background: rgba(0,0,0,.22); padding: 14px 12px; text-align: center; display: grid; gap: 4px; transition: border-color .15s, background .15s; }
+.trash-item .ic { font-size: 42px; line-height: 46px; }
+.trash-item .jp { font-size: 20px; font-weight: 800; color: #fff; }
+.trash-item .vi { font-size: 14.5px; color: var(--ink-dim); font-weight: 600; }
+.trash-item.good { border-color: var(--good); background: rgba(126, 214, 160, .24); }
+.trash-item.bad { border-color: var(--bad); background: rgba(255, 138, 122, .24); }
+.trash-tip { min-height: 36px; border-radius: 10px; padding: 7px 10px; font-size: 13px; line-height: 1.35; background: rgba(255, 138, 122, .16); border-left: 3px solid var(--bad); color: var(--ink); display: flex; align-items: center; }
+.trash-tip.good { background: rgba(126, 214, 160, .16); border-left-color: var(--good); color: var(--good); font-weight: 700; justify-content: center; }
+.trash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.trash-btn { appearance: none; border: 2px solid var(--line); border-radius: 14px; background: rgba(0,0,0,.26); padding: 11px 8px; display: grid; justify-items: center; gap: 2px; cursor: pointer; touch-action: manipulation; }
+.trash-btn:hover:not(:disabled) { border-color: var(--gold); }
+.trash-btn:disabled { opacity: .6; cursor: default; }
+.trash-btn .ic { font-size: 26px; line-height: 30px; }
+.trash-btn .jp { font-family: var(--font-jp); font-size: 15px; font-weight: 800; color: #fff; }
+.trash-btn .vi { font-size: 12px; color: var(--ink-dim); text-align: center; line-height: 1.2; }

@@ -38,15 +38,16 @@ function pipePile(parent, x, y, z, rows, cols, len, ry = 0, r = 0.09, color = '#
   return mesh;
 }
 
-const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight'];
+const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight', 'trash_bags'];
 const KONBINI_Z = 33.3;                  // mini mart lot centre: its 7.7 m deep lot fronts the sidewalk (z ≈ 29.4)
 const KONBINI_SIGN = { z: KONBINI_Z - 3.2 }; // shop front (for the light spilling out at night)
 const DORM_Z = 33.3;                     // dorm model centre: its 7.3 m deep block fronts the sidewalk (z ≈ 29.7)
 
-/** Morning walk on the south street: dorm → vending machines → neighbour → site gate. */
+/** Morning walk on the south street: dorm → trash point → vending machines → neighbour → site gate. */
 export const ROUTE = {
   dorm: { x: -26, z: 36.2 },
   start: { x: -24, z: 28.3 },
+  trash: { x: -22.7, z: 28.5 },
   vending: { x: -20.6, z: 28.5 },
   suzuki: { x: -10.5, z: 28.6 },
   hung: { x: 5.2, z: 22.6 },
@@ -54,7 +55,7 @@ export const ROUTE = {
   konbini: { x: -1, z: 28.5 },   // in front of the konbini, facing the street
   station: { x: 8.4, z: 24.6 },  // east end of the street: the way to さくら駅 (care home commute)
   bounds: { x0: -31, x1: 9, z0: 21.8, z1: 28.7 },
-  blocks: [{ x: -20.6, z: 29.5, r: 0.45 }, { x: -19.45, z: 29.5, r: 0.45 }],
+  blocks: [{ x: -22.7, z: 29.45, r: 0.55 }, { x: -20.6, z: 29.5, r: 0.45 }, { x: -19.45, z: 29.5, r: 0.45 }],
 };
 
 export async function buildSite() {
@@ -332,6 +333,95 @@ export async function buildSite() {
     const v = gl.vending.scene.clone(true); v.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     v.position.set(ROUTE.vending.x + dx, 0, ROUTE.vending.z + 0.9); v.rotation.y = Math.PI; scene.add(v); void k;
   }
+  // trash collection point (ゴミ集積所) beside the dorm entrance on the sidewalk: blue net box, 2 clusters
+  // of trash_bags, and the Japanese collection schedule sign
+  let handBag = null, droppedBag = null;
+  {
+    const tx = ROUTE.trash.x, tz = 29.36, nw = 1.54, nh = 0.86, nd = 0.82, fCol = '#1f65a6';
+    placeModel(gl.trash_bags, [[tx - 0.34, tz, 0.25, 0.78], [tx + 0.32, tz + 0.02, -0.4, 0.72]], { cast: true, y: 0.01 });
+    for (const sx of [-nw / 2, nw / 2]) for (const sz of [-nd / 2, nd / 2]) {
+      put(tube(nh, 0.022), fCol, tx + sx, nh / 2, tz + sz);
+    }
+    for (const y of [0.02, nh]) {
+      for (const sz of [-nd / 2, nd / 2]) put(tubeX(nw, 0.02), fCol, tx, y, tz + sz);
+      for (const sx of [-nw / 2, nw / 2]) put(tubeZ(nd, 0.02), fCol, tx + sx, y, tz);
+    }
+    for (const sx of [-0.45, 0.45]) put(tube(1.75, 0.024), '#6b737b', tx + sx, 0.875, tz + nd / 2);
+    const trashNetTex = canvasTexture(128, 128, (g) => {
+      g.clearRect(0, 0, 128, 128);
+      g.fillStyle = 'rgba(35, 118, 200, 0.36)'; g.fillRect(0, 0, 128, 128);
+      g.strokeStyle = 'rgba(18, 72, 138, 0.88)'; g.lineWidth = 2;
+      for (let i = 0; i <= 128; i += 16) {
+        g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 128); g.stroke();
+        g.beginPath(); g.moveTo(0, i); g.lineTo(128, i); g.stroke();
+      }
+    }, [3, 2]);
+    const trashNetMat = new THREE.MeshStandardMaterial({
+      map: trashNetTex, transparent: true, opacity: 0.88, side: THREE.DoubleSide, depthWrite: false, roughness: 0.75,
+    });
+    const topNet = new THREE.Mesh(new THREE.PlaneGeometry(nw, nd), trashNetMat);
+    topNet.rotation.x = -Math.PI / 2; topNet.position.set(tx, nh, tz); scene.add(topNet);
+    for (const sz of [-nd / 2, nd / 2]) {
+      const pNet = new THREE.Mesh(new THREE.PlaneGeometry(nw, nh), trashNetMat);
+      pNet.position.set(tx, nh / 2, tz + sz); scene.add(pNet);
+    }
+    for (const sx of [-nw / 2, nw / 2]) {
+      const sNet = new THREE.Mesh(new THREE.PlaneGeometry(nd, nh), trashNetMat);
+      sNet.rotation.y = Math.PI / 2; sNet.position.set(tx + sx, nh / 2, tz); scene.add(sNet);
+    }
+    const schedTex = canvasTexture(512, 340, (g) => {
+      g.fillStyle = '#fdfcf7'; g.fillRect(0, 0, 512, 340);
+      g.strokeStyle = '#1f65a6'; g.lineWidth = 10; g.strokeRect(8, 8, 496, 324);
+      g.fillStyle = '#1f65a6'; g.fillRect(14, 14, 484, 58);
+      g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '800 34px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+      g.fillText('ゴミ収集日', 256, 44);
+      g.textAlign = 'left'; g.font = '700 26px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+      const rows = [
+        ['#c0392b', '月・木  燃えるゴミ'],
+        ['#b87314', '火      プラ'],
+        ['#277a46', '水      資源ゴミ'],
+        ['#2b578a', '金      燃えないゴミ'],
+      ];
+      rows.forEach(([col, txt], idx) => { g.fillStyle = col; g.fillText(txt, 44, 102 + idx * 44); });
+      g.fillStyle = '#c0392b'; g.textAlign = 'center';
+      g.font = '700 22px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+      g.fillText('朝8時までに出してください', 256, 296);
+    });
+    const schedBoard = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.15, 0.76),
+      new THREE.MeshStandardMaterial({ map: schedTex, roughness: 0.65, side: THREE.DoubleSide }),
+    );
+    schedBoard.position.set(tx, 1.38, tz + nd / 2 - 0.02);
+    schedBoard.rotation.y = Math.PI;
+    scene.add(schedBoard);
+
+    // Extract one bag from trash_bags (z >= 0 sub-mesh), scaled down for carrying in hand & placing
+    handBag = new THREE.Group();
+    gl.trash_bags.scene.updateMatrixWorld(true);
+    gl.trash_bags.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const src = o.geometry.clone().applyMatrix4(o.matrixWorld);
+      const pos = src.attributes.position, idx = src.index;
+      if (idx) {
+        const keep = [];
+        for (let i = 0; i < idx.count; i += 3) {
+          const i0 = idx.getX(i), i1 = idx.getX(i + 1), i2 = idx.getX(i + 2);
+          if (pos.getZ(i0) >= -0.02 && pos.getZ(i1) >= -0.02 && pos.getZ(i2) >= -0.02) keep.push(i0, i1, i2);
+        }
+        src.setIndex(keep);
+      }
+      src.translate(-0.05, -0.58, -0.25);
+      const m = new THREE.Mesh(src, o.material);
+      m.castShadow = true; m.receiveShadow = true;
+      handBag.add(m);
+    });
+    handBag.scale.setScalar(0.55);
+    droppedBag = handBag.clone(true);
+    droppedBag.position.set(tx, 0.33, tz - 0.14);
+    droppedBag.visible = false;
+    scene.add(droppedBag);
+  }
   // evening place on the south street: the konbini (fictional chain) — its sign glows at dusk/night,
   // with street lamps that only light up then. Money is also sent home from its counter (day 3).
   const glow = [];
@@ -461,6 +551,9 @@ export async function buildSite() {
   // target ring
   const ring = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.05, 8, 48), new THREE.MeshBasicMaterial({ color: '#ffd23f' }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = Y + 0.03; scene.add(ring);
+  const trashRing = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.04, 8, 40), new THREE.MeshBasicMaterial({ color: '#ffd23f' }));
+  trashRing.rotation.x = -Math.PI / 2; trashRing.position.set(ROUTE.trash.x, 0.03, ROUTE.trash.z); trashRing.visible = false; scene.add(trashRing);
+  function setTrashDropped(on) { if (droppedBag) droppedBag.visible = !!on; }
 
   // rain: instanced streaks around the camera
   const RN = 600, rain = new THREE.InstancedMesh(new THREE.BoxGeometry(0.012, 0.5, 0.012), new THREE.MeshBasicMaterial({ color: '#d6e4ee', transparent: true, opacity: 0.55 }), RN);
@@ -504,10 +597,11 @@ export async function buildSite() {
   }
 
   return {
-    scene, sun, bundle, ring, setFloors, setPlaced, setWeather, setTime, dropAt, stack,
+    scene, sun, bundle, ring, trashRing, handBag, setTrashDropped, setFloors, setPlaced, setWeather, setTime, dropAt, stack,
     showcase: { pos: new THREE.Vector3(9, Y + 4.5, 12), look: new THREE.Vector3(-2, Y - 2, -3) },
     update(dt, t, focus) {
       jib.rotation.y = Math.sin(t * 0.12) * 0.55 + 0.35;
+      if (trashRing.visible) trashRing.scale.setScalar(1 + Math.sin(t * 6) * 0.05);
       if (fallT > 0) { fallT -= dt; fallen.position.y = Math.max(Y + 0.1, fallen.position.y - dt * 9); if (fallT <= 0) fallen.visible = false; }
       if (rain.visible) {
         for (let i = 0; i < RN; i++) {

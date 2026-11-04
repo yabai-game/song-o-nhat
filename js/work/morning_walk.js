@@ -4,6 +4,8 @@
 // Rules and stat effects live in core/morning.js; this module drives the 3D scenes and the HUD.
 import * as THREE from 'three';
 import { MORNING, createMorning, clock, wake, tick, act, leaveRoom, arrive, toPlatform, board, alight } from '../core/morning.js';
+import { applyFx, save } from '../core/state.js';
+import { KINDS, DAY_JP, TRASH_MIN, createSort, answer, result, rng } from '../core/trash_rules.js';
 import { DORM } from '../gfx/dorm.js';
 import { ROUTE } from '../gfx/site.js';
 import { STATION } from '../gfx/station.js';
@@ -17,13 +19,22 @@ const BUTTONS = [
   { id: 'wake', icon: '⏰', label: 'Dậy ngay', jp: '起きる', main: true },
   { id: 'snooze', icon: '😴', label: 'Ngủ thêm 10 phút', jp: 'あと10分' },
   { id: 'eat', icon: '🍙', label: 'Ăn sáng', jp: '朝ご飯' },
+  { id: 'trash', icon: '🗑️', label: 'Phân loại rác', jp: 'ゴミ分別' },
   { id: 'out', icon: '🚪', label: 'Ra ngoài', jp: '行ってきます', main: true },
+  { id: 'drop', icon: '🗑️', label: 'Bỏ rác', jp: 'ゴミ出し', main: true },
   { id: 'drink', icon: '🥤', label: 'Mua nước', jp: '自販機' },
   { id: 'greet', icon: '🙋', label: 'Chào', jp: 'おはよう' },
   { id: 'run', icon: '🏃', label: 'Chạy', jp: '走る' },
   { id: 'board', icon: '🚃', label: 'Lên tàu', jp: '乗る', main: true },
 ];
-const SHOW = { wake: ['wake', 'snooze'], room: ['out', 'eat'], street: ['greet', 'drink', 'run'], platform: ['board'], ride: [], walkin: ['greet'] };
+const SHOW = {
+  wake: ['wake', 'snooze'],
+  room: ['out', 'eat', 'trash'],
+  street: ['drop', 'greet', 'drink', 'run'],
+  platform: ['board'],
+  ride: [],
+  walkin: ['greet'],
+};
 // where the nurse waits for the morning greeting, just inside the dining room
 const NURSE_AT = { x: -1.4, z: 2.6 };
 const WALK = 3.0, RUN_MUL = 1.6, NEAR = 1.7;
@@ -89,26 +100,50 @@ export class MorningWalk {
 
   /** stages = { dorm, site }; who = { player, suzuki, hung }; setStage(id) switches the rendered scene */
   /** commute: 'walk' (street to the site gate) or 'train' (dorm → station → care home / bento factory, 22 min) */
-  start({ S, stages, who, setStage, dayLabel, onEnd, commute = 'walk', walkin = null }) {
-    Object.assign(this, { S, stages, who, setStage, onEnd, commute });
+  start({ S, stages, who, setStage, dayLabel, onEnd, commute = 'walk', walkin = null, demoTrash = false, storage = null }) {
+    Object.assign(this, { S, stages, who, setStage, onEnd, commute, demoTrash: !!demoTrash, storage });
     this.walkin = walkin || walkinFor(S && S.job, stages);
     this.st = createMorning();
     this.active = true; this.paused = false; this.running = false; this.rise = -1; this.busy = 0; this.bestD = Infinity; this.stuckT = 0;
     this.platT = 0; this.rideT = -1; this.boarding = false; this.warned = false; this.greetT = -1; this.pendingGreet = false;
+    this.sorted = false; this.carryingBag = false; this.trashSt = null; this.pendingDrop = false;
+    if (this.stages.site) {
+      if (this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
+      if (this.stages.site.setTrashDropped) this.stages.site.setTrashDropped(false);
+    }
     // swap the shift buttons for the morning ones
     const box = $('acts'); this.saved = [...box.children]; box.replaceChildren(...this.mine);
     show('shifthud'); show('sh-gust', false);
     $('sh-rank').textContent = dayLabel;
     this.enterRoom();
+    if (this.demoTrash) {
+      wake(this.S, this.st, false);
+      const P = this.who.player;
+      P.holder.rotation.x = 0;
+      P.holder.position.set(DORM.bed.x, 0, DORM.bed.z + 0.85);
+      P.yaw = Math.PI / 2;
+      this.controls.enabled = true;
+      this.controls.onTap = (pt) => { if (Math.hypot(pt.x - DORM.door.x, pt.z - DORM.door.z) < 1) this.pendingOut = true; };
+      this.tip('ゴミ分別・ゴミ出し', 'Bấm 🗑️ Phân loại rác (5 món), rồi mang túi rác ra cửa (🚪) bỏ vào điểm tập kết', 7);
+      this.hud();
+    }
   }
   stop() {
     this.active = false; this.controls.enabled = false;
-    const P = this.who.player; P.holder.rotation.x = 0; P.holder.visible = true;
+    clearTimeout(this.sortTimer);
+    const P = this.who.player; P.unpinAll(); P.bendTo = 0; P.reachTo = 0; P.holder.rotation.x = 0; P.holder.visible = true;
     if (this.who.hung) this.who.hung.holder.visible = true;
     if (this.stages.station) this.stages.station.sendTrain('reset');
+    if (this.stages.site && this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
     $('acts').replaceChildren(...this.saved);
     show('shifthud', false); show('sh-tip', false);
     this.btn.run.classList.remove('on');
+  }
+
+  trashDone() {
+    if (this.sorted) return true;
+    if (this.demoTrash) return false;
+    return !!(this.S && this.S.flags && this.S.flags.trashDay === this.S.story);
   }
 
   tip(jp, vi, sec = 6) {
@@ -125,11 +160,17 @@ export class MorningWalk {
     if (s.phase === 'room') {
       this.btn.eat.disabled = s.ate;
       this.btn.eat.classList.toggle('hot', !s.ate && this.near(DORM.table, 1.4));
-      this.btn.out.classList.toggle('hot', this.near(DORM.door));
+      const tDone = this.trashDone();
+      this.btn.trash.hidden = tDone;
+      this.btn.trash.classList.toggle('hot', !tDone && this.demoTrash);
+      this.btn.out.classList.toggle('hot', this.near(DORM.door) || (this.demoTrash && this.carryingBag));
     } else if (s.phase === 'street') {
+      this.btn.drop.hidden = !this.carryingBag;
+      this.btn.drop.classList.toggle('hot', this.carryingBag && this.near(ROUTE.trash, 1.9));
       this.btn.drink.disabled = s.drank;
       this.btn.drink.classList.toggle('hot', !s.drank && this.nearV());
-      this.btn.greet.classList.toggle('hot', !s.greeted && this.near(ROUTE.suzuki, 2.2));
+      const suzPos = this.who.suzuki ? this.who.suzuki.holder.position : ROUTE.suzuki;
+      this.btn.greet.classList.toggle('hot', !s.greeted && this.near(suzPos, 2.2));
     } else if (s.phase === 'platform') {
       const stopped = this.stages.station.trainState() === 'stopped';
       this.btn.board.disabled = !stopped;
@@ -175,18 +216,39 @@ export class MorningWalk {
     const P = this.who.player, site = this.stages.site;
     this.setStage('site');
     site.setWeather({}); site.setTime('day'); site.ring.visible = false;
+    P.unpinAll();
+    if (this.carryingBag && site.handBag) {
+      site.handBag.visible = true;
+      P.pin(site.handBag, P.handR, -0.02, -0.06, 0.06);
+    }
+    if (site.trashRing) site.trashRing.visible = !!this.carryingBag;
     P.look({ ...this.S.look.colors, top: '#1f3148', bottom: '#1c2c42' }); // dressed for work
     P.holder.rotation.x = 0;
     P.holder.position.set(ROUTE.start.x, 0, ROUTE.start.z); P.yaw = Math.PI / 2; P.play('idle');
     const { suzuki, hung } = this.who, train = this.commute === 'train';
-    suzuki.holder.position.set(ROUTE.suzuki.x, 0, ROUTE.suzuki.z + 0.6); suzuki.yaw = Math.PI; suzuki.play('idle');
+    if (this.carryingBag) {
+      suzuki.holder.position.set(ROUTE.trash.x + 1.25, 0, ROUTE.trash.z + 0.55);
+      suzuki.yaw = -Math.PI / 2;
+    } else {
+      suzuki.holder.position.set(ROUTE.suzuki.x, 0, ROUTE.suzuki.z + 0.6);
+      suzuki.yaw = Math.PI;
+    }
+    suzuki.play('idle');
     hung.holder.position.set(ROUTE.hung.x, 0, ROUTE.hung.z); hung.yaw = -Math.PI / 2; hung.play('idle');
     if (hung.helmet) hung.helmet.visible = true;
     hung.holder.visible = !train; // Hùng works at the site, not on the way to the station
     this.controls.reset({ yaw: -Math.PI / 2, pitch: 0.3, groundY: 0, yawLimit: [-Infinity, Infinity] });
     this.controls.enabled = true;
-    this.controls.onTap = null;
-    if (train) {
+    this.controls.onTap = (pt) => {
+      if (this.carryingBag && Math.hypot(pt.x - ROUTE.trash.x, pt.z - ROUTE.trash.z) < 1.8) {
+        this.controls.target = new THREE.Vector3(ROUTE.trash.x, 0, ROUTE.trash.z);
+        this.pendingDrop = true;
+      }
+    };
+    if (this.carryingBag) {
+      $('sh-place').querySelector('span').textContent = 'Trước ký túc xá · ゴミ集積所';
+      this.tip('ゴミ集積所', 'Lại gần vòng vàng cạnh cửa ký túc xá rồi bấm 🗑️ Bỏ rác', 5);
+    } else if (train) {
       const dest = this.walkin.stage === 'bento' ? 'xưởng' : this.walkin.stage === 'lotus' ? 'ruộng sen' : 'viện';
       $('sh-place').querySelector('span').textContent = 'Đường ra ga さくら駅';
       this.tip('駅はあっち', `Đi bộ tới biển 🚉 さくら駅 ở cuối phố, đi tàu tới ${dest} trước 7:45 (朝礼)`, 5);
@@ -197,9 +259,102 @@ export class MorningWalk {
     this.camRig.init = false;
   }
 
+  openSortCard() {
+    const st = this.trashSt;
+    if (!st || st.done) return;
+    this.paused = true;
+    const it = st.items[st.idx];
+    const tKind = KINDS[st.todayKind];
+    const dayJp = DAY_JP[((st.day | 0) % 5 + 5) % 5];
+    const c = $('card');
+    c.innerHTML = `
+      <div class="trash-head">
+        <span>🗑️ Phân loại rác · <b>${st.idx + 1}/${st.items.length}</b></span>
+        <span>Hôm nay (${dayJp}): <b>${tKind.icon} ${esc(tKind.jp)}</b></span>
+      </div>
+      <div class="trash-item" id="trash-item-box">
+        <div class="ic">${it.icon}</div>
+        <div class="jp">${esc(it.jp)}</div>
+        <div class="vi">${esc(it.vi)}</div>
+      </div>
+      <div class="trash-tip" id="trash-fb" hidden></div>
+      <div class="trash-grid" id="trash-grid"></div>
+    `;
+    const grid = $('trash-grid');
+    for (const k of KINDS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'trash-btn';
+      b.innerHTML = `<span class="ic">${k.icon}</span><span class="jp">${esc(k.jp)}</span><span class="vi">${esc(k.vi)}</span>`;
+      b.addEventListener('click', () => this.pickTrashKind(k.id));
+      grid.appendChild(b);
+    }
+    show('modal', true);
+  }
+
+  pickTrashKind(kindId) {
+    const st = this.trashSt, P = this.who.player;
+    if (!st || st.done) return;
+    for (const b of document.querySelectorAll('#trash-grid button')) b.disabled = true;
+    const r = answer(st, kindId);
+    this.st.min += TRASH_MIN.ITEM;
+    this.hud();
+    P.reachTo = 0.7;
+    setTimeout(() => { if (this.active) P.reachTo = 0; }, 220);
+
+    const box = $('trash-item-box'), fb = $('trash-fb');
+    if (r.ok) {
+      box.classList.add('good');
+      const rightK = KINDS[r.item.kind];
+      fb.className = 'trash-tip good';
+      fb.textContent = `✓ Đúng rồi! ${rightK.icon} ${rightK.jp} (${rightK.vi})`;
+      fb.hidden = false;
+      clearTimeout(this.sortTimer);
+      this.sortTimer = setTimeout(() => {
+        if (!this.active) return;
+        if (st.done) this.finishSort();
+        else this.openSortCard();
+      }, 360);
+    } else {
+      box.classList.add('bad');
+      fb.className = 'trash-tip';
+      fb.textContent = `❌ ${r.item.tip}`;
+      fb.hidden = false;
+      clearTimeout(this.sortTimer);
+      this.sortTimer = setTimeout(() => {
+        if (!this.active) return;
+        if (st.done) this.finishSort();
+        else this.openSortCard();
+      }, 2000);
+    }
+  }
+
+  finishSort() {
+    show('modal', false);
+    this.paused = false;
+    this.sorted = true;
+    this.carryingBag = true;
+    if (this.S && this.S.flags && !this.demoTrash) {
+      this.S.flags.trashDay = this.S.story;
+      if (this.storage) save(this.S, this.storage);
+    }
+    const P = this.who.player, site = this.stages.site;
+    P.unpinAll();
+    if (site && site.handBag) {
+      site.handBag.visible = true;
+      P.pin(site.handBag, P.handR, -0.02, -0.06, 0.06);
+    }
+    this.overhead.say(P, 'ゴミをまとめた！', 2);
+    toast('🗑️ Đã buộc túi rác', `Tốn ${TRASH_MIN.SORT} phút · ⏰ ${clock(this.st.min)} · Mang ra điểm tập kết trước nhà`);
+    this.tip('ゴミ集積所へ', 'Ra ngoài (🚪) rồi mang túi rác tới vòng vàng cạnh cửa ký túc xá', 6);
+    this.hud();
+  }
+
   // ---- train commute, phase 3: the platform of さくら駅 ----
   enterPlatform() {
     const P = this.who.player, stn = this.stages.station;
+    this.carryingBag = false; P.unpinAll();
+    if (this.stages.site && this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
     this.setStage('station'); stn.sendTrain('reset');
     P.holder.position.set(STATION.start.x, STATION.floor, STATION.start.z); P.yaw = STATION.start.yaw; P.play('idle');
     this.controls.reset({ yaw: -Math.PI / 2 + 0.5, pitch: 0.3, groundY: STATION.floor, yawLimit: [-Infinity, Infinity] }); // camera on the track side
@@ -282,11 +437,84 @@ export class MorningWalk {
       this.busy = 1.2; P.bendTo = 0.5;
       this.overhead.say(P, 'いただきます！', 2.5);
       toast('🍙 Ăn sáng', `${deltaText(r.deltas)} · ⏰ ${clock(s.min)}`);
+    } else if (id === 'trash') {
+      if (s.phase !== 'room' || this.trashDone()) return;
+      const day = (S && S.story) || 0;
+      const seed = (day + 1) * 709 + ((S && S.week) || 0) * 37;
+      this.trashSt = createSort(day, rng(seed));
+      this.openSortCard();
     } else if (id === 'out') {
       if (!this.near(DORM.door, 2.4)) { this.controls.target = new THREE.Vector3(DORM.door.x, 0, DORM.door.z); this.pendingOut = true; return; }
       this.overhead.say(P, '行ってきます！', 1.5);
       leaveRoom(s);
       this.fadeTo(() => this.enterStreet());
+    } else if (id === 'drop') {
+      if (s.phase !== 'street' || !this.carryingBag) return;
+      if (!this.near(ROUTE.trash, 1.9)) {
+        this.controls.target = new THREE.Vector3(ROUTE.trash.x, 0, ROUTE.trash.z);
+        this.pendingDrop = true;
+        return;
+      }
+      this.carryingBag = false;
+      this.pendingDrop = false;
+      P.unpinAll();
+      if (this.stages.site) {
+        if (this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
+        if (this.stages.site.setTrashDropped) this.stages.site.setTrashDropped(true);
+      }
+      P.yaw = 0;
+      this.busy = 0.9;
+      P.bendTo = 0.55;
+      P.reachTo = 0.8;
+      setTimeout(() => { if (this.active) { P.bendTo = 0; P.reachTo = 0; } }, 550);
+      s.min += TRASH_MIN.DROP;
+      const res = result(this.trashSt);
+      const deltas = applyFx(S, res.fx);
+      if (!this.demoTrash && this.storage) save(S, this.storage);
+      toast('🗑️ ゴミ出し完了', `${deltaText(deltas) || 'Đã đổ rác'} · ⏰ ${clock(s.min)}`, 4);
+      this.overhead.say(P, 'ゴミ出し完了！', 2);
+      const suz = this.who.suzuki;
+      if (res.wrong.length > 0) {
+        if (suz) {
+          suz.yaw = Math.atan2(P.holder.position.x - suz.holder.position.x, P.holder.position.z - suz.holder.position.z);
+          suz.play('talk');
+          setTimeout(() => this.active && suz.play('idle'), 3000);
+          this.overhead.say(suz, '分別、ちゃんとしてね。 — Nhớ phân loại cẩn thận nhé.', 4.5);
+        }
+        setTimeout(() => {
+          if (!this.active) return;
+          this.paused = true;
+          const itemsHtml = res.wrong.map((w) => {
+            const rightK = KINDS[w.kind];
+            return `<li><b>${w.icon} ${esc(w.jp)} (${esc(w.vi)})</b> → ${rightK.icon} ${esc(rightK.jp)} (${esc(rightK.vi)})<br><small style="color:var(--ink-dim)">${esc(w.tip)}</small></li>`;
+          }).join('');
+          card(`<h2>👵 Bà Suzuki nhắc nhở</h2>
+            <p class="jpline">「分別、ちゃんとしてね。」</p>
+            <p>Nhớ phân loại cẩn thận nhé. Các món phân loại chưa đúng:</p>
+            <ul>${itemsHtml}</ul>
+            <div class="deltas">${deltaChips(deltas)}</div>`, [
+            { label: this.demoTrash ? 'Về menu thử ca →' : 'Đã hiểu, đi làm thôi →', on: () => {
+              this.paused = false;
+              if (this.demoTrash) { this.stop(); this.onEnd(); }
+            } },
+          ]);
+        }, 650);
+      } else if (this.demoTrash) {
+        setTimeout(() => {
+          if (!this.active) return;
+          this.paused = true;
+          card(`<div class="big">🗑️✨</div><h2>Phân loại chuẩn xác!</h2>
+            <p>Bạn đã chia đúng cả 5 món rác và bỏ đúng điểm tập kết trước 8:00 sáng.</p>
+            <div class="deltas">${deltaChips(deltas)}</div>`, [
+            { label: 'Về menu thử ca →', on: () => { this.stop(); this.onEnd(); } },
+          ]);
+        }, 700);
+      } else {
+        const train = this.commute === 'train';
+        const dest = this.walkin.stage === 'bento' ? 'xưởng' : this.walkin.stage === 'lotus' ? 'ruộng sen' : 'viện';
+        $('sh-place').querySelector('span').textContent = train ? 'Đường ra ga さくら駅' : 'Đường tới công trường';
+        this.tip('ゴミ出し完了！', train ? `Đã bỏ rác xong! Đi bộ tới biển 🚉 さくら駅 để tới ${dest} trước 7:45` : 'Đã bỏ rác xong! Đi bộ tới cổng công trường trước 7:45', 4.5);
+      }
     } else if (id === 'drink') {
       if (!this.nearV()) { this.tip('自販機', 'Máy bán nước ở ngay cạnh cửa ký túc xá', 3); return; }
       const r = act(S, s, 'drink');
@@ -304,7 +532,8 @@ export class MorningWalk {
       this.greetNurse();
     } else if (id === 'greet') {
       const suz = this.who.suzuki;
-      if (!this.st.greeted && this.near(ROUTE.suzuki, 2.6)) {
+      const suzPos = suz ? suz.holder.position : ROUTE.suzuki;
+      if (!this.st.greeted && this.near(suzPos, 2.6)) {
         const r = act(S, s, 'greet');
         P.yaw = Math.atan2(suz.holder.position.x - P.holder.position.x, suz.holder.position.z - P.holder.position.z);
         suz.yaw = Math.atan2(P.holder.position.x - suz.holder.position.x, P.holder.position.z - suz.holder.position.z);
@@ -322,6 +551,7 @@ export class MorningWalk {
 
   askSkip() {
     if (this.paused) return;
+    if (this.demoTrash) { this.stop(); this.onEnd(); return; }
     this.paused = true;
     const place = this.commute === 'train' ? (this.walkin.stage === 'bento' ? 'xưởng cơm hộp' : this.walkin.stage === 'lotus' ? 'ruộng sen' : 'viện dưỡng lão') : 'công trường';
     card(`<h2>Bỏ qua buổi sáng?</h2><p>Đi thẳng tới ${place}, đến vừa kịp giờ.</p>`, [
@@ -332,6 +562,8 @@ export class MorningWalk {
 
   finish() {
     const r = arrive(this.S, this.st), P = this.who.player;
+    this.carryingBag = false; P.unpinAll();
+    if (this.stages.site && this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
     this.paused = true;
     const head = r.kind === 'early' ? '👍 Đến sớm 5 phút' : r.kind === 'ontime' ? '🙂 Vừa kịp giờ' : '😓 Đến muộn';
     const lesson = r.kind === 'late'
@@ -384,7 +616,7 @@ export class MorningWalk {
         this.rise = -1; P.holder.rotation.x = 0; P.holder.position.y = 0; P.yaw = Math.PI / 2;
         this.controls.enabled = true;
         this.controls.onTap = (pt) => { if (Math.hypot(pt.x - DORM.door.x, pt.z - DORM.door.z) < 1) this.pendingOut = true; };
-        this.tip('朝ご飯は？', 'Ăn sáng ở bàn (🍙) hoặc ra cửa đi làm luôn (🚪)', 5);
+        this.tip('朝ご飯は？', 'Ăn sáng (🍙), phân loại rác (🗑️) hoặc ra cửa đi làm (🚪)', 5);
       }
     }
     let moving = false, speed = 0;
@@ -422,8 +654,9 @@ export class MorningWalk {
       }
       if (this.pendingOut && !c.target && this.near(DORM.door, 2.4)) { this.pendingOut = false; this.action('out'); }
       if (this.pendingEat && !c.target) { this.pendingEat = false; if (this.near(DORM.table, 1.4)) { P.yaw = Math.PI / 2; this.action('eat'); } }
-      if (s.phase === 'street' && this.commute !== 'train' && this.near(ROUTE.gate, 1.9)) this.finish();
-      if (s.phase === 'street' && this.commute === 'train' && this.near(ROUTE.station, 1.6)) { toPlatform(s); this.fadeTo(() => this.enterPlatform()); }
+      if (this.pendingDrop && !c.target) { this.pendingDrop = false; if (this.near(ROUTE.trash, 1.9)) this.action('drop'); }
+      if (s.phase === 'street' && !this.demoTrash && this.commute !== 'train' && this.near(ROUTE.gate, 1.9)) this.finish();
+      if (s.phase === 'street' && !this.demoTrash && this.commute === 'train' && this.near(ROUTE.station, 1.6)) { toPlatform(s); this.fadeTo(() => this.enterPlatform()); }
       if (s.phase === 'platform') this.platform(dt);
       if (this.pendingGreet && !c.target) { this.pendingGreet = false; if (this.near(this.walkin.greeterAt, 2.2)) this.greetNurse(); }
       if (s.phase === 'walkin' && this.greetT < 0 && this.near(this.walkin.greeterAt, 1.3)) this.greetNurse();
