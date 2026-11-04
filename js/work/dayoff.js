@@ -563,7 +563,7 @@ export class DayOff {
     if (this.lie >= 0) {
       this.lie = Math.min(1, this.lie + dt / 0.9);
       const k = this.lie * this.lie * (3 - 2 * this.lie), a = k * Math.PI / 2, h = 0.55;
-      const hipY = h - (h - 0.2) * k, hipZ = DORM.bed.z + 0.3;
+      const hipY = h - (h - DORM.lieY) * k, hipZ = DORM.bed.z + 0.3;
       P.yaw = 0;
       P.holder.rotation.x = -a;
       P.holder.position.set(DORM.bed.x, hipY - h * Math.cos(a), hipZ + h * Math.sin(a));

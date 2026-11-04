@@ -1,6 +1,6 @@
 // Game flow: title → creator → job → first week at the construction site (M1).
 import * as THREE from 'three';
-import { renderer, camera, resize, isPortrait, CamRig, loadModel } from './gfx/stage.js';
+import { renderer, camera, resize, isPortrait, CamRig, loadModel, loadBrand } from './gfx/stage.js';
 import { OUTFITS, SWATCH, ensureSrc, makeCharacter, makeHelmet, makeSanitaryCap, wearHelmet, wearWaders, refHex } from './gfx/chars.js';
 import { buildTown } from './gfx/town.js';
 import { buildSite, DECK_Y, WANDER, ROUTE } from './gfx/site.js';
@@ -65,8 +65,8 @@ async function boot() {
     G.stages.care = care;
     G.stages.bento = bento;
     G.stages.lotus = lotus;
-    const [lowtable, gas_stove] = await Promise.all([loadModel('lowtable'), loadModel('gas_stove')]);
-    G.stages.dorm = buildDorm({ lowtable, gas_stove });
+    const [lowtable, gas_stove, brandWhite, futon] = await Promise.all([loadModel('lowtable'), loadModel('gas_stove'), loadBrand('white'), loadModel('futon')]);
+    G.stages.dorm = buildDorm({ lowtable, gas_stove, brandWhite, futon });
     $('bar').style.width = '100%';
     G.controls = new Controls($('joy'));
     G.shift = new SiteShift({ site: G.stages.site, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
@@ -729,6 +729,7 @@ const CREDITS = [
   ['Cổng torii', 'Japanese Torii gate Game Asset', 'Bazylonator', 'e12d2fa1b2b94928b8b87cb7787e2462', 'CC BY 4.0'],
   ['Đèn đá', 'Japanese Stone Lantern', 'Sahir Virmani', 'e0417d1e05984727a50f9ab1451d162d', 'CC BY 4.0'],
   ['Đền', 'Japanese shrine', 'GreenG', '56baeb7b13ba4238a2f54c363e7a3e0b', 'CC BY 4.0'],
+  ['Futon', 'Japanese futon/bed', 'nicolas_solo', '0d5590d1d2184aa98797c3d6382afd7e', 'CC BY 4.0'],
 ];
 function creditsScreen() {
   hideAll();

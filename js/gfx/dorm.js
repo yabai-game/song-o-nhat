@@ -2,10 +2,11 @@
 // left open towards the camera. Built procedurally and merged into one mesh per material.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTexture, signTexture, makeSun } from './stage.js';
+import { canvasTexture, signTexture, makeSun, loadBrand, BRAND_ASPECT } from './stage.js';
 
 export const DORM = {
   bed: { x: -0.5, z: -0.95 },      // player's futon (head towards the back wall)
+  lieY: 0.3,                       // body axis height when lying: on top of the futon model's blanket, head on its pillow
   table: { x: 1.25, z: 0.75 },     // low table with breakfast
   stove: { x: 1.78, z: -1.25 },    // in front of the kitchenette gas stove
   door: { x: 2.2, z: 1.65 },       // genkan
@@ -69,10 +70,13 @@ export function buildDorm(models = {}) {
   for (const [w, h, x, y] of [[1.7, 0.07, -0.6, 2.13], [1.7, 0.07, -0.6, 0.97], [0.07, 1.2, -1.45, 1.55], [0.07, 1.2, 0.25, 1.55], [0.05, 1.1, -0.6, 1.55]]) put(B(w, h, 0.06), col('#f4f1ea'), x, y, -2.17);
   for (const x of [-1.62, 0.42]) put(B(0.36, 1.35, 0.05), col('#e8a0b0'), x, 1.5, -2.12);
   // futons: the player's (unfolded, centre) and the roommates' (already folded in the corner)
-  const futon = col('#f3efe6'), blanket = col('#5b86b8'), pillow = col('#ffffff');
-  put(B(1.05, 0.1, 2.0), futon, DORM.bed.x, 0.05, DORM.bed.z + 0.05);
-  put(B(1.0, 0.08, 1.35), blanket, DORM.bed.x, 0.14, DORM.bed.z + 0.38);
-  put(B(0.5, 0.12, 0.32), pillow, DORM.bed.x, 0.16, DORM.bed.z - 0.78);
+  const futon = col('#f3efe6');
+  // the player's futon: "Japanese futon/bed" (nicolas_solo, CC BY) 1.33 × 2.0 × 0.22 m (pillow end at +z in the file)
+  if (models.futon) {
+    const f = models.futon.scene.clone(true);
+    f.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+    f.position.set(DORM.bed.x, 0, DORM.bed.z + 0.05); f.rotation.y = Math.PI; scene.add(f); // its pillow end towards the wall
+  } else put(B(1.05, 0.1, 2.0), futon, DORM.bed.x, 0.05, DORM.bed.z + 0.05);
   for (let k = 0; k < 4; k++) put(B(0.95, 0.12, 0.7), k % 2 ? col('#e9b8c2') : futon, -1.95, 0.06 + k * 0.12, -1.75, 0.05 * k);
   put(B(0.88, 0.06, 1.9), col('#d9cfb8'), 0.78, 0.03, -0.95);                     // roommate's empty sleeping spot
   // kitchenette in the back-right corner: wooden cabinet + stainless top + sink + gas_stove on top
@@ -154,6 +158,31 @@ export function buildDorm(models = {}) {
   for (const [txt, x, y, bg, fg] of [['5分前行動', 1.3, 1.65, '#fffdf4', '#c0392b'], ['ゴミは分別', 0.7, 1.65, '#fffdf4', '#2f6fb0']]) {
     const poster = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.32), new THREE.MeshStandardMaterial({ map: signTexture(txt, 256, 160, bg, fg), roughness: 0.9 }));
     poster.position.set(x, y, -2.19); scene.add(poster);
+  }
+  // vertical YABAI poster next to the two existing posters (no overlap)
+  {
+    const px = 1.88, py = 1.65, pz = -2.19;
+    const pTex = canvasTexture(220, 310, (g) => {
+      g.fillStyle = '#1e293b'; g.fillRect(0, 0, 220, 310);
+      g.strokeStyle = '#f5e2c0'; g.lineWidth = 6; g.strokeRect(8, 8, 204, 294);
+      g.fillStyle = '#f5e2c0'; g.fillRect(24, 152, 172, 3);
+      g.fillStyle = '#f8fafc'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '800 28px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+      g.fillText('夢に向かって', 110, 204);
+      g.fillStyle = '#cbd5e1';
+      g.font = '700 22px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+      g.fillText('一歩ずつ', 110, 252);
+    });
+    const pBg = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.62), new THREE.MeshStandardMaterial({ map: pTex, roughness: 0.85 }));
+    pBg.position.set(px, py, pz);
+    scene.add(pBg);
+    const lw = 0.36, lh = lw / BRAND_ASPECT;
+    const lMat = new THREE.MeshStandardMaterial({ transparent: true, alphaTest: 0.05, depthWrite: false, roughness: 0.7 });
+    if (models.brandWhite) lMat.map = models.brandWhite;
+    else loadBrand('white').then((tex) => { lMat.map = tex; lMat.needsUpdate = true; });
+    const lMesh = new THREE.Mesh(new THREE.PlaneGeometry(lw, lh), lMat);
+    lMesh.position.set(px, py + 0.14, pz + 0.02);
+    scene.add(lMesh);
   }
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.3), new THREE.MeshStandardMaterial({ map: signTexture('さくら寮', 256, 128, '#ffffff', '#3a2c23') }));
   sign.position.set(2.5, 2.25, 1.5); sign.rotation.y = -Math.PI / 2; scene.add(sign);

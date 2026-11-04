@@ -6,7 +6,7 @@
 // Layout (metres): the platform runs along x, its edge along z = EDGE, the track along z = TRACK_Z.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTexture, signTexture, makeSun, skyDome, loadModel } from './stage.js';
+import { canvasTexture, signTexture, makeSun, skyDome, loadModel, loadBrand, BRAND_ASPECT } from './stage.js';
 import { buildBackdrop } from './backdrop.js';
 
 const FLOOR = 1.1;             // walking height on the platform
@@ -30,7 +30,11 @@ export const STATION = {
 };
 
 export async function buildStation() {
-  const [shelter, gate, bench, train, houseLight] = await Promise.all(['platform_jp', 'ticket_gate', 'station_bench', 'train', 'house_beige'].map(loadModel));
+  const [shelter, gate, bench, train, houseLight, brandBlack, brandWhite] = await Promise.all([
+    ...['platform_jp', 'ticket_gate', 'station_bench', 'train', 'house_beige'].map(loadModel),
+    loadBrand('black'),
+    loadBrand('white'),
+  ]);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#9cc0d2');
   scene.fog = new THREE.FogExp2(new THREE.Color('#d3dde0'), 0.0068);
@@ -120,10 +124,56 @@ export async function buildStation() {
   board.position.set(12.4, FLOOR, 3.4); board.rotation.y = -Math.PI / 2; scene.add(board);
   STATION.blocks.push({ x: 12.4, z: 2.7, r: 0.2 }, { x: 12.4, z: 4.1, r: 0.2 });
 
+  // ---- standing advertising board (pano) along the back fence, clear of benches and walking lane ----
+  {
+    const pano = new THREE.Group();
+    pano.position.set(8.5, FLOOR, EDGE - DEPTH + 0.22);
+    pano.rotation.y = -0.32;
+    scene.add(pano);
+    const aluMat = col('#c6cdd4', { metalness: 0.55, roughness: 0.35 });
+    const panelMat = col('#f9fafb', { roughness: 0.5 });
+    for (const lx of [-0.88, 0.88]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.98, 0.06), aluMat);
+      leg.position.set(lx, 0.99, 0); leg.castShadow = true; pano.add(leg);
+    }
+    const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.96, 0.05), aluMat);
+    frameMesh.position.set(0, 1.48, 0); frameMesh.castShadow = true; pano.add(frameMesh);
+    const bgMesh = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.86, 0.06), panelMat);
+    bgMesh.position.set(0, 1.48, 0.005); pano.add(bgMesh);
+    const lw = 1.56, lh = lw / BRAND_ASPECT;
+    const pLogo = new THREE.Mesh(
+      new THREE.PlaneGeometry(lw, lh),
+      new THREE.MeshStandardMaterial({ map: brandBlack, transparent: true, alphaTest: 0.05, depthWrite: false, roughness: 0.6 }),
+    );
+    pLogo.position.set(0, 1.62, 0.055);
+    pano.add(pLogo);
+    const pSub = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.56, 0.22),
+      new THREE.MeshStandardMaterial({
+        map: signTexture('次は、あなたの番。', 512, 72, '#f9fafb', '#1f2a33'),
+        depthWrite: false, roughness: 0.6,
+      }),
+    );
+    pSub.position.set(0, 1.24, 0.055);
+    pano.add(pSub);
+  }
+
   // ---- the train: slides in, stops at the mark, leaves ----
   const car = train.scene; car.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   // scaled to 85 %: the real-size car (20.5 × 2.6 × 4 m) dwarfed the chibi characters
   const rig = new THREE.Group(); rig.add(car); rig.scale.setScalar(0.85); rig.position.set(90, 0.24, TRACK_Z); rig.visible = false; scene.add(rig);
+  // small YABAI logo (~ 1.2 x 0.3 m in world space) on both sides of the dark-blue train hull
+  {
+    const tw = 1.2 / 0.85, th = tw / BRAND_ASPECT;
+    const tGeo = new THREE.PlaneGeometry(tw, th);
+    const tMat = new THREE.MeshStandardMaterial({ map: brandWhite, transparent: true, alphaTest: 0.05, depthWrite: false, roughness: 0.55 });
+    for (const [tz, ry] of [[-1.298, Math.PI], [1.298, 0]]) {
+      const decal = new THREE.Mesh(tGeo, tMat);
+      decal.position.set(-0.8, 1.26, tz);
+      decal.rotation.y = ry;
+      rig.add(decal);
+    }
+  }
   const T = { state: 'away', x: 90, v: 0 };
   return {
     scene, sun, blocks: STATION.blocks, train: rig,

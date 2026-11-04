@@ -41,6 +41,28 @@ export function makeSun(scene, { color = 0xfff0dc, intensity = 2.3, size = 11, o
 // page may not fetch data: URIs); GLTFLoader parses the decoded bytes.
 const loader = new GLTFLoader();
 const cache = {};
+const texLoader = new THREE.TextureLoader();
+const brandCache = {};
+export const BRAND_ASPECT = 845 / 213;
+
+export function loadBrand(v = 'black') {
+  const key = v === 'white' ? 'white' : 'black';
+  if (!brandCache[key]) {
+    brandCache[key] = new Promise((res, rej) => {
+      texLoader.load(
+        `img/brand/yabai_logo_${key}.png?v=${MODEL_V}`,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          res(tex);
+        },
+        undefined,
+        rej,
+      );
+    });
+  }
+  return brandCache[key];
+}
 function b64ToBuffer(s) {
   const bin = atob(s), out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);

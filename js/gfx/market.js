@@ -3,7 +3,7 @@
 // (<= 120 instances), discount badges (2割引 / 半額), and a clerk NPC behind the counter.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTexture, signTexture, makeSun, loadModel } from './stage.js';
+import { canvasTexture, signTexture, makeSun, loadModel, loadBrand, BRAND_ASPECT } from './stage.js';
 import { discount } from '../core/market_rules.js';
 
 const MODELS = [
@@ -70,7 +70,10 @@ function makeBadgeTexture(kind) {
 }
 
 export async function buildMarket() {
-  const gl = Object.fromEntries(await Promise.all(MODELS.map(async (n) => [n, await loadModel(n)])));
+  const [gl, brandBlack] = await Promise.all([
+    Promise.all(MODELS.map(async (n) => [n, await loadModel(n)])).then(Object.fromEntries),
+    loadBrand('black'),
+  ]);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#232a38');
 
@@ -126,13 +129,29 @@ export async function buildMarket() {
   // Entrance mat at front-right door
   put(B(1.5, 0.015, 0.8), col('#277a46'), MARKET.door.x, 0.008, MARKET.door.z + 0.35);
 
-  // Wall signs
+  // Wall signs: タイムセール board with small black YABAI logo at top + text below (no overlap)
+  const bannerTex = canvasTexture(768, 180, (g) => {
+    g.fillStyle = '#ffd426'; g.fillRect(0, 0, 768, 180);
+    g.strokeStyle = '#c92a1d'; g.lineWidth = 8; g.strokeRect(6, 6, 756, 168);
+    g.fillStyle = '#c92a1d'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '800 44px "Zen Maru Gothic", "Yu Gothic", sans-serif';
+    g.fillText('スーパー さくら · タイムセール 19:30〜', 384, 130);
+  });
   const banner = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.8, 0.52),
-    new THREE.MeshStandardMaterial({ map: signTexture('スーパー さくら · タイムセール 19:30〜', 768, 140, '#ffd426', '#c92a1d'), roughness: 0.6 }),
+    new THREE.PlaneGeometry(2.8, 0.64),
+    new THREE.MeshStandardMaterial({ map: bannerTex, roughness: 0.6 }),
   );
-  banner.position.set(0, 2.25, -3.15);
+  banner.position.set(0, 2.28, -3.15);
   scene.add(banner);
+  {
+    const lw = 0.68, lh = lw / BRAND_ASPECT;
+    const mktLogo = new THREE.Mesh(
+      new THREE.PlaneGeometry(lw, lh),
+      new THREE.MeshStandardMaterial({ map: brandBlack, transparent: true, alphaTest: 0.05, depthWrite: false, roughness: 0.6 }),
+    );
+    mktLogo.position.set(0, 2.43, -3.13);
+    scene.add(mktLogo);
+  }
 
   for (const [txt, x, bg, fg] of [
     ['🥚 卵・野菜', -2.35, '#277a46', '#ffffff'],

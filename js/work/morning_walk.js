@@ -196,7 +196,7 @@ export class MorningWalk {
     P.look(this.S.look.colors);
     // lying on the futon, face up, head towards the back wall
     P.yaw = 0; P.play('idle'); P.holder.rotation.x = -Math.PI / 2;
-    P.holder.position.set(DORM.bed.x, 0.2, DORM.bed.z + 0.85);
+    P.holder.position.set(DORM.bed.x, DORM.lieY, DORM.bed.z + 0.85);
     this.controls.reset({ yaw: 0, pitch: 0.55, groundY: 0, yawLimit: [-0.7, 0.7] });
     this.controls.enabled = false;
     $('sh-place').querySelector('span').textContent = 'Ký túc xá さくら寮';
@@ -609,7 +609,7 @@ export class MorningWalk {
     if (this.rise >= 0) {
       this.rise = Math.min(1, this.rise + dt / 0.9);
       const k = this.rise * this.rise * (3 - 2 * this.rise), a = (1 - k) * Math.PI / 2, h = 0.55;
-      const hipY = 0.2 + (h - 0.2) * k, hipZ = DORM.bed.z + 0.85 - h; // hip stays over the same spot
+      const hipY = DORM.lieY + (h - DORM.lieY) * k, hipZ = DORM.bed.z + 0.85 - h; // hip stays over the same spot
       P.holder.rotation.x = -a;
       P.holder.position.set(DORM.bed.x, hipY - h * Math.cos(a), hipZ + h * Math.sin(a));
       if (this.rise >= 1) {

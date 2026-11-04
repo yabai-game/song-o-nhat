@@ -5,7 +5,7 @@
 // instanced; everything procedural and static is merged into one mesh per material.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTexture, signTexture, makeSun, skyDome, loadModel } from './stage.js';
+import { canvasTexture, signTexture, makeSun, skyDome, loadModel, loadBrand, BRAND_ASPECT } from './stage.js';
 import { SITE } from '../core/site_rules.js';
 import { buildBackdrop } from './backdrop.js';
 
@@ -61,7 +61,11 @@ export const ROUTE = {
 };
 
 export async function buildSite() {
-  const gl = Object.fromEntries(await Promise.all(MODELS.map(async (n) => [n, await loadModel(n)])));
+  const [gl, brandBlack, brandWhite] = await Promise.all([
+    Promise.all(MODELS.map(async (n) => [n, await loadModel(n)])).then(Object.fromEntries),
+    loadBrand('black'),
+    loadBrand('white'),
+  ]);
   const scene = new THREE.Scene();
   const SKY = new THREE.Color('#9cc0d2');
   scene.background = SKY.clone();
@@ -296,12 +300,33 @@ export async function buildSite() {
   }
 
   // ---- site fence: white panels with a green band, 安全第一 banners, gate on the south side ----
+  const BRAND_FENCE_X = new Set([-18, 8]);
   for (let x = -26; x <= 26; x += 2) { put(B(1.95, 2, 0.06), '#f2f2ee', x, 1, -29); put(B(1.95, 0.25, 0.07), '#2f8f57', x, 1.65, -28.96); }
-  for (let x = -26; x <= 26; x += 2) { if ((x >= 0 && x <= 6) || (x >= -8 && x <= -2)) continue; put(B(1.95, 2, 0.06), '#f2f2ee', x, 1, 21); put(B(1.95, 0.25, 0.07), '#2f8f57', x, 1.65, 20.96); }
+  for (let x = -26; x <= 26; x += 2) {
+    if ((x >= 0 && x <= 6) || (x >= -8 && x <= -2)) continue;
+    put(B(1.95, 2, 0.06), '#f2f2ee', x, 1, 21);
+    if (!BRAND_FENCE_X.has(x)) put(B(1.95, 0.25, 0.07), '#2f8f57', x, 1.65, 20.96);
+  }
   for (let z = -27; z <= 20; z += 2) for (const sx of [-27, 27]) { put(B(0.06, 2, 1.95), '#f2f2ee', sx, 1, z); put(B(0.07, 0.25, 1.95), '#2f8f57', sx - Math.sign(sx) * 0.04, 1.65, z); }
   for (const [x, z, ry] of [[-14, -28.9, 0], [10, -28.9, 0], [26.9, -6, -Math.PI / 2], [-26.9, 2, Math.PI / 2], [-12, 20.9, Math.PI], [14, 20.9, Math.PI]]) {
     const ban = new THREE.Mesh(new THREE.PlaneGeometry(5, 1), new THREE.MeshStandardMaterial({ map: signTexture('安全第一', 640, 128, '#2f8f57', '#ffffff'), roughness: 0.8 }));
     ban.position.set(x, 1.0, z); ban.rotation.y = ry; scene.add(ban);
+  }
+  // 2 contractor panels on the south fence (x = -18 and x = 8): black YABAI logo on the white fence + 施工 YABAI建設
+  {
+    const logoW = 1.48, logoH = logoW / BRAND_ASPECT;
+    const logoGeo = new THREE.PlaneGeometry(logoW, logoH);
+    const logoMat = new THREE.MeshStandardMaterial({ map: brandBlack, transparent: true, alphaTest: 0.05, depthWrite: false, roughness: 0.75 });
+    const subGeo = new THREE.PlaneGeometry(1.48, 0.28);
+    const subMat = new THREE.MeshStandardMaterial({ map: signTexture('施工 YABAI建設', 512, 96, '#f2f2ee', '#1d2733'), depthWrite: false, roughness: 0.8 });
+    for (const fx of BRAND_FENCE_X) {
+      for (const [fz, ry] of [[21.05, 0], [20.95, Math.PI]]) {
+        const lg = new THREE.Mesh(logoGeo, logoMat);
+        lg.position.set(fx, 1.24, fz); lg.rotation.y = ry; scene.add(lg);
+        const sb = new THREE.Mesh(subGeo, subMat);
+        sb.position.set(fx, 0.78, fz); sb.rotation.y = ry; scene.add(sb);
+      }
+    }
   }
 
   // ---- Saitama suburb: streets, houses ("Japanese Residential Home" 01–03 by Morrissey Alexander, CC BY),
@@ -334,6 +359,17 @@ export async function buildSite() {
   for (const [k, dx] of [[0, 0], [1, 1.15]]) {
     const v = gl.vending.scene.clone(true); v.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     v.position.set(ROUTE.vending.x + dx, 0, ROUTE.vending.z + 0.9); v.rotation.y = Math.PI; scene.add(v); void k;
+  }
+  // small YABAI logo sticker on the side of the vending machine (not on the front glass)
+  {
+    const vw = 0.42, vh = vw / BRAND_ASPECT;
+    const vSticker = new THREE.Mesh(
+      new THREE.PlaneGeometry(vw, vh),
+      new THREE.MeshStandardMaterial({ map: brandWhite, transparent: true, alphaTest: 0.05, depthWrite: false, roughness: 0.55 }),
+    );
+    vSticker.position.set(ROUTE.vending.x - 0.52, 1.35, ROUTE.vending.z + 0.88);
+    vSticker.rotation.y = -Math.PI / 2;
+    scene.add(vSticker);
   }
   // trash collection point (ゴミ集積所) beside the dorm entrance on the sidewalk: blue net box, 2 clusters
   // of trash_bags, and the Japanese collection schedule sign
@@ -551,6 +587,53 @@ export async function buildSite() {
   }
   { const l = new THREE.PointLight(0xf2f6ff, 0, 10, 1.5); l.position.set(ROUTE.konbini.x, 2.4, KONBINI_SIGN.z - 1.2); l.visible = false; scene.add(l); lampLights.push(l); } // shop light spilling out
   { const l = new THREE.PointLight(0xfff4d6, 0, 10, 1.5); l.position.set(ROUTE.market.x, 2.5, 22.1); l.visible = false; scene.add(l); lampLights.push(l); } // supermarket light spilling out
+  // Rooftop YABAI billboard on the building across the street from the construction site (x = -2.4, z = 30.55)
+  let billboardLogo = null, billboardStdMat = null, billboardBasicMat = null;
+  {
+    const bx = -2.4, by = 4.95, bz = 30.55, bry = Math.PI + 0.35; // by 4.35 hid the tagline behind the roof eave seen from the street
+    const bb = new THREE.Group();
+    bb.position.set(bx, by, bz);
+    bb.rotation.y = bry;
+    scene.add(bb);
+    const frameMat = M('#4a5058', { metalness: 0.55, roughness: 0.45 });
+    const boardMat = M('#1c1f26', { roughness: 0.7 });
+    // steel support columns and rear diagonal struts standing on the roof
+    for (const lx of [-1.75, 0, 1.75]) {
+      box(0.1, 1.75, 0.1, frameMat, lx, 0.875, -0.08, bb);
+      const strut = box(0.08, 1.45, 0.08, frameMat, lx, 0.62, -0.52, bb);
+      strut.rotation.x = 0.58;
+    }
+    // outer metal frame + dark #1c1f26 backing panel
+    box(4.56, 1.68, 0.14, frameMat, 0, 1.02, 0, bb);
+    box(4.38, 1.50, 0.16, boardMat, 0, 1.02, 0.01, bb);
+    // white YABAI logo (~ 4 x 1 m, exact 845:213 aspect ratio)
+    const lw = 4.0, lh = lw / BRAND_ASPECT;
+    billboardStdMat = new THREE.MeshStandardMaterial({
+      map: brandWhite, transparent: true, alphaTest: 0.05, depthWrite: false, roughness: 0.5,
+    });
+    billboardBasicMat = new THREE.MeshBasicMaterial({
+      map: brandWhite, transparent: true, alphaTest: 0.05, depthWrite: false,
+    });
+    billboardLogo = new THREE.Mesh(new THREE.PlaneGeometry(lw, lh), billboardStdMat);
+    billboardLogo.position.set(0, 1.18, 0.11);
+    bb.add(billboardLogo);
+    // small Japanese canvas tagline below the logo
+    const subTex = signTexture('日本で生きる', 640, 64, '#1c1f26', '#eef2f7');
+    const subMat = new THREE.MeshStandardMaterial({
+      map: subTex, emissiveMap: subTex, emissive: '#ffffff', emissiveIntensity: 0, depthWrite: false, roughness: 0.6,
+    });
+    glow.push(subMat);
+    const subMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.30), subMat);
+    subMesh.position.set(0, 0.46, 0.11);
+    bb.add(subMesh);
+    // single weak PointLight for the billboard at dusk/night
+    const bl = new THREE.PointLight(0xeef4ff, 0, 9, 1.5);
+    bl.userData.scale = 0.38;
+    bl.position.set(bx - Math.sin(0.35) * 1.1, by + 1.05, bz - Math.cos(0.35) * 1.1);
+    bl.visible = false;
+    scene.add(bl);
+    lampLights.push(bl);
+  }
   // a second row of light houses behind the near rows, so the street does not end at one row
   placeModel(gl.house_modern, [
     ...[-5.5, 8, 21.5].map((z, i) => [58.5, z, -Math.PI / 2 + (i % 2) * Math.PI, 1]),
@@ -658,9 +741,10 @@ export async function buildSite() {
     setLamps(0);
   }
   function setLamps(k) {
+    if (billboardLogo) billboardLogo.material = k > 0 ? billboardBasicMat : billboardStdMat;
     for (const m of glow) m.emissiveIntensity = k * 0.9;
     for (const m of lampHeads) m.emissiveIntensity = k * 2;
-    for (const l of lampLights) { l.visible = k > 0; l.intensity = k * 9; }
+    for (const l of lampLights) { l.visible = k > 0; l.intensity = k * 9 * (l.userData.scale || 1); }
   }
   /** Dusk after the afternoon shift, night on the way home (call after setWeather). */
   function setTime(which) {
