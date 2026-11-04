@@ -42,7 +42,7 @@ export async function buildLotus() {
   const sun = makeSun(scene, { color: 0xfff2dc, intensity: 2.2, size: 15, offset: [7, 13, 8] });
 
   // far town / mountains around the paddy (keep the field and its bunds free of backdrop lots)
-  buildBackdrop(scene, { houseLight: houseBeige, isFree: (x, z) => !(Math.abs(x) < 45 && Math.abs(z) < 45) });
+  buildBackdrop(scene, { houseLight: houseBeige, isFree: (x, z) => !(Math.abs(x) < 45 && Math.abs(z) < 45), ground: false });
 
   // Surrounding countryside grass plane
   const grassMat = new THREE.MeshStandardMaterial({ color: '#6b824e', roughness: 0.95 });

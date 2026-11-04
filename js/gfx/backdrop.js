@@ -47,7 +47,7 @@ function gable(w, rise, d, color) {
 }
 const keep = (g) => { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k); return g; };
 
-export function buildBackdrop(scene, { houseLight, isFree }) {
+export function buildBackdrop(scene, { houseLight, isFree, ground = true }) {
   const R = rng(20261104);
   const pick = (a) => a[Math.floor(R() * a.length)];
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), s1 = new THREE.Vector3(1, 1, 1);
@@ -63,7 +63,8 @@ export function buildBackdrop(scene, { houseLight, isFree }) {
   }, [20, 20]);
   const town = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 20, TILE * 20), new THREE.MeshLambertMaterial({ map: townTex }));
   // shift by half a road so the roads are centred on multiples of TILE
-  town.rotation.x = -Math.PI / 2; town.position.set(-20 / 256 * TILE, -0.02, -20 / 256 * TILE); scene.add(town);
+  town.rotation.x = -Math.PI / 2; town.position.set(-20 / 256 * TILE, -0.02, -20 / 256 * TILE);
+  if (ground) scene.add(town); // the countryside (lotus paddy) brings its own ground
 
   // ---- facade textures (white, tinted per building by vertex colour) ----
   const aptTex = canvasTexture(64, 64, (g) => {
