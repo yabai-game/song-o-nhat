@@ -265,6 +265,24 @@ export function applyPay(S, remit = 0) {
   return { ...p, remit: r, mental };
 }
 
+/**
+ * Early debt repayment (繰上返済) on payday: pays up to `amount` (50,000 or 100,000 ¥,
+ * capped by remaining `S.debt`), deducts from `S.money`, and grants a mental boost.
+ */
+export function repayDebt(S, amount = 50000) {
+  const curDebt = Math.max(0, S.debt ?? 0);
+  const curMoney = Math.max(0, S.money ?? 0);
+  const want = Math.max(0, Math.round(amount || 0));
+  if (curDebt <= 0) return { ok: false, reason: 'no_debt', paid: 0, remaining: 0, cleared: true, deltas: [] };
+  const pay = Math.min(want, curDebt);
+  if (curMoney < pay || pay <= 0) return { ok: false, reason: 'no_money', paid: 0, remaining: curDebt, cleared: false, deltas: [] };
+  S.money = curMoney - pay;
+  S.debt = curDebt - pay;
+  const mental = pay >= 100000 ? 8 : pay >= 50000 ? 4 : 2;
+  const deltas = [['money', -pay], ...applyFx(S, { mental })];
+  return { ok: true, paid: pay, remaining: S.debt, cleared: S.debt === 0, deltas };
+}
+
 // ---------- Endless Life Loop Helpers ----------
 /**
  * Scale an afternoon challenge config by job rank (every 3 ranks: +1 goal, -5% limit)

@@ -154,6 +154,13 @@ export function load(storage) {
     if (!Array.isArray(S.festLog.visited)) S.festLog.visited = [];
     if (!S.festLog.stamps || typeof S.festLog.stamps !== 'object') S.festLog.stamps = {};
     if (!S.festLog.acts || typeof S.festLog.acts !== 'object') S.festLog.acts = {};
+    if (S.festLog.festivalsVisited && typeof S.festLog.festivalsVisited === 'object') {
+      for (const [k, v] of Object.entries(S.festLog.festivalsVisited)) {
+        if (v && !S.festLog.visited.includes(k)) S.festLog.visited.push(k);
+      }
+      delete S.festLog.festivalsVisited;
+    }
+    if (S.festLog.hanami && !S.festLog.visited.includes('hanami')) S.festLog.visited.push('hanami');
     return S;
   } catch { return null; }
 }

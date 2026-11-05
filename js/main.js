@@ -37,7 +37,7 @@ import {
   SEASONS, DAYS_PER_SEASON, WEEKDAYS, WEEKDAYS_VI, PAY,
   newCalendar, advance, nextDay, weekday, seasonOf, label as calLabel,
   eventsOn, isRedDay, isOffDay, isMandatoryOff, isSaturdayWorkable,
-  weatherOf, weatherFx, paydayOn, payslip, applyPay,
+  weatherOf, weatherFx, paydayOn, payslip, applyPay, repayDebt,
 } from './core/calendar.js';
 import {
   REMIT_ROUTES, ensureHome, inboxFor, unreadCount, sendMoney, callHome,
@@ -65,7 +65,7 @@ import {
 } from './core/disaster.js';
 import {
   FESTIVALS, ANNUAL_FESTIVAL_IDS, BOUNENKAI_QUESTIONS, doBounenkai, doValentine,
-  ACHIEVEMENTS, checkAchievements,
+  ACHIEVEMENTS, checkAchievements, ensureFestivalState, visitFestival,
 } from './core/festival.js';
 
 const storage = (() => { try { return window.localStorage; } catch { return { getItem: () => null, setItem() {}, removeItem() {} }; } })();
@@ -385,17 +385,18 @@ function activeModule() {
   return { shift: G.activeShift || G.shift, morning: G.morning, evening: G.evening, market: G.market, dayoff: G.dayoff }[G.mode] || null;
 }
 function pauseMenu() {
-  if (!$('modal').hidden) return; // another card is already open
+  const overCard = !$('modal').hidden && G.mode === 'talk' && !!G.S?.life;
+  if (!$('modal').hidden && !overCard) return; // another card is already open
   const mod = activeModule(), was = mod ? mod.paused : false;
   if (mod) mod.paused = true;
   const demo = !G.S || G.S.flags.demo || G.demoJob;
   card(`<h2>⏸ Tạm dừng</h2><p>${demo ? 'Đang ở chế độ thử, không lưu.' : 'Tiến độ đã lưu tới bước gần nhất. Về màn hình chính thì phần đang làm dở (ca làm, đường đi) sẽ làm lại từ đầu bước này.'}</p>`, [
-    { label: '▶ Tiếp tục', on: () => { if (mod) mod.paused = was; } },
+    { label: '▶ Tiếp tục', on: () => { if (mod) mod.paused = was; if (overCard) runStep(); } },
     ...(G.S ? [
-      { label: '📅 Lịch 4 mùa', cls: 'ghost', on: () => { if (mod) mod.paused = was; calendarModal(); } },
-      { label: '📒 Sổ tay thành tựu', cls: 'ghost', on: () => { if (mod) mod.paused = was; notebookModal(); } },
+      { label: '📅 Lịch 4 mùa', cls: 'ghost', on: () => { if (mod) mod.paused = was; calendarModal(overCard); } },
+      { label: '📒 Sổ tay thành tựu', cls: 'ghost', on: () => { if (mod) mod.paused = was; notebookModal(overCard); } },
     ] : []),
-    { label: music.muted ? '🔈 Bật nhạc nền' : '🔇 Tắt nhạc nền', cls: 'ghost', on: () => { music.toggle(); if (mod) mod.paused = was; toast(music.muted ? '🔇 Đã tắt nhạc nền' : '🎵 Đã bật nhạc nền'); } },
+    { label: music.muted ? '🔈 Bật nhạc nền' : '🔇 Tắt nhạc nền', cls: 'ghost', on: () => { music.toggle(); if (mod) mod.paused = was; toast(music.muted ? '🔇 Đã tắt nhạc nền' : '🎵 Đã bật nhạc nền'); if (overCard) runStep(); } },
     { label: '🏠 Về màn hình chính', cls: 'ghost', on: () => {
       try { if (mod && mod.stop) mod.stop(); } catch (e) { console.warn(e); }
       if (mod) mod.active = false;
@@ -439,8 +440,9 @@ function hudCalText(S = G.S, sub = '') {
   return sub ? `${base} · ${sub}` : base;
 }
 
-function calendarModal() {
-  if (!$('modal').hidden || !G.S) return;
+function calendarModal(forceOver = false) {
+  const overCard = forceOver || (!$('modal').hidden && G.mode === 'talk' && !!G.S?.life);
+  if ((!$('modal').hidden && !overCard) || !G.S) return;
   const mod = activeModule(), was = mod ? mod.paused : false;
   if (mod) mod.paused = true;
   const cur = ensureCal(G.S);
@@ -497,7 +499,7 @@ function calendarModal() {
         ${selPay ? '<div>💴 <b>Ngày nhận lương định kỳ (給与明細):</b> nhận lương kỳ + phụ cấp bậc nghề + tăng ca, trừ tiền nhà 15.000 ¥, thuế 12% và trả nợ 25.000 ¥.</div>' : ''}
         ${selEvs.map((ev) => `<div>${ev.icon} <b>${esc(ev.jp)} — ${esc(ev.vi)}:</b> ${esc(ev.desc)}</div>`).join('')}
       </div>`, [
-      { label: 'Đóng lịch', on: () => { if (mod) mod.paused = was; } },
+      { label: 'Đóng lịch', on: () => { if (mod) mod.paused = was; if (overCard) runStep(); } },
     ]);
 
     $('cal-prev')?.addEventListener('click', () => {
@@ -538,24 +540,25 @@ function notifyAchievements(S = G.S) {
   }
 }
 
-function notebookModal() {
+function notebookModal(forceOver = false) {
   // like the phone: opens over a choice card (day-off hub…) and brings that card back when closed
-  const overCard = !$('modal').hidden && G.mode === 'talk' && !!G.S?.life;
+  const overCard = forceOver || (!$('modal').hidden && G.mode === 'talk' && !!G.S?.life);
   if ((!$('modal').hidden && !overCard) || !G.S) return;
   const mod = activeModule(), was = mod ? mod.paused : false;
   if (mod) mod.paused = true;
   const S = G.S;
+  ensureFestivalState(S);
   notifyAchievements(S);
   const nb = S.notebook || {};
-  const visited = S.festLog?.festivalsVisited || {};
+  const visited = Array.isArray(S.festLog?.visited) ? S.festLog.visited : [];
   const unlockedList = ACHIEVEMENTS.filter((a) => nb[a.id]);
   const lockedList = ACHIEVEMENTS.filter((a) => !nb[a.id]);
-  const stampCount = ANNUAL_FESTIVAL_IDS.filter((id) => visited[id]).length;
+  const stampCount = ANNUAL_FESTIVAL_IDS.filter((id) => visited.includes(id)).length;
   const goldfishCount = S.pets?.goldfish || 0;
 
   const stampsHtml = ANNUAL_FESTIVAL_IDS.map((id) => {
     const f = FESTIVALS[id];
-    const done = Boolean(visited[id]);
+    const done = visited.includes(id);
     return `<div class="nb-stamp ${done ? 'stamped' : ''}">
       <span class="ic">${f.icon}</span>
       <div><b>${esc(f.jp)}</b></div>
@@ -1034,6 +1037,7 @@ async function runStep() {
     S.lDay.overdueChecked = true;
     const oRes = checkPaperOverdue(S, S.cal);
     if (oRes.items.length) {
+      S.lDay.hankyuAsked = true;
       save(S, storage);
       return overdueAlertCard(oRes);
     }
@@ -1060,7 +1064,7 @@ async function runStep() {
   if (S.sStep === 0 && S.ill && !S.lDay.illPrompted) return morningIllCard();
 
   if (S.lDay.kind === 'work' && S.sStep === 0 && !S.lDay.hankyuAsked) {
-    const urgentDocs = paperTodo(S, S.cal).filter((d) => d.daysLeft <= 5 && isPaperOpen(d.place, S.cal, 600));
+    const urgentDocs = paperTodo(S, S.cal).filter((d) => d.daysLeft >= 0 && d.daysLeft <= 5 && isPaperOpen(d.place, S.cal, 600));
     if (urgentDocs.length) {
       S.lDay.hankyuAsked = true;
       save(S, storage);
@@ -1102,8 +1106,39 @@ function paydayCard() {
     if (noYucho) applyFx(S, { mental: -2 });
     S.lDay.paid = true;
     save(S, storage);
+    notifyAchievements(S);
     toast(`💴 Nhận lương thực lĩnh +${yen(p.net)}`, noYucho ? 'Lương tiền mặt, phải tự đi nhận (🧠 −2)' : remDebt > 0 ? `Còn nợ ${yen(remDebt)}` : '🎉 Đã trả hết nợ môi giới!', 4);
     runStep();
+  };
+
+  const chooseExtraDebt = () => {
+    const doExtra = (amt) => {
+      applyPay(S, 0);
+      if (noYucho) applyFx(S, { mental: -2 });
+      const r = repayDebt(S, amt);
+      S.lDay.paid = true;
+      save(S, storage);
+      notifyAchievements(S);
+      toast(
+        r.cleared ? '🎉 Đã trả hết toàn bộ nợ môi giới!' : `💳 Đã trả thêm nợ ${yen(r.paid)}`,
+        r.cleared ? 'Thành tựu: 🆓 Trả hết nợ môi giới!' : `Còn nợ ${yen(r.remaining)} · 🧠 Tinh thần nhẹ nhõm hơn`,
+        4.5,
+      );
+      runStep();
+    };
+    const dBtns = [];
+    if (avail >= Math.min(100000, remDebt) && remDebt > 50000) {
+      dBtns.push({ label: `💳 Trả thêm ${yen(Math.min(100000, remDebt))} (🧠 +8)`, on: () => doExtra(100000) });
+    }
+    dBtns.push({
+      label: `💳 Trả thêm ${yen(Math.min(50000, remDebt))} (🧠 +4)`,
+      cls: dBtns.length > 0 ? 'ghost' : '',
+      on: () => doExtra(50000),
+    });
+    dBtns.push({ label: '← Quay lại phiếu lương', cls: 'ghost', on: paydayCard });
+    card(`<h2>💳 Trả nợ trước hạn · 繰上返済</h2>
+      <p>Sau khi trừ kỳ lương này, dư nợ còn <b>${yen(remDebt)}</b> và bạn có <b>${yen(avail)}</b> tiền mặt.</p>
+      <p class="lesson">💡 Trả nợ trước hạn giúp giảm nhanh áp lực tài chính và mở khóa thành tựu <b>🆓 Trả hết nợ môi giới</b> ngay khi dư nợ về 0 ¥.</p>`, dBtns);
   };
 
   const chooseRouteFor = (amount) => {
@@ -1113,6 +1148,7 @@ function paydayCard() {
       const r = sendMoney(S, amount, route);
       S.lDay.paid = true;
       save(S, storage);
+      notifyAchievements(S);
       if (r.lost) {
         card(`<div class="big">😱</div><h2>Bị lừa mất tiền chuyển chui!</h2>
           <p>Người nhận chuyển tiền tay ba đột nhiên khóa tài khoản LIME và biến mất. Bạn mất trắng <b>${yen(amount + r.fee)}</b>!</p>
@@ -1136,15 +1172,24 @@ function paydayCard() {
     ]);
   };
 
+  const canExtraDebt = remDebt > 0 && avail >= Math.min(50000, remDebt);
   const remitOpts = [];
   if (avail >= 50000 + REMIT_ROUTES.legal.fee) remitOpts.push({ amt: 50000, label: '💸 Gửi 50.000 ¥ về nhà (🧠 +9)' });
   if (avail >= 30000 + REMIT_ROUTES.legal.fee) remitOpts.push({ amt: 30000, label: '💸 Gửi 30.000 ¥ về nhà (🧠 +6)' });
   if (avail >= 10000 + REMIT_ROUTES.legal.fee) remitOpts.push({ amt: 10000, label: '💸 Gửi 10.000 ¥ về nhà (🧠 +3)' });
-  const btns = remitOpts.map((opt, idx) => ({
+  const visibleRemit = remitOpts.slice(0, canExtraDebt ? 2 : 3);
+  const btns = visibleRemit.map((opt, idx) => ({
     label: opt.label,
     cls: idx === 0 ? '' : 'ghost',
     on: () => chooseRouteFor(opt.amt),
   }));
+  if (canExtraDebt) {
+    btns.push({
+      label: '💳 Trả thêm nợ 50.000 ¥ / 100.000 ¥',
+      cls: 'ghost',
+      on: chooseExtraDebt,
+    });
+  }
   btns.push({ label: 'Không gửi (giữ lại tiêu dùng)', cls: 'ghost', on: finishNoRemit });
 
   card(`<h2>💴 Phiếu lương · 給与明細</h2>
@@ -1381,9 +1426,7 @@ function tetVnEveningCard(ev, onDone = null) {
   setStage('dorm'); G.stages.dorm.setTime('night'); hideNpcs();
   G.mode = 'talk';
   dayHud(`🧧 ${ev.vi}`);
-  S.festLog = S.festLog || { festivalsVisited: {} };
-  S.festLog.festivalsVisited = S.festLog.festivalsVisited || {};
-  S.festLog.festivalsVisited.tet_vn = true;
+  visitFestival(S, 'tet_vn');
   if (!S.lDay.tetBaseFx) {
     applyFx(S, ev.fx || { mental: 6, culture: 3 });
     S.lDay.tetBaseFx = true;
@@ -1765,6 +1808,9 @@ function overdueAlertCard(oRes) {
 function morningIllCard() {
   const S = G.S;
   if (!S.ill) { runStep(); return; }
+  S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+  S.lDay.illPrompted = true;
+  save(S, storage);
   const meta = ILLNESSES[S.ill.id] || ILLNESSES.kaze;
   const cal = ensureCal(S);
   const hoken = !!S.papers?.hoken;
@@ -1781,6 +1827,7 @@ function morningIllCard() {
       on: () => {
         if (!cal.isOff) takeHankyu(S);
         S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+        S.lDay.illPrompted = true;
         save(S, storage);
         townMedicalVisit(() => runStep());
       },
@@ -1791,6 +1838,7 @@ function morningIllCard() {
     cls: btns.length > 0 ? 'ghost' : '',
     on: () => {
       S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+      S.lDay.illPrompted = true;
       save(S, storage);
       townMedicalVisit(() => runStep());
     },
@@ -2130,24 +2178,25 @@ function townBikeShopVisit(returnTo) {
 
 function runBikeRulesQuiz(onDone) {
   const S = G.S;
-  const rules = bikeRules();
+  const rules = Array.isArray(bikeRules) ? bikeRules : bikeRules();
   const answers = [];
 
   function askRule(idx) {
     if (idx >= rules.length) {
       const res = answerBikeRules(S, answers);
       save(S, storage);
-      card(`<div class="big">${res.allCorrect ? '🎉' : '📘'}</div><h2>Kết quả luật đi xe đạp: ${res.correct}/${res.total}</h2>
-        <p>${res.allCorrect
+      card(`<div class="big">${res.ok ? '🎉' : '📘'}</div><h2>Kết quả luật đi xe đạp: ${res.score}/${res.total}</h2>
+        <p>${res.ok
           ? 'Bạn đã nắm vững cả 5 quy tắc an toàn khi đi xe đạp tại Nhật Bản!'
           : 'Hãy chú ý: đi bên trái, bật đèn buổi tối, không vừa đi vừa cầm ô/điện thoại, không chở đôi và không uống rượu bia.'}</p>
-        ${res.jpGain ? `<div class="deltas"><span class="chip pos">🎌 Tiếng Nhật +${res.jpGain}</span></div>` : ''}`, [
+        ${res.deltas?.length ? `<div class="deltas">${deltaChips(res.deltas)}</div>` : ''}`, [
         { label: 'Hoàn tất →', on: () => onDone() },
       ]);
       return;
     }
     const q = rules[idx];
-    const btns = q.choices.map((c, cIdx) => ({
+    const opts = q.options || q.choices || [];
+    const btns = opts.map((c, cIdx) => ({
       label: c,
       on: () => {
         answers[idx] = cIdx;
@@ -2156,7 +2205,7 @@ function runBikeRulesQuiz(onDone) {
     }));
     btns.push({ label: '← Quay lại', cls: 'ghost', on: () => onDone() });
     card(`<h2>📘 Luật xe đạp Nhật Bản (${idx + 1}/${rules.length})</h2>
-      <p><b>${esc(q.jp)}</b></p>
+      ${q.jp ? `<p><b>${esc(q.jp)}</b></p>` : ''}
       <p>${esc(q.q)}</p>`, btns);
   }
 
@@ -2195,17 +2244,21 @@ function emergencyBagModal(returnTo) {
       cls: btns.length > 0 ? 'ghost' : '',
       on: () => {
         const q = SHELTER_QUESTION;
-        const qBtns = q.choices.map((c, idx) => ({
+        const opts = q.options || q.choices || [];
+        const qBtns = opts.map((c, idx) => ({
           label: c,
           on: () => {
             const res = answerShelter(S, idx);
             save(S, storage);
-            toast(res.correct ? '✅ Chính xác! 避難所 = Nơi sơ tán' : '💡 避難所 nghĩa là Nơi sơ tán khẩn cấp', res.jpGain ? `🎌 +${res.jpGain}` : '');
+            toast(
+              res.ok ? '✅ Chính xác! 避難所 = Nơi sơ tán' : '💡 避難所 nghĩa là Nơi sơ tán khẩn cấp',
+              res.deltas?.length ? '🎌 Văn hóa +2 · 🗣️ Tiếng Nhật +1' : '',
+            );
             emergencyBagModal(returnTo);
           },
         }));
         qBtns.push({ label: '← Quay lại', cls: 'ghost', on: () => emergencyBagModal(returnTo) });
-        card(`<h2>🪧 Biển báo phòng chống thiên tai</h2><p>${esc(q.prompt)}</p>`, qBtns);
+        card(`<h2>🪧 Biển báo phòng chống thiên tai (${esc(q.jp || '避難所')})</h2><p>${esc(q.q || q.prompt || '')}</p>`, qBtns);
       },
     });
   }
@@ -3078,7 +3131,11 @@ function frame() {
   if (G.mode === 'market') G.market.update(dt, t);
   if (G.mode === 'dayoff') G.dayoff.update(dt, t);
   if (G.stageId === 'dorm') st.setDrying?.(!!G.S?.home?.drying); // clothes on the rack while laundry dries indoors
-  if ((musicT -= dt) <= 0) { musicT = 0.5; music.set(pickTrack({ mode: G.mode, stageId: G.stageId, season: G.S?.life && G.S?.cal ? G.S.cal.season : 0, festival: G.stages.shrine?.festival })); }
+  if ((musicT -= dt) <= 0) {
+    musicT = 0.5;
+    const atWork = G.mode === 'shift' || (G.mode === 'talk' && (G.talkCam === 'deck' || !!G.player?.helmet?.visible));
+    music.set(pickTrack({ mode: G.mode, stageId: G.stageId, season: G.S?.life && G.S?.cal ? G.S.cal.season : 0, festival: G.stages.shrine?.festival, atWork }));
+  }
   if (G.streetCrowd) {
     const onStreet = G.stageId === 'site' && (G.mode === 'morning' || G.mode === 'evening' || G.mode === 'dayoff');
     G.streetCrowd.setVisible(onStreet);

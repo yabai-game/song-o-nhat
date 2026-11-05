@@ -25,7 +25,7 @@ const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 const FEST = { natsumatsuri: 'matsuri', obon: 'matsuri', hanami: 'matsuri', shogatsu: 'newyear', oomisoka: 'newyear', halloween: 'halloween' };
 
 /** pure: the track id for a game state (exported for tests) */
-export function pickTrack({ mode, stageId, season = 0, festival = null }) {
+export function pickTrack({ mode, stageId, season = 0, festival = null, atWork = false }) {
   const s = SEASONS[season] || 'spring';
   if (mode === 'title' || mode === 'creator' || stageId === 'town') return 'title';
   if (stageId === 'shrine') return FEST[festival] || `street_${s}`;
@@ -33,7 +33,7 @@ export function pickTrack({ mode, stageId, season = 0, festival = null }) {
   if (stageId === 'station') return 'station';
   if (mode === 'market' || stageId === 'market') return 'market';
   if (stageId === 'care' || stageId === 'bento' || stageId === 'lotus') return `work_${stageId}`;
-  if (stageId === 'site') return mode === 'shift' ? 'work_site' : `street_${s}`;
+  if (stageId === 'site') return mode === 'shift' || atWork ? 'work_site' : `street_${s}`;
   return `street_${s}`;
 }
 

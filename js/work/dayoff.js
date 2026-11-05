@@ -7,7 +7,7 @@ import {
   PRAY_SEQ, PRAY_STEPS, createDayOff, tickDayOff, prayStep, drawOmikuji, tieOmikujiKyo, doHanami,
 } from '../core/dayoff_rules.js';
 import {
-  FESTIVALS, YATAI_ITEMS, buyYatai, goldfishRound, scoop, finishGoldfish,
+  FESTIVALS, YATAI_ITEMS, visitFestival, buyYatai, goldfishRound, scoop, finishGoldfish,
   bonOdoriBeats, judgeBonBeat, scoreBonOdori, rentYukata, launchFirework, watchFireworks,
   doHalloween, doMomiji, eatToshikoshiSoba, ringJoyaBell, callNewYearEve,
   drinkAmazake, receiveNengajo,
@@ -156,9 +156,7 @@ export class DayOff {
     this.S.flags = this.S.flags || {};
     this.S.flags.dayOff = { ...(this.S.flags.dayOff || {}), started: true };
     if (this.festival) {
-      this.S.festLog = this.S.festLog || { festivalsVisited: {} };
-      this.S.festLog.festivalsVisited = this.S.festLog.festivalsVisited || {};
-      this.S.festLog.festivalsVisited[this.festival] = true;
+      visitFestival(this.S, this.festival);
     }
     if (this.storage) save(this.S, this.storage);
 
@@ -750,10 +748,8 @@ export class DayOff {
     const P = this.who.player, hung = this.who.hung, hoa = this.who.hoa;
     const r = doHanami(this.st, this.S);
     if (!r.ok) return;
-    this.S.festLog = this.S.festLog || { festivalsVisited: {} };
+    visitFestival(this.S, 'hanami');
     this.S.festLog.hanami = true;
-    this.S.festLog.festivalsVisited = this.S.festLog.festivalsVisited || {};
-    this.S.festLog.festivalsVisited.hanami = true;
     if (this.storage) save(this.S, this.storage);
     this.stages.shrine.syncRings(this.st);
     this.paused = true;
@@ -802,7 +798,7 @@ export class DayOff {
     this.poseT = 0.5;
     const it = YATAI_ITEMS[itemId] || { icon: '🏮', jp: itemId, vi: itemId };
     this.overhead.say(P, `${it.icon} おいしい！— ${it.jp} ngon quá!`, 3.0);
-    const deltas = Object.entries(r.fx || {}).filter(([, v]) => v);
+    const deltas = Array.isArray(r.deltas) ? r.deltas : Object.entries(r.fx || {}).filter(([, v]) => v);
     toast(`${it.icon} ${it.vi} (${it.jp})`, deltaText(deltas));
     this.onNotify?.(this.S);
     this.hud();
@@ -880,15 +876,20 @@ export class DayOff {
     const renderDone = () => {
       clearInterval(this.miniTimer);
       this.miniTimer = null;
+      const fin = finishGoldfish(this.S, round, !paid);
+      paid = true;
       this.st.min += 15;
       if (this.storage) save(this.S, this.storage);
       const caught = round.caught;
+      const showDeltas = caught > 0
+        ? [['money', -300], ['mental', 4 * caught], ['culture', 2 * caught]]
+        : (fin.deltas || [['money', -300], ['mental', 1]]);
       card(`
         <h2>🐠 Kết quả Vớt cá vàng · 金魚すくい</h2>
         <p>${caught > 0
           ? `Tuyệt vời! Bạn đã khéo léo vớt được <b>${caught} chú cá vàng 🐠</b> trước khi vợt giấy ポイ bị rách!`
           : 'Tiếc quá, vợt giấy ポイ đã bị rách hết hoặc cá đã lặn mất tiêu!'}</p>
-        <div class="deltas">${deltaChips([['money', -300], ...(caught > 0 ? [['mental', 4 * caught]] : [['mental', 1]])])}</div>
+        <div class="deltas">${deltaChips(showDeltas)}</div>
         <p class="lesson">🐠 Chú cá vàng vớt được ở lễ hội sẽ được đem về nuôi trong chậu nước ở phòng ký túc xá さくら寮 (Đang nuôi: <b>${this.S.pets?.goldfish || 0}</b> con).</p>
       `, [{ label: 'Tiếp tục dạo lễ hội →', on: closeMini }]);
     };
@@ -904,11 +905,7 @@ export class DayOff {
       {
         label: '🥄 Vớt cá ngay! (すくう)',
         on: () => {
-          if (round.done) return;
-          if (!paid) {
-            paid = true;
-            finishGoldfish(this.S, { caught: 0 }, true);
-          }
+          if (round.done || round.torn) return;
           P.reachTo = 0.65;
           this.poseT = 0.35;
           const r = scoop(round, t, this.S);
@@ -921,42 +918,40 @@ export class DayOff {
             if (fishEl) fishEl.innerHTML = '💦 Trượt rồi! Vợt giấy ポイ bị rách thêm…';
           }
           if (statEl) {
-            statEl.innerHTML = `Vợt ポイ: <b>${round.tears}/${round.maxTears}</b> vết rách · Đã vớt: <b>${round.caught}</b> 🐠`;
+            statEl.innerHTML = `Vợt ポイ: <b>${round.misses}/${round.maxMiss}</b> vết rách · Đã vớt: <b>${round.caught}</b> 🐠`;
           }
-          if (round.done) setTimeout(renderDone, 450);
+          if (round.torn || round.used.size >= round.length) {
+            round.done = true;
+            setTimeout(renderDone, 450);
+          }
         },
       },
       {
         label: 'Dừng chơi →',
         cls: 'ghost',
         on: () => {
-          if (!paid) {
-            paid = true;
-            finishGoldfish(this.S, round, true);
-          }
+          round.done = true;
           renderDone();
         },
       },
     ]);
 
     const stepMs = 80;
-    const maxTime = (round.windows[round.windows.length - 1]?.t1 || 6.5) + 0.8;
+    const win = round.window || 0.25;
+    const maxTime = ((round[round.length - 1] || 6.5) + win) + 0.8;
     this.miniTimer = setInterval(() => {
-      if (round.done) {
+      if (round.done || round.torn) {
+        round.done = true;
         renderDone();
         return;
       }
       t += stepMs / 1000;
       if (t > maxTime) {
-        if (!paid) {
-          paid = true;
-          finishGoldfish(this.S, round, true);
-        }
         round.done = true;
         renderDone();
         return;
       }
-      const up = round.windows.some((w) => !w.caught && t >= w.t0 && t <= w.t1);
+      const up = round.some((t0, i) => !round.used?.has(i) && Math.abs(t - t0) <= win);
       const fishEl = $('kg-fish');
       if (fishEl) {
         fishEl.innerHTML = up
@@ -976,23 +971,29 @@ export class DayOff {
     clearInterval(this.miniTimer);
     const seed = ((this.S.seed || 1) * 53 + (this.st.min || 0)) >>> 0;
     const beats = bonOdoriBeats(seed);
+    const beatTime = (b) => (typeof b === 'number' ? b : b.timeMs);
+    const beatCue = (b, i) => (typeof b === 'object' && b?.cue ? b.cue : (i % 2 === 0 ? 'ドン' : 'カッ'));
     const taps = new Array(beats.length).fill(NaN);
     let curIdx = 0;
     let startMs = performance.now() + 700;
 
+    let finished = false;
     const finishDance = () => {
+      // the last tap schedules a finish and the ticker may also see the end: score only once
+      if (finished) return;
+      finished = true;
       clearInterval(this.miniTimer);
       this.miniTimer = null;
       const res = scoreBonOdori(this.S, beats, taps);
       this.st.min += 20;
       if (this.storage) save(this.S, this.storage);
       this.overhead.say(P, '💃 盆踊り楽しい！— Nhảy Bon Odori vui quá!', 3.2);
-      const deltas = Object.entries(res.fx).filter(([, v]) => v);
+      const deltas = Array.isArray(res.deltas) ? res.deltas : Object.entries(res.fx || {}).filter(([, v]) => v);
       card(`
         <h2>💃 Kết quả Nhảy 盆踊り (Bon Odori)</h2>
         <p>Bạn đã vỗ tay & nhảy chuẩn <b>${res.hits} / ${res.total}</b> nhịp trống Taiko quanh đài 櫓 (Yagura)!</p>
         <div class="deltas">${deltaChips(deltas)}</div>
-        <p class="lesson">🥁 Điệu múa <b>盆踊り (Bon Odori)</b> dịp lễ Obon vừa đón tổ tiên về thăm vừa gắn kết cả khu phố. Đạt từ 12/16 nhịp chuẩn sẽ mở khóa thành tựu <b>💃 Nhảy Bon Odori không trượt</b>!</p>
+        <p class="lesson">🥁 Điệu múa <b>盆踊り (Bon Odori)</b> dịp lễ Obon vừa đón tổ tiên về thăm vừa gắn kết cả khu phố. Đạt từ 13/16 nhịp chuẩn sẽ mở khóa thành tựu <b>💃 Nhảy Bon Odori không trượt</b>!</p>
       `, [
         {
           label: 'Tiếp tục dạo lễ hội →',
@@ -1019,23 +1020,23 @@ export class DayOff {
         on: () => {
           if (curIdx >= beats.length) return;
           const nowElapsed = performance.now() - startMs;
-          // Find closest untappped beat or current beat
           let targetIdx = curIdx;
           const b = beats[targetIdx];
-          // If player taps reasonably close or button is in active cue window, record against beat
-          const diff = Math.abs(nowElapsed - b.timeMs);
-          taps[targetIdx] = diff <= 260 ? b.timeMs + (diff <= 150 ? 0 : diff) : nowElapsed;
-          const j = judgeBonBeat(b.timeMs, taps[targetIdx]);
+          const bMs = beatTime(b);
+          const bCue = beatCue(b, targetIdx);
+          const diff = Math.abs(nowElapsed - bMs);
+          taps[targetIdx] = diff <= 260 ? bMs + (diff <= 150 ? 0 : diff) : nowElapsed;
+          const j = judgeBonBeat(bMs, taps[targetIdx]);
           P.reachTo = 0.65;
           P.wristSway = 0.8;
           this.poseT = 0.32;
           curIdx++;
-          const hitsSoFar = beats.slice(0, curIdx).filter((bt, i) => judgeBonBeat(bt.timeMs, taps[i]).hit).length;
+          const hitsSoFar = beats.slice(0, curIdx).filter((bt, i) => judgeBonBeat(beatTime(bt), taps[i]).hit).length;
           const cueEl = $('bon-cue');
           const statEl = $('bon-stat');
           if (cueEl) {
             cueEl.innerHTML = j.hit
-              ? `<span style="color:#4ade80">✨ Chuẩn nhịp ${targetIdx + 1}! (${b.cue})</span>`
+              ? `<span style="color:#4ade80">✨ Chuẩn nhịp ${targetIdx + 1}! (${bCue})</span>`
               : `<span style="color:#fbbf24">💦 Hơi lệch nhịp ${targetIdx + 1}… nghe tiếp nhịp sau!</span>`;
           }
           if (statEl) {
@@ -1044,8 +1045,7 @@ export class DayOff {
           if (curIdx >= beats.length) {
             setTimeout(finishDance, 350);
           } else {
-            // Re-anchor next beat so player always has a crisp 550ms rhythm after each tap
-            startMs = performance.now() - beats[curIdx].timeMs + 420;
+            startMs = performance.now() - beatTime(beats[curIdx]) + 420;
           }
         },
       },
@@ -1058,29 +1058,30 @@ export class DayOff {
       }
       const elapsed = performance.now() - startMs;
       const b = beats[curIdx];
-      const delta = elapsed - b.timeMs;
+      const bMs = beatTime(b);
+      const bCue = beatCue(b, curIdx);
+      const delta = elapsed - bMs;
       const cueEl = $('bon-cue');
       const statEl = $('bon-stat');
       if (delta > 320) {
-        // Missed this beat
-        taps[curIdx] = b.timeMs + 500;
+        taps[curIdx] = bMs + 500;
         curIdx++;
         if (curIdx >= beats.length) {
           finishDance();
           return;
         }
-        startMs = performance.now() - beats[curIdx].timeMs + 480;
+        startMs = performance.now() - beatTime(beats[curIdx]) + 480;
       } else if (Math.abs(delta) <= 150) {
         if (cueEl) {
-          cueEl.innerHTML = `<span style="color:#facc15">🥁 ${b.cue} — BẤM VỖ TAY NGAY! (Nhịp ${curIdx + 1}/16)</span>`;
+          cueEl.innerHTML = `<span style="color:#facc15">🥁 ${bCue} — BẤM VỖ TAY NGAY! (Nhịp ${curIdx + 1}/16)</span>`;
         }
       } else if (delta < -150) {
         if (cueEl) {
-          cueEl.innerHTML = `🏮 Sắp tới nhịp ${curIdx + 1}/16 (${b.cue})…`;
+          cueEl.innerHTML = `🏮 Sắp tới nhịp ${curIdx + 1}/16 (${bCue})…`;
         }
       }
       if (statEl && curIdx < beats.length) {
-        const hitsSoFar = beats.slice(0, curIdx).filter((bt, i) => judgeBonBeat(bt.timeMs, taps[i]).hit).length;
+        const hitsSoFar = beats.slice(0, curIdx).filter((bt, i) => judgeBonBeat(beatTime(bt), taps[i]).hit).length;
         statEl.innerHTML = `Nhịp: <b>${curIdx + 1} / 16</b> · Chuẩn nhịp: <b>${hitsSoFar}</b>`;
       }
     }, 50);
@@ -1093,7 +1094,7 @@ export class DayOff {
     P.yaw = Math.PI;
     P.reachTo = 0.7;
     this.poseT = 0.45;
-    this.overhead.say(P, `🎆 ${r.shout} (Đẹp quá!)`, 2.6);
+    this.overhead.say(P, `🎆 ${r.cheer} (Đẹp quá!)`, 2.6);
     if (this.storage) save(this.S, this.storage);
     this.onNotify?.(this.S);
     this.hud();
@@ -1117,7 +1118,7 @@ export class DayOff {
           P.look({ ...this.S.look.colors, shirt: 0x1e3a8a });
           if (this.storage) save(this.S, this.storage);
           this.overhead.say(P, '🥻 浴衣、涼しくていいな！— Mặc Yukata mát thật!', 3.0);
-          toast('🥻 Đã thuê Yukata lễ hội', '💴 −3.000 ¥ · 🧠 Tinh thần +3');
+          toast('🥻 Đã thuê Yukata lễ hội', deltaText(r.deltas || [['money', -3000], ['mental', 3]]));
           show('modal', false);
           this.paused = false;
           this.onNotify?.(this.S);
@@ -1135,7 +1136,8 @@ export class DayOff {
         this.overhead.say(P, '🎆 たまや〜！きれいだなあ… — Pháo hoa rực rỡ quá!', 3.5);
         show('modal', false);
         this.paused = false;
-        toast('🎆 Đã ngắm pháo hoa & gửi ảnh LIME cho Mẹ!', `🧠 Tinh thần +${r.fx.mental} · 🎌 Văn hóa +${r.fx.culture}`);
+        const deltas = Array.isArray(r.deltas) ? r.deltas : [];
+        toast('🎆 Đã ngắm pháo hoa & gửi ảnh LIME cho Mẹ!', deltaText(deltas));
         this.onNotify?.(this.S);
         this.hud();
       },
@@ -1170,12 +1172,12 @@ export class DayOff {
     if (this.storage) save(this.S, this.storage);
     this.overhead.say(P, '🔔 ゴーン… (Tiếng chuông giao thừa 108 tiếng)', 3.5);
     this.paused = true;
-    const deltas = Object.entries(r.fx).filter(([, v]) => v);
+    const deltas = Array.isArray(r.deltas) ? r.deltas : Object.entries(r.fx || {}).filter(([, v]) => v);
     card(`
       <h2>🔔 Thỉnh chuông giao thừa · 除夜の鐘 (108 tiếng)</h2>
       <p class="jpline">「ゴーン……」— Tiếng chuông đồng trầm hùng ngân vang giữa đêm tuyết cuối năm.</p>
       <div class="deltas">${deltaChips(deltas)}</div>
-      <p class="lesson">🔔 ${esc(r.note)}</p>
+      <p class="lesson">🔔 ${esc(r.lesson || r.note || '')}</p>
     `, [
       {
         label: 'Chắp tay cầu bình an năm mới →',
@@ -1197,10 +1199,11 @@ export class DayOff {
       this.st.min += 20;
       if (this.storage) save(this.S, this.storage);
       this.paused = true;
-      const deltas = Object.entries(r.fx).filter(([, v]) => v);
+      const deltas = Array.isArray(r.deltas) ? r.deltas : Object.entries(r.fx || {}).filter(([, v]) => v);
+      const diffHours = r.diffHours ?? r.tzDiffHours ?? 2;
       card(`
         <h2>📹 Gọi video về nhà đêm Giao thừa · 大晦日</h2>
-        <p>Đồng hồ ở Nhật điểm <b>00:00 bước sang năm mới</b> — lúc này ở Việt Nam là <b>22:00 tối (lệch múi giờ ${r.tzDiffHours} tiếng)</b>. Cả nhà ở quê vẫn đang thức quây quần và vẫy tay chúc mừng qua màn hình điện thoại!</p>
+        <p>Đồng hồ ở Nhật điểm <b>00:00 bước sang năm mới</b> — lúc này ở Việt Nam là <b>22:00 tối (lệch múi giờ ${diffHours} tiếng)</b>. Cả nhà ở quê vẫn đang thức quây quần và vẫy tay chúc mừng qua màn hình điện thoại!</p>
         <div class="deltas">${deltaChips(deltas)}</div>
         <p class="lesson">📱 Mẹ đã nhắn tin chúc năm mới trong hộp thư <b>LIME</b> của bạn.</p>
       `, [
@@ -1221,13 +1224,13 @@ export class DayOff {
       this.st.min += 10;
       if (this.storage) save(this.S, this.storage);
       this.paused = true;
-      const deltas = Object.entries(r.fx).filter(([, v]) => v);
+      const deltas = Array.isArray(r.deltas) ? r.deltas : Object.entries(r.fx || {}).filter(([, v]) => v);
       card(`
         <h2>📮 Thiệp chúc Tết 年賀状 & Phong tục お年玉</h2>
         <p class="jpline">「あけましておめでとうございます。今年もよろしくお願いします！」</p>
         <p>Công ty và tổ trưởng gửi tặng bạn tấm thiệp <b>年賀状 (Nengajō)</b> đầu xuân.</p>
         <div class="deltas">${deltaChips(deltas)}</div>
-        <p class="lesson">🎍 ${esc(r.note)}</p>
+        <p class="lesson">🎍 ${esc(r.otoshidamaNote || r.note || '')}</p>
       `, [
         {
           label: 'Cất thiệp kỷ niệm →',
@@ -1260,7 +1263,8 @@ export class DayOff {
             this.overhead.say(P, '🎃 ハッピーハロウィン！', 2.8);
             show('modal', false);
             this.paused = false;
-            toast('🎃 Hóa trang Halloween vui vẻ!', `🧠 +${r.fx.mental} · 🎌 +${r.fx.culture} (${r.note})`);
+            const deltas = Array.isArray(r.deltas) ? r.deltas : [];
+            toast('🎃 Hóa trang Halloween vui vẻ!', `${deltaText(deltas)} (${r.lesson || r.note || ''})`);
             this.onNotify?.(this.S);
             this.hud();
           },
@@ -1274,7 +1278,8 @@ export class DayOff {
             if (this.storage) save(this.S, this.storage);
             show('modal', false);
             this.paused = false;
-            toast('🎃 Dạo phố Halloween', `🧠 +${r.fx.mental} · 🎌 +${r.fx.culture} (${r.note})`);
+            const deltas = Array.isArray(r.deltas) ? r.deltas : [];
+            toast('🎃 Dạo phố Halloween', `${deltaText(deltas)} (${r.lesson || r.note || ''})`);
             this.onNotify?.(this.S);
             this.hud();
           },
@@ -1288,7 +1293,7 @@ export class DayOff {
       if (this.storage) save(this.S, this.storage);
       this.overhead.say(P, '🍁 紅葉が真っ赤できれい！— Lá phong đỏ rực đẹp quá!', 3.2);
       this.paused = true;
-      const deltas = Object.entries(r.fx).filter(([, v]) => v);
+      const deltas = Array.isArray(r.deltas) ? r.deltas : Object.entries(r.fx || {}).filter(([, v]) => v);
       card(`
         <h2>🍁 Ngắm lá phong đỏ mùa thu · 紅葉狩り</h2>
         <p>Hàng cây phong trong khuôn viên đền さくら神社 chuyển sắc đỏ cam rực rỡ dưới nắng thu. Bạn chụp một tấm ảnh dưới tán lá đỏ gửi về cho gia đình qua LIME.</p>

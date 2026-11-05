@@ -31,8 +31,8 @@ export const INTRO = {
   text: '“Giấy tờ chị lo xong cả rồi. Mai em bắt đầu đi làm nhé. Có gì khó cứ gọi chị.”',
 };
 
-// RANK_NEED: job XP needed for rank 1..10; rankPay(i) = i·4000 ¥/month from rank 2
-export const RANK_NEED = [0, 6, 14, 24, 36, 50, 66, 84, 104, 130];
+// RANK_NEED: job XP needed for rank 1..10 (~3 seasons of steady play to reach rank 10); rankPay(i) = i·4000 ¥/month from rank 2
+export const RANK_NEED = [0, 20, 50, 90, 140, 200, 265, 335, 410, 490];
 export const rankOf = (xp) => { let r = 0; while (r + 1 < RANK_NEED.length && xp >= RANK_NEED[r + 1]) r++; return r; };
 export const rankPay = (i) => i * 4000;
 export const SITE_RANKS = ['Vác ống thép 資材運搬', 'Vác sắt cây nặng', 'Buộc sắt 鉄筋結束', 'Lắp giàn giáo 足場組立', 'Kiểm tra giàn giáo 足場点検',

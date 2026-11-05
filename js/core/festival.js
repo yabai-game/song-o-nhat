@@ -36,6 +36,13 @@ export function ensureFestivalState(S) {
   if (!Array.isArray(f.visited)) f.visited = [];
   if (!f.stamps || typeof f.stamps !== 'object') f.stamps = {};
   if (!f.acts || typeof f.acts !== 'object') f.acts = {};
+  if (f.festivalsVisited && typeof f.festivalsVisited === 'object') {
+    for (const [k, v] of Object.entries(f.festivalsVisited)) {
+      if (v && !f.visited.includes(k)) f.visited.push(k);
+    }
+    delete f.festivalsVisited;
+  }
+  if (f.hanami && !f.visited.includes('hanami')) f.visited.push('hanami');
   if (typeof f.bonOdoriBest !== 'number') f.bonOdoriBest = 0;
   if (typeof f.fireworks !== 'boolean') f.fireworks = false;
   if (typeof f.launches !== 'number') f.launches = 0;

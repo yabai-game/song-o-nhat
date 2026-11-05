@@ -148,8 +148,8 @@ export function paperTodo(S, cal = S?.cal) {
       ...doc,
       cost,
       daysLeft,
-      soon: daysLeft <= 5,
-      urgent: daysLeft <= 3,
+      soon: daysLeft >= 0 && daysLeft <= 5,
+      urgent: daysLeft >= 0 && daysLeft <= 3,
       overdue: daysLeft < 0,
     });
   }
@@ -157,7 +157,7 @@ export function paperTodo(S, cal = S?.cal) {
 }
 
 /**
- * Check and apply overdue penalties as of `cal`:
+ * Check and apply overdue penalties as of `cal` (alerting at most once every 3 days per document):
  * - `tennyu` overdue (> day 14): reminder letter + 🧠 −3
  * - `juminzei` overdue (> day 56): late fee 延滞金 +10% (13,200 ¥)
  * - `zairyu` overdue (> day 104): critical warning, manager + union call, 👷 boss −30, must renew immediately
@@ -171,42 +171,55 @@ export function overdue(S, cal = S?.cal) {
   let juminzeiOverdue = false;
   let zairyuOverdue = false;
   let taxAmount = JUMINZEI_BASE;
+  if (p && (!p.lastOverdueAlertDay || typeof p.lastOverdueAlertDay !== 'object')) {
+    p.lastOverdueAlertDay = {};
+  }
+  const canAlert = (id) => !p?.lastOverdueAlertDay || p.lastOverdueAlertDay[id] === undefined || (today - p.lastOverdueAlertDay[id]) >= 3;
 
   if (p && !p.tennyu && today > PAPER_DOCS.tennyu.dueDay) {
     tennyuOverdue = true;
     p.tennyuWarned = true;
-    deltas.push(...applyFx(S, { mental: -3 }));
-    items.push({
-      id: 'tennyu',
-      jp: '転入届期限超過',
-      vi: 'Quá hạn 14 ngày đăng ký địa chỉ 転入届: có thư nhắc nhở từ 市役所 (🧠 −3).',
-      urgent: false,
-    });
+    if (canAlert('tennyu')) {
+      p.lastOverdueAlertDay.tennyu = today;
+      deltas.push(...applyFx(S, { mental: -3 }));
+      items.push({
+        id: 'tennyu',
+        jp: '転入届期限超過',
+        vi: 'Quá hạn 14 ngày đăng ký địa chỉ 転入届: có thư nhắc nhở từ 市役所 (🧠 −3).',
+        urgent: false,
+      });
+    }
   }
 
   if (p && !p.juminzei && today > PAPER_DOCS.juminzei.dueDay) {
     juminzeiOverdue = true;
     p.juminzeiLate = true;
     taxAmount = Math.round(JUMINZEI_BASE * JUMINZEI_LATE_RATE);
-    items.push({
-      id: 'juminzei',
-      jp: '住民税延滞金 +10%',
-      vi: `Quá hạn nộp thuế cư trú 住民税: bị tính thêm tiền phạt chậm 延滞金 +10% (tổng ${taxAmount.toLocaleString('ja-JP')} ¥).`,
-      taxAmount,
-      urgent: false,
-    });
+    if (canAlert('juminzei')) {
+      p.lastOverdueAlertDay.juminzei = today;
+      items.push({
+        id: 'juminzei',
+        jp: '住民税延滞金 +10%',
+        vi: `Quá hạn nộp thuế cư trú 住民税: bị tính thêm tiền phạt chậm 延滞金 +10% (tổng ${taxAmount.toLocaleString('ja-JP')} ¥).`,
+        taxAmount,
+        urgent: false,
+      });
+    }
   }
 
   if (p && !p.zairyu && today > PAPER_DOCS.zairyu.dueDay) {
     zairyuOverdue = true;
     p.zairyuWarned = true;
-    deltas.push(...applyFx(S, { boss: -30 }));
-    items.push({
-      id: 'zairyu',
-      jp: '在留カード期限切れ警告',
-      vi: 'Quá hạn gia hạn 在留カード! Quản lý và nghiệp đoàn gọi khẩn cấp (👷 −30), bắt buộc phải đi làm thủ tục ngay lập tức!',
-      urgent: true,
-    });
+    if (canAlert('zairyu')) {
+      p.lastOverdueAlertDay.zairyu = today;
+      deltas.push(...applyFx(S, { boss: -30 }));
+      items.push({
+        id: 'zairyu',
+        jp: '在留カード期限切れ警告',
+        vi: 'Quá hạn gia hạn 在留カード! Quản lý và nghiệp đoàn gọi khẩn cấp (👷 −30), bắt buộc phải đi làm thủ tục ngay lập tức!',
+        urgent: true,
+      });
+    }
   }
 
   return {
