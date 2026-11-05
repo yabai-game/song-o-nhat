@@ -2839,6 +2839,11 @@ const CREDITS=[
 ['Biển 止まれ','Japanese Street Props','AlienKat','fc52f80909ba466c8b786bb2dada5dab','CC BY 4.0'],
 ['Bồn rửa inox','Low poly commercial sink','christian','2d0cade455614fd989b2e81878fd7764','CC BY 4.0'],
 ['Khay inox đựng món','Gastronorm_Basic_1_2','MPS Porcellane di Saronno','9fec684962424c8186b075dd99f9bef6','CC BY 4.0'],
+['Gà rán karaage (xưởng cơm hộp)','Chicken Nugget fried chicken','noemyssima7','55aaf01b3fa648c4a848029b63fa7948','CC BY 4.0'],
+['Xúc xích (xưởng cơm hộp)','Sausages','Evanz','4402d5db61a44feb840ecf48692729c1','CC BY 4.0'],
+['Bông cải xanh (xưởng cơm hộp)','Broccoli','meerschaumdigital','0fb58ca488b64298ab8af6f0372e66b9','CC BY 4.0'],
+['Kẹp gắp inox','metal tongs','kosicky.jozef2308','86628581455a4c5d85faae2511076afe','CC BY 4.0'],
+['Tay đeo găng (đổi màu, đổi tư thế)','Hand With Gloves','teenjust500','5a6a434b8ec943ffacc581358781eecb','CC BY 4.0'],
 ];
 function creditsScreen(){
 hideAll();

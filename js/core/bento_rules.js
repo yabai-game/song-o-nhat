@@ -1,12 +1,12 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 export const BENTO={
 BELT_LEN:37.2,
-ZONE0:21.0,
+ZONE0:20.4,
 ZONE1:24.0,
 LOOKAHEAD:2.5,
 SPEED0:1.5,
-SPEED_ADD:0.09,
-SPEED_MAX:2.6,
+SPEED_ADD:0.04,
+SPEED_MAX:2.0,
 SPAWN_BASE:2.5,
 SPAWN_DIST:3.75,
 LOCK_GOOD:0.12,
@@ -59,6 +59,7 @@ other:ITEM_KEYS[j],
 done:false,
 rejected:false,
 missed:false,
+penalized:false,
 };
 }
 export const spawnInterval=(speed)=>BENTO.SPAWN_BASE/(speed/BENTO.SPEED0);
@@ -129,6 +130,7 @@ if(st.streak>st.maxStreak)st.maxStreak=st.streak;
 st.lock=BENTO.LOCK_GOOD;
 return'rejected';
 }
+t.penalized=true;
 addMiss(st);
 return'bad_reject';
 }
@@ -162,6 +164,7 @@ st.winPending=true;
 }
 return'good';
 }
+t.penalized=true;
 addMiss(st);
 return'bad';
 }
@@ -176,6 +179,9 @@ for(const t of st.trays){
 t.x+=dx;
 if(!t.done&&!t.missed&&t.x>BENTO.ZONE1){
 t.missed=true;
+if(t.penalized){
+ev.push('pass');
+}else{
 st.miss++;
 st.streak=0;
 ev.push('miss_pass');
@@ -184,6 +190,7 @@ st.over=true;
 st.result='lose';
 st.loseWhy='Sai quá nhiều lần rồi.';
 ev.push('lose');
+}
 }
 }
 }
@@ -201,6 +208,41 @@ st.spawnT+=spawnInterval(st.speed);
 }
 }
 return ev;
+}
+function formatQueueTray(t){
+if(!t)return null;
+const order=t.order||(t.need?[t.need]:[]);
+const placedCount=t.placed?t.placed.length:(t.stepIdx||0);
+const def=t.defect?(DEFECTS[t.defect]||{id:t.defect,icon:'🚫',jp:'不良',vi:'Khay lỗi'}):null;
+return{
+id:t.id,
+x:t.x,
+defect:t.defect||null,
+defectIcon:def?def.icon:null,
+isDefect:!!t.defect,
+order:[...order],
+placed:t.placed?[...t.placed]:order.slice(0,placedCount),
+stepIdx:placedCount,
+need:t.defect?'reject':(order[placedCount]||null),
+items:order.map((id,i)=>({
+id,
+icon:ITEMS[id]?.icon||'',
+done:i<placedCount,
+active:!t.defect&&i===placedCount,
+})),
+};
+}
+export function queueView(st,n=2){
+const cur=activeTray(st);
+const upcoming=st.trays
+.filter((t)=>!t.done&&!t.missed&&t.x<BENTO.ZONE0)
+.sort((a,b)=>b.x-a.x)
+.slice(0,n)
+.map(formatQueueTray);
+return{
+cur:formatQueueTray(cur),
+next:upcoming,
+};
 }
 export const bentoExtra=(st)=>(st.maxStreak||0)>=5;
 export const bentoFraction=(st)=>Math.max(0,Math.min(1,st.count/Math.max(1,st.goal)));

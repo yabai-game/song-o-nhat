@@ -23,7 +23,7 @@ choices:[
 ],
 after:'Tám tiếng đứng một chỗ. Nhắm mắt vẫn thấy băng chuyền.',
 },
-a:{goal:5,multi:[1,1],defect:0,label:'Ca sáng: 5 hộp'},
+a:{goal:5,speed:1.4,multi:[1,1],defect:0,label:'Ca sáng: 5 hộp'},
 drama:{
 title:'Sợi tóc',who:'sato',
 jp:'「あれ？これ、髪の毛…？」',
@@ -33,7 +33,7 @@ choices:[
 {t:'Lén nhặt đi cho nhanh',fx:{boss:-3,mental:-2},r:'Tổ trưởng nhìn thấy qua gương, nhắc nhở nghiêm khắc.'},
 ],
 },
-b:{goal:7,maxMiss:3,speed:1.7,multi:[1,1],defect:0,label:'Ca chiều: băng chạy nhanh hơn',jp:'「スピードアップ！」',vi:'Tốc độ tăng. Sai quá 3 lần là cả dây chuyền phải dừng'},
+b:{goal:7,maxMiss:3,speed:1.5,multi:[1,1],defect:0,label:'Ca chiều: băng chạy nhanh hơn',jp:'「スピードアップ！」',vi:'Tốc độ tăng. Sai quá 3 lần là cả dây chuyền phải dừng'},
 },
 {
 story:{
@@ -46,7 +46,7 @@ choices:[
 ],
 after:'Tay bạn gắp nhanh hơn hẳn hôm qua.',
 },
-a:{goal:6,speed:1.7,multi:[1,2],defect:0.125,label:'Ca sáng: 6 hộp'},
+a:{goal:6,speed:1.5,multi:[1,2],defect:0.125,label:'Ca sáng: 6 hộp'},
 drama:{
 title:'Đổi ca đêm',who:'tanaka',
 jp:'「急だけど、今夜入れる？」',
@@ -56,7 +56,7 @@ choices:[
 {t:'Nhận luôn cho vừa lòng',fx:{money:12000,health:-8,boss:5},r:'Có thêm tiền phụ cấp nhưng sáng hôm sau bạn mệt rã rời.'},
 ],
 },
-b:{goal:8,maxMiss:3,speed:1.9,multi:[1,2],defect:0.125,label:'Ca chiều: nhanh và đúng',jp:'「間違えないで！」',vi:'Đơn 1–2 món, gặp hộp lỗi nhớ bấm 🚫 Loại 不良!'},
+b:{goal:8,maxMiss:3,speed:1.6,multi:[1,2],defect:0.125,label:'Ca chiều: nhanh và đúng',jp:'「間違えないで！」',vi:'Đơn 1–2 món, gặp hộp lỗi nhớ bấm 🚫 Loại 不良!'},
 },
 {
 story:{
@@ -69,7 +69,7 @@ choices:[
 ],
 after:'Bạn đã có người để ăn trưa cùng.',
 },
-a:{goal:6,speed:1.8,multi:[2,3],defect:0.125,label:'Ca sáng: 6 hộp'},
+a:{goal:6,speed:1.5,multi:[1,3],defect:0.125,label:'Ca sáng: 6 hộp'},
 drama:{
 title:'Đồng hương bị đuổi?',who:'hung',
 jp:'「ベトナム人のあの子、クビらしいよ。」',
@@ -79,7 +79,7 @@ choices:[
 {t:'Kéo cả nhóm đình công ngay',fx:{boss:-7,team:-3},watch:true,r:'Hóa ra bạn ấy chỉ xin nghỉ phép về nước. Quản lý để ý bạn từ đó.'},
 ],
 },
-b:{goal:9,maxMiss:3,speed:2,multi:[2,3],defect:0.125,label:'Ca chiều: cả nhóm đang căng thẳng',jp:'「集中して！」',vi:'Tập trung: 9 hộp (2–3 món/hộp), sai tối đa 3 lần'},
+b:{goal:9,maxMiss:3,speed:1.65,multi:[1,3],defect:0.125,label:'Ca chiều: cả nhóm đang căng thẳng',jp:'「集中して！」',vi:'Tập trung: 9 hộp (2–3 món/hộp), sai tối đa 3 lần'},
 },
 {
 story:{
@@ -92,7 +92,7 @@ choices:[
 ],
 after:'Một ngày dài nữa đã qua.',
 },
-a:{goal:7,speed:1.9,multi:[2,3],defect:0.125,label:'Ca sáng: 7 hộp'},
+a:{goal:7,speed:1.6,multi:[2,3],defect:0.125,label:'Ca sáng: 7 hộp'},
 drama:{
 title:'Nhãn in sai',who:'sato',
 jp:'「賞味期限、間違ってない？」',
@@ -102,7 +102,7 @@ choices:[
 {t:'Đợi hết họp rồi nói',fx:{boss:-5},r:'Hàng trăm hộp đã đóng thùng phải bóc ra dán lại.'},
 ],
 },
-b:{goal:10,maxMiss:3,speed:2.1,multi:[2,3],defect:0.125,label:'Ca chiều: làm lại 300 hộp',jp:'「やり直しだ！」',vi:'10 hộp (2–3 món), tốc độ rất cao'},
+b:{goal:10,maxMiss:3,speed:1.75,multi:[2,3],defect:0.125,label:'Ca chiều: làm lại 300 hộp',jp:'「やり直しだ！」',vi:'10 hộp (2–3 món), tốc độ rất cao'},
 },
 {
 story:{
@@ -115,7 +115,7 @@ choices:[
 ],
 after:'Một tuần ở xưởng cơm hộp đã qua.',
 },
-a:{goal:7,speed:2,multi:[2,3],defect:0.125,label:'Ca sáng: 3.000 hộp, đợt 1'},
+a:{goal:7,speed:1.65,multi:[2,3],defect:0.125,label:'Ca sáng: 3.000 hộp, đợt 1'},
 drama:{
 title:'Băng chuyền dừng đột ngột',who:'tanaka',
 jp:'「ラインが止まった！」',
@@ -125,6 +125,6 @@ choices:[
 {t:'Bỏ kiểm tra cho kịp',fx:{boss:-8,mental:-5},watch:true,r:'Tổ trưởng phát hiện và yêu cầu kiểm lại toàn bộ lô hàng.'},
 ],
 },
-b:{goal:12,maxMiss:4,speed:2.2,multi:[2,3],defect:0.125,label:'Thử thách cuối tuần: 3.000 hộp',jp:'「ラストスパート！」',vi:'Về đích: 12 hộp (2–3 món + loại hộp lỗi), nhanh nhất từ trước tới nay'},
+b:{goal:12,maxMiss:4,speed:1.8,multi:[2,3],defect:0.125,label:'Thử thách cuối tuần: 3.000 hộp',jp:'「ラストスパート！」',vi:'Về đích: 12 hộp (2–3 món + loại hộp lỗi), nhanh nhất từ trước tới nay'},
 },
 ];
