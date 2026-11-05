@@ -1,4 +1,5 @@
 // Game flow: title → creator → job → first week at the construction site (M1).
+import { pageview, track } from './net/stats.js';
 import * as THREE from 'three';
 import { renderer, camera, resize, isPortrait, CamRig, loadModel, loadBrand, loadStats } from './gfx/stage.js';
 import { OUTFITS, SWATCH, ensureSrc, makeCharacter, makeHelmet, makeSanitaryCap, wearHelmet, wearWaders, refHex } from './gfx/chars.js';
@@ -99,6 +100,8 @@ const LOTUS_COLORS = { top: '#2b3a36', bottom: '#3f5a3c' }; // JOB_OUTFIT.lotus:
 
 // ---------- boot ----------
 async function boot() {
+  pageview();
+  const bootT0 = performance.now();
   try {
     const fontReady = document.fonts ? document.fonts.load('700 48px "Zen Maru Gothic"', 'ラーメン安全第一') : Promise.resolve();
     // owner request: download everything up front (every place, every character, all music) behind one progress bar,
@@ -126,6 +129,7 @@ async function boot() {
     const [lowtable, gas_stove, brandWhite, futon, washing_machine, drying_rack, rice_cooker, cooking_pot] = await Promise.all([loadModel('lowtable'), loadModel('gas_stove'), loadBrand('white'), loadModel('futon'), loadModel('washing_machine'), loadModel('drying_rack'), loadModel('rice_cooker'), loadModel('cooking_pot')]);
     G.stages.dorm = buildDorm({ lowtable, gas_stove, brandWhite, futon, washing_machine, drying_rack, rice_cooker, cooking_pot }); stagesDone++;
     clearInterval(painter);
+    { const sec = (performance.now() - bootT0) / 1000; track(`loaded-${sec < 10 ? 'under-10s' : sec < 30 ? '10-30s' : sec < 60 ? '30-60s' : 'over-60s'}`, 'Tải xong game'); }
     // warm up: compile every stage's shaders and upload its textures now, not on the first frame there
     paint('Đang chuẩn bị đồ hoạ…');
     await new Promise((r) => setTimeout(r, 30));
@@ -280,7 +284,7 @@ function updateWorkers(dt) {
 // ---------- UI binding ----------
 function bindUi() {
   $('btn-new').addEventListener('click', () => creatorScreen());
-  $('btn-continue').addEventListener('click', () => { const S = load(storage); if (S) { G.S = S; G.draft.colors = S.look.colors; G.draft.outfit = S.look.outfit; setPlayer().then(runStep); } });
+  $('btn-continue').addEventListener('click', () => { const S = load(storage); if (S) { track('continue', '⏯ Chơi tiếp'); G.S = S; G.draft.colors = S.look.colors; G.draft.outfit = S.look.outfit; setPlayer().then(runStep); } });
   $('btn-demo').addEventListener('click', demoScreen);
   $('btn-career').addEventListener('click', careerScreen);
   const musicLabel = () => { const b = $('btn-music'); if (b) b.textContent = music.muted ? '🔇 Nhạc nền: tắt' : '🎵 Nhạc nền: bật'; };
@@ -363,6 +367,7 @@ function bindUi() {
       const bd = $('phone-badge');
       if (bd) { bd.hidden = u <= 0; bd.textContent = u > 9 ? '9+' : String(u); }
       renderHomeChips(G.S, cal);
+      { const k = `y${cal.year}-s${cal.season}`; if (G.S.flags.gcSeason && G.S.flags.gcSeason !== k) track(`season-${k}`, `Tới mùa ${['xuân', 'hạ', 'thu', 'đông'][cal.season]} năm ${cal.year}`); G.S.flags.gcSeason = k; }
       notifyAchievements(G.S);
     }
   }, 300);
@@ -984,6 +989,7 @@ function jobScreen() {
 function startGame(job) {
   const d = G.draft;
   G.S = newState({ name: d.name, job, look: { gender: d.gender, outfit: d.outfit, colors: { ...d.colors } } });
+  track(`new-game-${job}`, `Bắt đầu mới · ${JOBS[job]?.place || job}`);
   save(G.S, storage);
   hideAll();
   card(`<h2>${JOBS[job].icon} ${esc(JOBS[job].place)} · ${esc(JOBS[job].area)}</h2>
@@ -1111,6 +1117,7 @@ async function runStep() {
 
 function paydayCard() {
   const S = G.S, p = payslip(S);
+  if (!S.flags.gcPay) { S.flags.gcPay = true; track('first-payday', 'Nhận lương lần đầu'); }
   setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
   G.mode = 'talk';
   dayHud('💴 Ngày lương · 給与明細');
