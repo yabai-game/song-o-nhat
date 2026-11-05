@@ -224,7 +224,15 @@ function bindUi() {
     const m = (k, icon, v, cls) => `<button type="button" class="sbar mini ${cls}" data-k="${k}" aria-label="${k}"><span class="sb-i">${icon}</span><span class="sb-t"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></span></button>`;
     const html = m('health', '❤️', S.health, lvl(S.health)) + m('mental', '🧠', S.mental, lvl(S.mental)) + m('skill', '🛠️', sk.pct, sk.maxed ? 'max' : 'skill');
     if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
-  }, 500);
+    // sit just below whatever is on the left under the top bar (the day / rank pill can wrap to two lines)
+    let bottom = 0;
+    for (const id of ['sh-rank', 'sh-place']) {
+      const el = $(id); if (!el || el.hidden) continue;
+      const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+      if (r.height && r.left < b.right && r.right > b.left) bottom = Math.max(bottom, r.bottom);
+    }
+    if (bottom) { const top = Math.round(bottom - hud.getBoundingClientRect().top + 6) + 'px'; if (box.style.top !== top) box.style.top = top; }
+  }, 250);
   $('btn-credits').addEventListener('click', creditsScreen);
   $('cr-back').addEventListener('click', titleScreen);
   $('cr-next').addEventListener('click', jobScreen);

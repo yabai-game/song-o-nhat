@@ -700,7 +700,7 @@ export async function buildSite() {
     }
     const lblSign = new THREE.Mesh(
       new THREE.PlaneGeometry(0.76, 0.32),
-      new THREE.MeshStandardMaterial({ map: signTexture(`${info.jp} (${info.vi})`, 256, 112, info.color, '#ffffff'), side: THREE.DoubleSide, roughness: 0.6 }),
+      new THREE.MeshStandardMaterial({ map: signTexture(`${info.jp} ${info.slot}`, 256, 112, info.color, '#ffffff'), side: THREE.DoubleSide, roughness: 0.6 }),
     );
     lblSign.position.set(0.45, 0.62, 0);
     lblSign.rotation.y = Math.PI / 2;
@@ -718,7 +718,7 @@ export async function buildSite() {
     for (const z of [-0.45, 0.45]) box(0.92, 0.07, 0.08, rackM, 0, 0.14, z, rg);
     const slotSign = new THREE.Mesh(
       new THREE.PlaneGeometry(0.78, 0.34),
-      new THREE.MeshStandardMaterial({ map: signTexture(`Ô ${info.slot} · ${info.jp}`, 256, 112, info.color, '#ffffff'), side: THREE.DoubleSide, roughness: 0.6 }),
+      new THREE.MeshStandardMaterial({ map: signTexture(`${info.slot} · ${info.jp}`, 256, 112, info.color, '#ffffff'), side: THREE.DoubleSide, roughness: 0.6 }),
     );
     slotSign.position.set(-0.48, 0.76, 0);
     slotSign.rotation.y = -Math.PI / 2;
