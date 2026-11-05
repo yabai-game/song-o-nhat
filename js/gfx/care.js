@@ -1,6 +1,7 @@
 // Care home dining room (食堂), Tokyo — layout from j3Care in the original (spec §16): checkered floor,
 // a big window onto green hills, 食堂 and お知らせ boards, four tables with chairs, four residents in
-// wheelchairs, plants and a steel cart. Furniture is CC0 Meshy community models (baked in Blender).
+// wheelchairs, plants and a steel cart. Furniture is CC0 Meshy community models (baked in Blender);
+// tea set ("Japanese Tea Set", juyo) and towels ("Folded Towel", Nicothin) are CC BY Sketchfab models.
 // The front wall is left open so the camera can look in.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -13,14 +14,14 @@ export const CARE_ROOM = {
   // residents: [x, z, facing] — they sit in wheelchairs at the tables
   folk: [[-2.6, 1.1, 0.9], [2.8, 2.9, -2.2], [3.2, -1.8, -1], [-1.6, -1.6, 0.4]],
   tables: [[-5.4, -2, 0], [0.2, -3.6, 0], [5.4, 0.2, 0], [-5.8, 3.2, 0]],
-  showcase: { pos: [-5.5, 2.4, 3.4], look: [-8.9, 2.7, 3.4] },
+  showcase: { pos: [1.5, 2.6, 7.6], look: [-0.6, 1.0, -2.4] }, // opening shot: the whole dining room, not a wall
 };
 
 export async function buildCare() {
-  const [table, chair, wheel, plant, cart] = await Promise.all(['dtable', 'chair', 'wheelchair', 'plant', 'cart'].map(loadModel));
+  const [table, chair, wheel, plant, cart, teaSet, towel] = await Promise.all(['dtable', 'chair', 'wheelchair', 'plant', 'cart', 'tea_set', 'towel'].map(loadModel));
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#f6dfae');
-  const hemi = new THREE.HemisphereLight(0xfff0d0, 0xb98a50, 1.0); scene.add(hemi);
+  const hemi = new THREE.HemisphereLight(0xfff0d0, 0xb98a50, 1.15); scene.add(hemi); // warm, like the reference
   const sun = makeSun(scene, { color: 0xffeccb, intensity: 1.9, size: 10, offset: [4, 10, 6] });
   const W = 9, D = 7, H = 4.2;
 
@@ -71,7 +72,25 @@ export async function buildCare() {
   for (const [x, y, c] of [[4.3, 2.3, '#ffffff'], [5.0, 2.1, '#fff2b8'], [5.7, 2.35, '#ffd9e0']]) put(B(0.5, 0.65, 0.02), col(c), x, y, -D + 0.14);
   // cabinet
   put(B(1.2, 1.8, 0.6), col('#b07a46'), -8.1, 0.9, -3.2, Math.PI / 2);
+  // low wooden sideboard under the notice board: body, top, two door lines and knobs
+  put(B(2.6, 0.82, 0.5), col('#b98552'), 5.0, 0.41, -D + 0.33);
+  put(B(2.7, 0.05, 0.56), col('#9a6a3c'), 5.0, 0.845, -D + 0.33);
+  for (const x of [4.35, 5.65]) { put(B(0.02, 0.62, 0.02), col('#8a5a2b'), x, 0.42, -D + 0.585); put(B(0.08, 0.05, 0.04), col('#e8d2a8'), x + (x < 5 ? 0.12 : -0.12), 0.5, -D + 0.6); }
+  // cream curtains gathered at both sides of the big window (a few soft folds each)
+  for (const cx of [-4.95, 1.95]) for (let k = 0; k < 4; k++) put(B(0.16, 3.1, 0.12), col(k % 2 ? '#f4e6c8' : '#faf0dc', { roughness: 0.95 }), cx + (k - 1.5) * 0.13, 2.05, -D + 0.24 + (k % 2) * 0.05);
+  put(B(7.4, 0.08, 0.08), col('#c9a27a'), -1.5, 3.7, -D + 0.24); // curtain rail
   for (const [m, list] of batch) { const mesh = new THREE.Mesh(mergeGeometries(list, false), m); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); }
+
+  // wall clock above the 食堂 sign side, hands follow the real minute (life in the room)
+  const clock = new THREE.Group(); clock.position.set(3.2, 3.15, -D + 0.12); scene.add(clock);
+  const face = new THREE.Mesh(new THREE.CircleGeometry(0.34, 40), new THREE.MeshStandardMaterial({ map: canvasTexture(128, 128, (g) => {
+    g.fillStyle = '#fffaf0'; g.beginPath(); g.arc(64, 64, 62, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#8a5a2b'; g.lineWidth = 6; g.stroke();
+    g.fillStyle = '#5a3d2b'; for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; g.fillRect(64 + Math.sin(a) * 50 - 2, 64 - Math.cos(a) * 50 - 2, 4, 4); }
+  }), roughness: 0.6 }));
+  clock.add(face);
+  const hand = (len, w, c) => { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.BoxGeometry(w, len, 0.01), new THREE.MeshStandardMaterial({ color: c })); m.position.y = len / 2; g.add(m); g.position.z = 0.012; clock.add(g); return g; };
+  const hourH = hand(0.17, 0.035, '#3a2a1e'), minH = hand(0.26, 0.022, '#3a2a1e');
 
   // furniture: Meshy models drawn instanced (one draw call each)
   const sv = new THREE.Vector3();
@@ -92,6 +111,23 @@ export async function buildCare() {
   placeModel(wheel, CARE_ROOM.folk.map(([x, z, ry]) => [x, z, ry, 1]));
   placeModel(plant, [[-7.9, -5.8, 0, 1.05], [8, -6, 1.2, 1.1]]);
   placeModel(cart, [[6.6, -3.8, -0.4, 1]]);
+  placeModel(plant, [[-5.2, -6.2, 0.6, 0.9], [7.2, -6.1, 2.1, 0.8]]); // by the window curtain and the sideboard
+  // tea trays on two tables and a stack of towels on the cart: put on their tops (measured from the models)
+  const top = (gltf, s = 1) => new THREE.Box3().setFromObject(gltf.scene).max.y * s;
+  const tableTop = top(table, 1.2), cartTop = top(cart);
+  const putOn = (gltf, list, y) => { const g = new THREE.Group(); g.position.y = y; scene.add(g); placeModelIn(g, gltf, list); return g; };
+  function placeModelIn(parent, gltf, list) {
+    gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const im = new THREE.InstancedMesh(o.geometry, o.material, list.length);
+      list.forEach(([x, z, ry, s = 1], i) => { e.set(0, ry, 0); q.setFromEuler(e); p.set(x, 0, z); sv.set(s, s, s); m4.compose(p, q, sv).multiply(o.matrixWorld); im.setMatrixAt(i, m4); });
+      im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); parent.add(im);
+    });
+  }
+  putOn(teaSet, [[CARE_ROOM.tables[0][0] + 0.35, CARE_ROOM.tables[0][1] + 0.1, 0.3], [CARE_ROOM.tables[2][0] - 0.3, CARE_ROOM.tables[2][1], -0.4]], tableTop);
+  const towels = putOn(towel, [[6.6, -3.8, -0.4], [6.62, -3.78, -0.3], [6.58, -3.82, -0.5]].map(([x, z, ry]) => [x, z, ry, 0.9]), cartTop);
+  towels.children.forEach((im) => { for (let i = 0; i < 3; i++) { im.getMatrixAt(i, m4); m4.elements[13] += i * 0.022; im.setMatrixAt(i, m4); } im.instanceMatrix.needsUpdate = true; }); // stacked
 
   // blockers for walking: tables (two circles each), residents, cabinet, plants, cart
   const blocks = [];
@@ -102,6 +138,10 @@ export async function buildCare() {
   return {
     scene, sun, blocks,
     showcase: { pos: new THREE.Vector3(...CARE_ROOM.showcase.pos), look: new THREE.Vector3(...CARE_ROOM.showcase.look) },
-    update() {},
+    towel, // the towel model, cloned for the wipe action
+    update() {
+      const d = new Date(), mi = d.getMinutes() + d.getSeconds() / 60, h = (d.getHours() % 12) + mi / 60;
+      minH.rotation.z = -mi / 60 * Math.PI * 2; hourH.rotation.z = -h / 12 * Math.PI * 2;
+    },
   };
 }

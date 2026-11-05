@@ -28,10 +28,11 @@ import { $, show, card, toast, deltaChips, esc, Overhead } from './ui/ui.js';
 import { newState, save, load, clearSave, yen, jpLevel, applyFx } from './core/state.js';
 import { JOBS, NPCS, INTRO, rankOf, rankPay, daysOf, ranksOf } from './core/jobs.js';
 import { daySteps, shiftOpts, shiftEnd, chooseTalk, completeStep, weekEval, sleep, retryCost, DAYS } from './core/story.js';
+import { stars, formatStars, recordStars, getStars } from './core/stars.js';
 
 const storage = (() => { try { return window.localStorage; } catch { return { getItem: () => null, setItem() {}, removeItem() {} }; } })();
 const G = {
-  S: null, stage: null, stages: {}, player: null, own: null, wardrobe: {}, folk: [], npcs: {}, workers: [], streetCrowd: null, stationCrowd: null, demoJob: null, activeShift: null,
+  S: null, demoState: { flags: {} }, stage: null, stages: {}, player: null, own: null, wardrobe: {}, folk: [], npcs: {}, workers: [], streetCrowd: null, stationCrowd: null, demoJob: null, activeShift: null,
   draft: { gender: 'm', outfit: 'hoodie', colors: { top: null, bottom: null, hair: null, skin: null }, name: '' },
   mode: 'loading', yaw: 0, spin: 0.5, camRig: new CamRig(), overhead: new Overhead(), t: 0,
 };
@@ -529,8 +530,8 @@ async function shiftStep(st) {
   card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
     ${opts.jp ? `<p class="jpline">${esc(opts.jp)}</p>` : ''}
     <p>${esc(opts.vi || 'Đi tới đống ống thép bên trái, nhấc lên, rồi vác sang giá bên phải.')}</p>
-    <ul><li>🎯 Vác ${opts.goal} bó ống thép</li>${opts.limit ? `<li>⏱ ${opts.limit} giây</li>` : '<li>⏱ Không giới hạn giờ</li>'}${opts.maxMiss ? `<li>❌ Sai tối đa ${opts.maxMiss} lần</li>` : ''}${opts.wind ? '<li>💨 Có gió giật: đứng yên khi có cảnh báo</li>' : ''}${opts.rain ? '<li>🌧️ Mưa, sàn trơn: đi chậm hơn</li>' : ''}</ul>
-    <p class="lesson">🏃 Đang vác mà chạy quá 1 giây là rơi ống. Chạm đất để đi, hoặc dùng cần điều khiển.</p>`, [
+    <ul><li>🎯 Vác ${opts.goal} bó ống thép</li>${opts.limit ? `<li>⏱ ${opts.limit} giây</li>` : '<li>⏱ Không giới hạn giờ</li>'}${opts.maxMiss ? `<li>❌ Sai tối đa ${opts.maxMiss} lần</li>` : ''}${opts.wind ? '<li>💨 Có gió giật: kim thăng bằng trôi nhanh hơn</li>' : ''}${opts.rain ? '<li>🌧️ Mưa, sàn trơn: đi chậm hơn</li>' : ''}</ul>
+    <p class="lesson">⚖️ Giữ thanh thăng bằng bằng 2 nút ◀ ▶ (hoặc phím A / D) khi đang vác ống · Xem 📋 Phiếu giao việc để lấy đúng loại ống và đặt đúng ô A / B / C.</p>`, [
     { label: 'Bắt đầu ca →', on: () => {
       G.shift.start(opts, { player: P, foreman }, {
         unit: JOBS.site.unit, rankLabel: `🎖️ ${rk + 1}/10 ${ranksOf('site')[rk]}`,
@@ -542,8 +543,18 @@ async function shiftStep(st) {
   G.camRig.snap(G.stages.site.showcase.pos, G.stages.site.showcase.look);
 }
 
+function finishDemoShift(job, day, r) {
+  const n = typeof r?.stars === 'number' ? r.stars : (r?.fail ? 0 : 1);
+  recordStars(G.demoState, job, day, 'b', n);
+  if (G.S && !G.S.flags?.demo) {
+    recordStars(G.S, job, day, 'b', n);
+    save(G.S, storage);
+  }
+  demoScreen();
+}
+
 /** Care home shift: four residents in the dining room, answer what they say in Japanese. */
-async function careShiftStep(st, demo = false) {
+async function careShiftStep(st, demo = false, demoDay = 0) {
   const S = G.S || { jobXp: 0, ally: 0, watch: 0 };
   await dress(true);
   setStage('care'); hideNpcs();
@@ -555,13 +566,13 @@ async function careShiftStep(st, demo = false) {
   const rk = rankOf(S.jobXp || 0);
   const meta = { unit: JOBS.care.unit, rankLabel: demo ? '🎮 Chế độ thử' : `🎖️ ${rk + 1}/10 ${ranksOf('care')[rk]}`,
     onRetry: () => { if (!demo) { retryCost(G.S); save(G.S, storage); } } };
-  const begin = () => G.care.start(opts, { player: P, nurse, folk: G.folk }, meta, (r) => (demo ? demoScreen() : shiftDone(st, r)));
+  const begin = () => G.care.start(opts, { player: P, nurse, folk: G.folk }, meta, (r) => (demo ? finishDemoShift('care', demoDay, r) : shiftDone(st, r)));
   if (demo) { begin(); return; }
   card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
     ${opts.jp ? `<p class="jpline">${esc(opts.jp)}</p>` : ''}
     <p>${esc(opts.vi || 'Đi tới cạnh từng cụ, nghe cụ nói gì rồi chọn việc phù hợp.')}</p>
     <ul><li>🎯 Chăm sóc ${opts.goal} lượt</li>${opts.limit ? `<li>⏱ ${opts.limit} giây</li>` : '<li>⏱ Không giới hạn giờ</li>'}${opts.maxMiss ? `<li>❌ Sai tối đa ${opts.maxMiss} lần</li>` : ''}</ul>
-    <p class="lesson">👂 Không có gợi ý: đọc câu tiếng Nhật của cụ.<br>お腹がすいた → 🥣 Đút ăn · 口が汚れた → 🧻 Lau miệng · さみしい → 💬 Trò chuyện · 家に帰りたい → ❤️ Dỗ dành</p>`, [
+    <p class="lesson">👂 Đọc câu tiếng Nhật của cụ (ưu tiên cụ có ❤️ thấp, khi có 🚨 chạy lại bấm 🤲 Đỡ cụ trong 6s).<br>お腹がすいた → 🥣 Đút ăn · 口が汚れた → 🧻 Lau miệng · さみしい → 💬 Trò chuyện · 家に帰りたい → ❤️ Dỗ dành</p>`, [
     { label: 'Bắt đầu ca →', on: begin },
   ]);
   dayHud(st.label);
@@ -569,7 +580,7 @@ async function careShiftStep(st, demo = false) {
 }
 
 /** Bento factory shift: stand at the conveyor belt and place the requested side dish into each tray. */
-async function bentoShiftStep(st, demo = false) {
+async function bentoShiftStep(st, demo = false, demoDay = 0) {
   const S = G.S || { jobXp: 0, ally: 0, watch: 0 };
   await dress(true);
   setStage('bento'); hideNpcs();
@@ -580,13 +591,13 @@ async function bentoShiftStep(st, demo = false) {
   const rk = rankOf(S.jobXp || 0);
   const meta = { unit: JOBS.bento.unit, rankLabel: demo ? '🎮 Chế độ thử' : `🎖️ ${rk + 1}/10 ${ranksOf('bento')[rk]}`,
     onRetry: () => { if (!demo) { retryCost(G.S); save(G.S, storage); } } };
-  const begin = () => G.bento.start(opts, { player: P, foreman }, meta, (r) => (demo ? demoScreen() : shiftDone(st, r)));
+  const begin = () => G.bento.start(opts, { player: P, foreman }, meta, (r) => (demo ? finishDemoShift('bento', demoDay, r) : shiftDone(st, r)));
   if (demo) { begin(); return; }
   card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
     ${opts.jp ? `<p class="jpline">${esc(opts.jp)}</p>` : ''}
     <p>${esc(opts.vi || 'Đứng trước băng chuyền, nhìn biểu tượng trên khay rồi bấm đúng món khi khay vào vùng vàng.')}</p>
     <ul><li>🎯 Đóng gói ${opts.goal} hộp cơm</li>${opts.maxMiss ? `<li>❌ Sai/trôi qua tối đa ${opts.maxMiss} khay</li>` : ''}</ul>
-    <p class="lesson">🍱 Phím 1 / 2 / 3 hoặc chạm nút: 🍗 Gà rán 唐揚げ · 🌭 Xúc xích ウインナー · 🥦 Rau 野菜. Bấm khi khay đã vào vùng vàng.</p>`, [
+    <p class="lesson">🍱 Phím 1 / 2 / 3 (🍗 Gà rán · 🌭 Xúc xích · 🥦 Rau) theo thứ tự trái → phải khi khay vào vùng vàng · Gặp khay lỗi bấm 4 / 🚫 Loại 不良.</p>`, [
     { label: 'Bắt đầu ca →', on: begin },
   ]);
   dayHud(st.label);
@@ -594,7 +605,7 @@ async function bentoShiftStep(st, demo = false) {
 }
 
 /** Lotus paddy shift: wade through mud to the yellow-ringed spots and perform the 4 steps in order. */
-async function lotusShiftStep(st, demo = false) {
+async function lotusShiftStep(st, demo = false, demoDay = 0) {
   const S = G.S || { jobXp: 0, ally: 0, watch: 0 };
   await dress(true);
   setStage('lotus'); hideNpcs();
@@ -605,13 +616,13 @@ async function lotusShiftStep(st, demo = false) {
   const rk = rankOf(S.jobXp || 0);
   const meta = { unit: JOBS.lotus.unit, rankLabel: demo ? '🎮 Chế độ thử' : `🎖️ ${rk + 1}/10 ${ranksOf('lotus')[rk]}`,
     onRetry: () => { if (!demo) { retryCost(G.S); save(G.S, storage); } } };
-  const begin = () => G.lotus.start(opts, { player: P, foreman }, meta, (r) => (demo ? demoScreen() : shiftDone(st, r)));
+  const begin = () => G.lotus.start(opts, { player: P, foreman }, meta, (r) => (demo ? finishDemoShift('lotus', demoDay, r) : shiftDone(st, r)));
   if (demo) { begin(); return; }
   card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
     ${opts.jp ? `<p class="jpline">${esc(opts.jp)}</p>` : ''}
-    <p>${esc(opts.vi || 'Lội bùn lại gần gốc sen có vòng vàng, làm đúng 4 bước theo thứ tự để thu hoạch củ sen.')}</p>
-    <ul><li>🎯 Đào ${opts.goal} củ sen</li>${opts.limit ? `<li>⏱ ${opts.limit} giây</li>` : '<li>⏱ Không giới hạn giờ</li>'}${opts.maxMiss ? `<li>❌ Sai thứ tự tối đa ${opts.maxMiss} lần</li>` : ''}${opts.rain ? '<li>🌧️ Mưa lớn: bùn nặng chân</li>' : ''}</ul>
-    <p class="lesson">🪷 Thứ tự 4 bước: 1. ⛏️ Đào 掘る → 2. 💦 Xịt nước 洗う → 3. 🪴 Nhổ 抜く → 4. 🧺 Nhặt 拾う.</p>`, [
+    <p>${esc(opts.vi || 'Lội bùn lại gần gốc sen có vòng vàng, làm đúng các bước theo thứ tự để thu hoạch củ sen.')}</p>
+    <ul><li>🎯 Đào ${opts.goal} củ sen</li>${opts.limit ? `<li>⏱ ${opts.limit} giây</li>` : '<li>⏱ Không giới hạn giờ</li>'}${opts.maxMiss ? `<li>❌ Sai tối đa ${opts.maxMiss} lần</li>` : ''}${opts.rain ? '<li>🌧️ Mưa lớn: bùn nặng chân</li>' : ''}</ul>
+    <p class="lesson">🪷 Gốc có 🌿 bấm ✂️ Cắt cỏ trước → ⛏️ Đào → Giữ 💦 Xịt nước đến 80–100% rồi thả → Căn kim vùng xanh bấm 🪴 Nhổ → 🧺 Nhặt.</p>`, [
     { label: 'Bắt đầu ca →', on: begin },
   ]);
   dayHud(st.label);
@@ -619,16 +630,22 @@ async function lotusShiftStep(st, demo = false) {
 }
 
 function shiftDone(st, r) {
-  const S = G.S;
+  const S = G.S, job = jobOf();
+  const starCount = typeof r.stars === 'number' ? r.stars : stars({ won: !r.fail && r.f >= 1, miss: 0, maxMiss: st.data.maxMiss || 0, timeLeft: 0, limit: 0, extra: false });
+  recordStars(S, job, S.story, st.hard ? 'b' : 'a', starCount);
   const res = shiftEnd(S, r, st.hard);
+  save(S, storage);
   G.mode = 'talk';
   const P = G.player; P.play('idle');
   if (st.hard) G.overhead.say(P, r.fail ? '悔しい… — Tiếc quá…' : 'やった！ — Làm được rồi!', 3);
   const rk = rankOf(S.jobXp);
+  const linesHtml = (r.starLines || []).map((l) => `<div class="star-line${l.ok ? ' ok' : ''}">${esc(l.text)}</div>`).join('');
+  const starsBox = `<div class="stars-box"><div class="stars-row">${formatStars(starCount)}</div>${linesHtml ? `<div class="stars-lines">${linesHtml}</div>` : ''}</div>`;
   card(`<h2>${res.title}</h2>
-    <p>Xong ${r.done}/${st.data.goal} ${esc(JOBS[jobOf()].unit)}.</p>
+    <p>Xong ${r.done}/${st.data.goal} ${esc(JOBS[job].unit)}.</p>
+    ${starsBox}
     <div class="deltas">${deltaChips(res.deltas)}<span class="delta">🛠️ Tay nghề +${res.jobXp}</span></div>
-    ${res.rankUp ? `<p class="lesson">🎖️ Lên mốc ${res.rankUp + 1}/10: ${esc(ranksOf(jobOf())[res.rankUp])}<br>Quản lý: 「任せるよ！」 “Từ giờ việc này giao cho em.” · 💰 Phụ cấp tay nghề: +${yen(rankPay(res.rankUp + 1))}/tháng</p>` : ''}
+    ${res.rankUp ? `<p class="lesson">🎖️ Lên mốc ${res.rankUp + 1}/10: ${esc(ranksOf(job)[res.rankUp])}<br>Quản lý: 「任せるよ！」 “Từ giờ việc này giao cho em.” · 💰 Phụ cấp tay nghề: +${yen(rankPay(res.rankUp + 1))}/tháng</p>` : ''}
     <p style="color:var(--ink-dim);font-size:12.5px">Tay nghề ${S.jobXp} · Mốc ${rk + 1}/10</p>`, [
     { label: 'Tiếp →', on: () => finishStep() },
   ]);
@@ -744,16 +761,21 @@ function creditsScreen() {
 
 function demoScreen() {
   hideAll(); G.demoJob = null;
+  const saved = (!G.S || G.S.flags?.demo) ? load(storage) : G.S;
+  const starStr = (job, i) => {
+    const best = Math.max(getStars(saved, job, i, 'b'), getStars(G.S, job, i, 'b'), getStars(G.demoState, job, i, 'b'));
+    return ` · ${formatStars(best)}`;
+  };
   const name = (d) => d.b.label.replace(/^Ca chiều: |^Thử thách cuối tuần: /, '');
   const rows = [
     { label: '🎌 Ngày nghỉ ở đền', on: () => demoDayOff() },
     { label: '🗑️ Phân loại rác', on: () => demoTrash() },
     { label: '🛒 Siêu thị (20:05)', on: () => demoMarket() },
     { label: '🍳 Nấu cơm', on: () => demoCook() },
-    ...daysOf('site').map((d, i) => ({ label: `👷 Ngày ${i + 1}: ${name(d)}${d.b.wind ? ' 💨' : ''}${d.b.rain ? ' 🌧️' : ''}`, on: () => demoShift('site', i) })),
-    ...daysOf('care').map((d, i) => ({ label: `👵 Ngày ${i + 1}: ${name(d)}`, on: () => demoShift('care', i) })),
-    ...daysOf('bento').map((d, i) => ({ label: `🍱 Ngày ${i + 1}: ${name(d)}`, on: () => demoShift('bento', i) })),
-    ...daysOf('lotus').map((d, i) => ({ label: `🪷 Ngày ${i + 1}: ${name(d)}${d.b.rain ? ' 🌧️' : ''}`, on: () => demoShift('lotus', i) })),
+    ...daysOf('site').map((d, i) => ({ label: `👷 Ngày ${i + 1}: ${name(d)}${d.b.wind ? ' 💨' : ''}${d.b.rain ? ' 🌧️' : ''}${starStr('site', i)}`, on: () => demoShift('site', i) })),
+    ...daysOf('care').map((d, i) => ({ label: `👵 Ngày ${i + 1}: ${name(d)}${starStr('care', i)}`, on: () => demoShift('care', i) })),
+    ...daysOf('bento').map((d, i) => ({ label: `🍱 Ngày ${i + 1}: ${name(d)}${starStr('bento', i)}`, on: () => demoShift('bento', i) })),
+    ...daysOf('lotus').map((d, i) => ({ label: `🪷 Ngày ${i + 1}: ${name(d)}${d.b.rain ? ' 🌧️' : ''}${starStr('lotus', i)}`, on: () => demoShift('lotus', i) })),
   ];
   card('<h2>🎮 Thử ca làm 3D</h2><p>🎌 Ngày nghỉ ở đền · 🗑️ Phân loại rác · 🛒 Siêu thị · 🍳 Nấu cơm · 👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · 🪷 Ruộng sen · không tính điểm.</p>', [...rows, { label: '← Quay lại', cls: 'ghost', on: titleScreen }]);
 }
@@ -823,9 +845,9 @@ async function demoTrash() {
 async function demoShift(job, i) {
   G.demoJob = job;
   const W = daysOf(job)[i].b;
-  if (job === 'care') return careShiftStep({ data: W, hard: true, label: W.label }, true);
-  if (job === 'bento') return bentoShiftStep({ data: W, hard: true, label: W.label }, true);
-  if (job === 'lotus') return lotusShiftStep({ data: W, hard: true, label: W.label }, true);
+  if (job === 'care') return careShiftStep({ data: W, hard: true, label: W.label }, true, i);
+  if (job === 'bento') return bentoShiftStep({ data: W, hard: true, label: W.label }, true, i);
+  if (job === 'lotus') return lotusShiftStep({ data: W, hard: true, label: W.label }, true, i);
   await dress(true);
   setStage('site'); hideNpcs(); G.mode = 'shift'; G.activeShift = G.shift;
   G.player.look({ ...G.draft.colors, ...WORK_COLORS });
@@ -834,7 +856,7 @@ async function demoShift(job, i) {
   G.stages.site.ring.visible = true; G.stages.site.setFloors(3);
   G.camRig.snap(G.stages.site.showcase.pos, G.stages.site.showcase.look);
   const opts = shiftOpts(W, true, { ally: 0, watch: 0 });
-  G.shift.start(opts, { player: G.player, foreman }, { unit: JOBS.site.unit, rankLabel: '🎮 Chế độ thử' }, () => demoScreen());
+  G.shift.start(opts, { player: G.player, foreman }, { unit: JOBS.site.unit, rankLabel: '🎮 Chế độ thử' }, (r) => finishDemoShift('site', i, r));
 }
 
 // ---------- frame ----------

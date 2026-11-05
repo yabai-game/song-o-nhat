@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, signTexture, makeSun, loadModel } from './stage.js';
-import { BENTO, ITEMS, ITEM_KEYS } from '../core/bento_rules.js';
+import { BENTO, ITEMS, ITEM_KEYS, DEFECTS } from '../core/bento_rules.js';
 
 const BELT_X0 = -22.5;   // belt coordinate u in [0, 37.2] maps to world x = BELT_X0 + u
 const BELT_Y = 0.95;     // top surface of the conveyor model
@@ -28,21 +28,78 @@ export const BENTO_ROOM = {
   showcase: { pos: [-4.2, 3.1, 4.8], look: [-1.5, 1.1, 0] },
 };
 
-function makeIconSpriteMat(icon) {
-  const tex = canvasTexture(128, 128, (g) => {
-    g.clearRect(0, 0, 128, 128);
-    g.fillStyle = 'rgba(255, 255, 255, 0.96)';
-    g.beginPath(); g.arc(64, 64, 54, 0, Math.PI * 2); g.fill();
-    g.lineWidth = 8; g.strokeStyle = '#e67e22'; g.stroke();
-    g.font = '72px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillStyle = '#1f2a33';
-    g.fillText(icon, 64, 68);
-  });
-  return new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+function makeOrderSprite() {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 112;
+  const g = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  return { c, g, tex, mat };
 }
 
-function makeRawTray(trayMat, rimMat, riceMat, sideMats) {
+function drawOrderBadge(badge, tray) {
+  const { g, tex } = badge;
+  g.clearRect(0, 0, 256, 112);
+  if (tray.defect) {
+    const def = DEFECTS[tray.defect] || DEFECTS.hair;
+    g.fillStyle = 'rgba(255, 244, 242, 0.96)';
+    g.strokeStyle = '#d93829';
+    g.lineWidth = 7;
+    g.beginPath();
+    g.roundRect(14, 14, 228, 84, 22);
+    g.fill();
+    g.stroke();
+    g.font = '800 32px "Zen Maru Gothic", "Segoe UI Emoji", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillStyle = '#c92a1d';
+    g.fillText(`${def.icon} 不良`, 128, 56);
+    tex.needsUpdate = true;
+    return;
+  }
+  const order = tray.order || [tray.need];
+  const stepIdx = tray.stepIdx || 0;
+  const w = order.length === 1 ? 116 : order.length === 2 ? 176 : 236;
+  const x0 = (256 - w) / 2;
+  g.fillStyle = 'rgba(255, 255, 255, 0.96)';
+  g.strokeStyle = '#e67e22';
+  g.lineWidth = 7;
+  g.beginPath();
+  g.roundRect(x0, 14, w, 84, 24);
+  g.fill();
+  g.stroke();
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const stepW = w / order.length;
+  for (let i = 0; i < order.length; i++) {
+    const cx = x0 + stepW * (i + 0.5);
+    const ic = ITEMS[order[i]] ? ITEMS[order[i]].icon : '🍱';
+    if (i < stepIdx) {
+      g.globalAlpha = 0.42;
+      g.font = '42px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+      g.fillText(ic, cx, 56);
+      g.globalAlpha = 1;
+      g.fillStyle = '#27ae60';
+      g.font = '900 26px sans-serif';
+      g.fillText('✓', cx + 16, 36);
+    } else {
+      if (i === stepIdx && order.length > 1) {
+        g.fillStyle = 'rgba(245, 199, 26, 0.36)';
+        g.beginPath();
+        g.arc(cx, 56, 30, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.font = order.length === 1 ? '56px "Segoe UI Emoji", sans-serif' : '46px "Segoe UI Emoji", sans-serif';
+      g.fillStyle = '#1f2a33';
+      g.fillText(ic, cx, 58);
+    }
+  }
+  tex.needsUpdate = true;
+}
+
+function makeRawTray(trayMat, rimMat, riceMat, sideMats, hairMat) {
   const g = new THREE.Group();
   const base = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.032, 0.22), trayMat);
   base.position.y = 0.016; base.castShadow = true; base.receiveShadow = true;
@@ -50,10 +107,23 @@ function makeRawTray(trayMat, rimMat, riceMat, sideMats) {
   rim.position.y = 0.022;
   const rice = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.038, 0.18), riceMat);
   rice.position.set(-0.065, 0.028, 0);
-  const side = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.034, 0.08), sideMats.karaage);
-  side.position.set(0.06, 0.028, -0.045);
-  g.add(rim, base, rice, side);
-  g.userData.side = side;
+  const side = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.032, 0.055), sideMats.karaage);
+  side.position.set(0.055, 0.028, -0.062);
+  // 3 slots for placed items in multi-item orders (left to right in the compartment)
+  const placedSlots = [-0.01, 0.045, 0.095].map((px, idx) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.036, 0.062), sideMats.karaage);
+    m.position.set(px, 0.03, idx % 2 === 0 ? 0.038 : -0.01);
+    m.visible = false;
+    g.add(m);
+    return m;
+  });
+  // Small dark hair strand on top of rice for defect === 'hair'
+  const hair = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.006, 0.008), hairMat);
+  hair.position.set(-0.065, 0.049, 0.01);
+  hair.rotation.y = 0.45;
+  hair.visible = false;
+  g.add(rim, base, rice, side, hair);
+  g.userData = { side, rim, rice, hair, placedSlots };
   return g;
 }
 
@@ -169,43 +239,68 @@ export async function buildBento() {
   const trayMat = new THREE.MeshStandardMaterial({ color: '#1f2126', roughness: 0.55 });
   const rimMat = new THREE.MeshStandardMaterial({ color: '#2c2f36', roughness: 0.45 });
   const riceMat = new THREE.MeshStandardMaterial({ color: '#fbfaf5', roughness: 0.85 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: '#141210', roughness: 0.4 });
   const sideMats = {
     karaage: new THREE.MeshStandardMaterial({ color: '#d98a2e', roughness: 0.7 }),
     sausage: new THREE.MeshStandardMaterial({ color: '#c8423a', roughness: 0.6 }),
     veg:     new THREE.MeshStandardMaterial({ color: '#4c9a4a', roughness: 0.7 }),
   };
-  const iconMats = {};
-  for (const k of ITEM_KEYS) iconMats[k] = makeIconSpriteMat(ITEMS[k].icon);
 
   const pool = [];
   for (let i = 0; i < POOL_SIZE; i++) {
     const group = new THREE.Group();
-    const raw = makeRawTray(trayMat, rimMat, riceMat, sideMats);
+    const raw = makeRawTray(trayMat, rimMat, riceMat, sideMats, hairMat);
     const doneBox = bentoBox.scene.clone(true);
     doneBox.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     doneBox.visible = false;
-    const sprite = new THREE.Sprite(iconMats.karaage);
-    sprite.scale.set(0.46, 0.46, 1);
-    sprite.position.set(0, 0.44, 0);
+    const badge = makeOrderSprite();
+    const sprite = new THREE.Sprite(badge.mat);
+    sprite.scale.set(0.86, 0.38, 1);
+    sprite.position.set(0, 0.45, 0);
     sprite.renderOrder = 10;
     group.add(raw, doneBox, sprite);
     group.visible = false;
     scene.add(group);
-    pool.push({ group, raw, doneBox, sprite });
+    pool.push({ group, raw, doneBox, sprite, badge, sig: '' });
   }
 
   function syncTrays(trays) {
     const n = Math.min(pool.length, trays.length);
     for (let i = 0; i < n; i++) {
       const t = trays[i], slot = pool[i];
+      if (t.rejected) {
+        slot.group.visible = false;
+        continue;
+      }
       slot.group.visible = true;
       slot.group.position.set(BELT_X0 + t.x, BELT_Y + 0.008, BELT_Z);
       slot.raw.visible = !t.done;
       slot.doneBox.visible = !!t.done;
-      if (!t.done && sideMats[t.other]) slot.raw.userData.side.material = sideMats[t.other];
+      if (!t.done) {
+        const u = slot.raw.userData;
+        if (sideMats[t.other]) u.side.material = sideMats[t.other];
+        u.rice.visible = t.defect !== 'norice';
+        u.hair.visible = t.defect === 'hair';
+        u.rim.rotation.y = t.defect === 'lid' ? 0.26 : 0;
+        u.rim.position.x = t.defect === 'lid' ? 0.025 : 0;
+        const placed = t.placed || [];
+        for (let k = 0; k < u.placedSlots.length; k++) {
+          const m = u.placedSlots[k];
+          const itemKey = placed[k];
+          m.visible = !!itemKey;
+          if (itemKey && sideMats[itemKey]) m.material = sideMats[itemKey];
+        }
+      }
       const showIcon = !t.done && !t.missed && t.x >= BENTO.ZONE0 - BENTO.LOOKAHEAD - 3.5 && t.x <= BENTO.ZONE1;
       slot.sprite.visible = showIcon;
-      if (showIcon && iconMats[t.need]) slot.sprite.material = iconMats[t.need];
+      if (showIcon) {
+        const orderStr = (t.order || [t.need]).join(',');
+        const sig = `${t.id}:${t.defect || ''}:${orderStr}:${t.stepIdx || 0}`;
+        if (slot.sig !== sig) {
+          slot.sig = sig;
+          drawOrderBadge(slot.badge, t);
+        }
+      }
     }
     for (let i = n; i < pool.length; i++) pool[i].group.visible = false;
   }

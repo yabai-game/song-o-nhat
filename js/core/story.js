@@ -22,7 +22,15 @@ export function daySteps(i, job = 'site') {
  * Morning shifts at rank 1 have no limit and no miss cap, so they cannot be lost.
  */
 export function shiftOpts(W, hard, S) {
-  const o = { goal: W.goal, limit: 0, maxMiss: 0, rain: !!W.rain, wind: !!W.wind, walk: W.walk || 1, jp: W.jp, vi: W.vi, label: W.label, hard };
+  const o = {
+    goal: W.goal, limit: 0, maxMiss: 0,
+    rain: !!W.rain, wind: !!W.wind, walk: W.walk || 1,
+    drift: W.drift, pipeKinds: W.pipeKinds,
+    hintDelay: W.hintDelay, decay: W.decay, urgent: W.urgent, waitMin: W.waitMin, waitRand: W.waitRand,
+    multi: W.multi, defect: W.defect, speed: W.speed,
+    pullPeriod: W.pullPeriod, pullZone: W.pullZone, weeds: !!W.weeds,
+    jp: W.jp, vi: W.vi, label: W.label, hard,
+  };
   if (!hard) return o;
   o.limit = W.limit ? W.limit + (S.ally || 0) * 6 - (S.watch || 0) * 5 : 0;
   let mm = W.maxMiss || 3;

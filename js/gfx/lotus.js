@@ -214,9 +214,11 @@ export async function buildLotus() {
   plantMesh.instanceMatrix.needsUpdate = true;
   scene.add(plantMesh);
 
-  // 8 work spots: mud mound + lotus_root model + yellow marker ring
+  // 8 work spots: mud mound + weed tuft (when state < 0) + lotus_root model + yellow marker ring
   const moundMat = new THREE.MeshStandardMaterial({ color: '#423022', roughness: 0.92 });
+  const weedMat = new THREE.MeshStandardMaterial({ color: '#3b7a2e', roughness: 0.85 });
   const moundGeo = new THREE.CylinderGeometry(0.42, 0.62, 0.18, 16);
+  const bladeGeo = new THREE.ConeGeometry(0.06, 0.38, 5);
   const ringGeo = new THREE.RingGeometry(0.58, 0.74, 28);
   const spotVisuals = LOTUS.SPOTS.map(([x, z], idx) => {
     const group = new THREE.Group();
@@ -226,6 +228,17 @@ export async function buildLotus() {
     mound.position.y = LOTUS.GROUND_Y + 0.09;
     mound.castShadow = true;
     mound.receiveShadow = true;
+
+    const weeds = new THREE.Group();
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2 + idx * 0.3;
+      const r = 0.16 + (k % 2) * 0.14;
+      const b = new THREE.Mesh(bladeGeo, weedMat);
+      b.position.set(Math.cos(a) * r, LOTUS.GROUND_Y + 0.24, Math.sin(a) * r);
+      b.rotation.set(Math.sin(a) * 0.28, a, -Math.cos(a) * 0.28);
+      weeds.add(b);
+    }
+    weeds.visible = false;
 
     const root = lotusRoot.scene.clone(true);
     root.scale.setScalar(1.45);
@@ -245,9 +258,9 @@ export async function buildLotus() {
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.005;
 
-    group.add(mound, root, ring);
+    group.add(mound, weeds, root, ring);
     scene.add(group);
-    return { group, mound, root, ring, ringMat };
+    return { group, mound, weeds, root, ring, ringMat };
   });
 
   // Collected lotus_root models inside the plastic crate on the bund
@@ -280,17 +293,19 @@ export async function buildLotus() {
       const st = sp ? sp.state : 0;
       if (st >= 4) {
         v.mound.visible = false;
+        v.weeds.visible = false;
         v.root.visible = false;
         v.ring.visible = false;
         continue;
       }
       v.ring.visible = true;
+      v.weeds.visible = st < 0;
       const isNear = !!(nearSpot && nearSpot.id === i);
-      v.ringMat.color.set(isNear ? '#fff066' : '#f5c71a');
+      v.ringMat.color.set(isNear ? '#fff066' : st < 0 ? '#7ed6a0' : '#f5c71a');
       v.ringMat.opacity = isNear ? 0.92 : 0.62;
 
-      if (st === 0) {
-        // Unworked: full mud mound covering the root
+      if (st <= 0) {
+        // Unworked (with or without weeds): full mud mound covering the root
         v.mound.visible = true;
         v.mound.scale.set(1, 1, 1);
         v.mound.position.y = LOTUS.GROUND_Y + 0.09;
@@ -396,6 +411,7 @@ export async function buildLotus() {
     scene,
     sun,
     blocks,
+    spotGroups: spotVisuals.map((v) => v.group),
     showcase: { pos: new THREE.Vector3(...LOTUS_FIELD.showcase.pos), look: new THREE.Vector3(...LOTUS_FIELD.showcase.look) },
     syncSpots,
     setCollected,

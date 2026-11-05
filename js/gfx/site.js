@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, signTexture, makeSun, skyDome, loadModel, loadBrand, BRAND_ASPECT } from './stage.js';
-import { SITE } from '../core/site_rules.js';
+import { SITE, PIPE_KINDS, PIPE_ORDER } from '../core/site_rules.js';
 import { buildBackdrop } from './backdrop.js';
 
 export const DECK_Y = 9;
@@ -682,19 +682,77 @@ export async function buildSite() {
   poleLine([[31.5, 18], [31.5, 4], [31.5, -10], [31.5, -24]]);
   poleLine([[-31.5, 18], [-31.5, 4], [-31.5, -10], [-31.5, -24]]);
 
-  // ---- gameplay props on the deck: pipe source (left) and yellow rack (right) ----
-  const stack = pipePile(scene, SITE.STACK.x, Y, SITE.STACK.z, 3, 5, 3.4, Math.PI / 2, 0.09, '#9a9ea3');
-  const rack = new THREE.Group(); rack.position.set(SITE.RACK.x, Y, SITE.RACK.z); scene.add(rack);
-  const rackM = M('#d9a62e', { metalness: 0.3, roughness: 0.5 }); // yellow-painted rack, easy to spot
-  for (const z of [-1.2, 1.2]) for (const x of [-0.5, 0.5]) { const p = box(0.08, 1.1, 0.08, rackM, x, 0.55, z, rack); p.castShadow = true; }
-  for (const z of [-1.2, 1.2]) box(1.1, 0.08, 0.1, rackM, 0, 0.15, z, rack);
-  const placed = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 8), M('#9a9ea3', { metalness: 0.6, roughness: 0.4 }), 60);
+  // ---- gameplay props on the deck: 3 pipe stacks (short/med/long) on the left and 3 rack slots (A/B/C) on the right ----
+  const stackGroups = {}, rackGroups = {};
+  const rackM = M('#d9a62e', { metalness: 0.3, roughness: 0.5 });
+  const stack = new THREE.Group();
+  scene.add(stack);
+
+  for (const k of PIPE_ORDER) {
+    const info = PIPE_KINDS[k];
+    const sg = new THREE.Group();
+    sg.position.set(info.stack.x, Y, info.stack.z);
+    pipePile(sg, 0, 0, 0, 2, 4, info.len * 0.72, 0, 0.075, '#9a9ea3');
+    // Painted pipe-end marker cap & sign (短 A / 中 B / 長 C)
+    const endMat = M(info.color, { roughness: 0.45 });
+    for (const sx of [-info.len * 0.36, info.len * 0.36]) {
+      box(0.06, 0.24, 0.52, endMat, sx, 0.14, 0, sg);
+    }
+    const lblSign = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.76, 0.32),
+      new THREE.MeshStandardMaterial({ map: signTexture(`${info.jp} (${info.vi})`, 256, 112, info.color, '#ffffff'), side: THREE.DoubleSide, roughness: 0.6 }),
+    );
+    lblSign.position.set(0.45, 0.62, 0);
+    lblSign.rotation.y = Math.PI / 2;
+    sg.add(lblSign);
+    scene.add(sg);
+    stackGroups[k] = sg;
+
+    // Matching rack slot (A / B / C) on the right
+    const rg = new THREE.Group();
+    rg.position.set(info.rack.x, Y, info.rack.z);
+    for (const z of [-0.45, 0.45]) for (const x of [-0.42, 0.42]) {
+      const p = box(0.07, 0.95, 0.07, rackM, x, 0.475, z, rg);
+      p.castShadow = true;
+    }
+    for (const z of [-0.45, 0.45]) box(0.92, 0.07, 0.08, rackM, 0, 0.14, z, rg);
+    const slotSign = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.78, 0.34),
+      new THREE.MeshStandardMaterial({ map: signTexture(`Ô ${info.slot} · ${info.jp}`, 256, 112, info.color, '#ffffff'), side: THREE.DoubleSide, roughness: 0.6 }),
+    );
+    slotSign.position.set(-0.48, 0.76, 0);
+    slotSign.rotation.y = -Math.PI / 2;
+    rg.add(slotSign);
+    scene.add(rg);
+    rackGroups[k] = rg;
+  }
+
+  const rack = new THREE.Group();
+  rack.position.set(SITE.RACK.x, Y, PIPE_KINDS.med.rack.z);
+  scene.add(rack);
+  const placed = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.055, 0.055, 1.8, 8), M('#9a9ea3', { metalness: 0.6, roughness: 0.4 }), 60);
   placed.count = 0; placed.castShadow = true; rack.add(placed);
-  const pm = new THREE.Matrix4(), pq = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0)), pv = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const pm = new THREE.Matrix4(), pq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.PI / 2)), pv = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
   function setPlaced(n) {
     const k = Math.min(60, n * 4);
-    for (let i = 0; i < k; i++) { pv.set(((i % 4) - 1.5) * 0.15, 0.25 + Math.floor(i / 4) * 0.13, 0); pm.compose(pv, pq, one); placed.setMatrixAt(i, pm); }
+    for (let i = 0; i < k; i++) {
+      const slotIdx = Math.floor(i / 4) % 3;
+      const slotZ = PIPE_KINDS[PIPE_ORDER[slotIdx]].rack.z - PIPE_KINDS.med.rack.z;
+      const row = Math.floor(i / 12);
+      pv.set(0, 0.22 + row * 0.12, slotZ + ((i % 4) - 1.5) * 0.13);
+      pm.compose(pv, pq, one);
+      placed.setMatrixAt(i, pm);
+    }
     placed.count = k; placed.instanceMatrix.needsUpdate = true;
+  }
+
+  function setActiveKinds(pipeKinds = 3) {
+    const n = Math.max(1, Math.min(3, pipeKinds || 3));
+    PIPE_ORDER.forEach((k, idx) => {
+      const vis = idx < n;
+      if (stackGroups[k]) stackGroups[k].visible = vis;
+      if (rackGroups[k]) rackGroups[k].visible = vis;
+    });
   }
 
   // bundle carried on the right shoulder: outer group follows the body's yaw, inner group tilts
@@ -702,10 +760,20 @@ export async function buildSite() {
   const bundle = new THREE.Group(), tilt = new THREE.Group(); bundle.add(tilt);
   tilt.rotation.set(-0.3, -0.55, 0, 'YXZ'); // front end up and out to the right, back end across the back
   const pipeM = M('#a3a7ad', { metalness: 0.65, roughness: 0.3 });
-  for (let i = 0; i < 4; i++) { const p = cyl(0.042, 2.6, pipeM, tilt, 10); p.rotation.x = Math.PI / 2; p.position.set((i % 2) * 0.085 - 0.042, Math.floor(i / 2) * 0.08, 0.35); }
+  const bundleEndMat = M(PIPE_KINDS.short.color, { roughness: 0.4 });
+  for (let i = 0; i < 4; i++) {
+    const px = (i % 2) * 0.085 - 0.042, py = Math.floor(i / 2) * 0.08;
+    const p = cyl(0.042, 2.6, pipeM, tilt, 10); p.rotation.x = Math.PI / 2; p.position.set(px, py, 0.35);
+    const capF = cyl(0.045, 0.16, bundleEndMat, tilt, 10); capF.rotation.x = Math.PI / 2; capF.position.set(px, py, 1.58);
+    const capB = cyl(0.045, 0.16, bundleEndMat, tilt, 10); capB.rotation.x = Math.PI / 2; capB.position.set(px, py, -0.88);
+  }
   for (const z of [-0.3, 0.9]) { const band = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.016, 6, 16), M('#55585c', { metalness: 0.5 })); band.position.set(0, 0.04, z); tilt.add(band); }
   bundle.userData.tilt = tilt;
   bundle.visible = false; scene.add(bundle);
+  function setBundleKind(kind) {
+    const info = PIPE_KINDS[kind] || PIPE_KINDS.short;
+    bundleEndMat.color.set(info.color);
+  }
 
   // dropped bundle that falls onto the deck and fades
   const fallen = bundle.clone(); fallen.visible = false; scene.add(fallen);
@@ -762,7 +830,7 @@ export async function buildSite() {
   }
 
   return {
-    scene, sun, bundle, ring, trashRing, handBag, setTrashDropped, setFloors, setPlaced, setWeather, setTime, dropAt, stack,
+    scene, sun, bundle, ring, trashRing, handBag, setTrashDropped, setFloors, setPlaced, setBundleKind, setActiveKinds, setWeather, setTime, dropAt, stack,
     showcase: { pos: new THREE.Vector3(9, Y + 4.5, 12), look: new THREE.Vector3(-2, Y - 2, -3) },
     update(dt, t, focus) {
       jib.rotation.y = Math.sin(t * 0.12) * 0.55 + 0.35;

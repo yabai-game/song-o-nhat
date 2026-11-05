@@ -5,7 +5,11 @@ export const LOTUS = {
   GROUND_Y: -0.14,     // mud depth: player stands 0.14 m lower than the bund
   REACH: 2.3,          // max distance (m) to work on the nearest unfinished lotus spot
   HIDE_CAM_DIST: 3.2,  // hide lotus leaf instances closer than 3.2 m to the camera
-  WALK: 1.8,           // base walking speed in the mud paddy (m/s), scaled by opts.walk; ≤ GAIT.WALK_MAX so wading uses the walk clip
+  WALK: 1.8,           // base walking speed in the mud paddy (m/s), scaled by opts.walk
+  WASH_MIN: 0.80,      // release water spray at 80–100% to complete wash
+  WASH_OVER: 1.6,      // holding > 1.6 s after 100% bruises the root (+1 miss)
+  PREVIEW_SEC: 2.0,    // show step order sign for 2 s when approaching a spot
+  PREVIEW_TIME: 2.0,
   BOUNDS: { x0: -10.5, x1: 10.5, z0: -3.8, z1: 5.2 },
   SPOTS: [
     [-2.2, 2],
@@ -20,23 +24,64 @@ export const LOTUS = {
 };
 
 export const STEPS = {
-  dig:     { id: 'dig',     icon: '⛏️', label: 'Đào',      jp: '掘る', tipJp: '掘る (horu)',   vi: 'Đào lớp bùn phía trên',          time: 0.8 },
-  wash:    { id: 'wash',    icon: '💦', label: 'Xịt nước', jp: '洗う', tipJp: '洗う (arau)',   vi: 'Xịt nước để lộ củ sen',          time: 1.1 },
-  pull:    { id: 'pull',    icon: '🪴', label: 'Nhổ',      jp: '抜く', tipJp: '抜く (nuku)',   vi: 'Nhổ củ sen lên, nhẹ tay kẻo gãy', time: 0.7 },
-  collect: { id: 'collect', icon: '🧺', label: 'Nhặt',     jp: '拾う', tipJp: '拾う (hirou)',  vi: 'Nhặt củ sen vào giỏ',            time: 0.5 },
+  cut:     { id: 'cut',     icon: '✂️', label: 'Cắt cỏ',   jp: '刈る', tipJp: '刈る (karu)',   vi: 'Cắt cỏ dại quanh gốc sen',                  time: 0.6 },
+  dig:     { id: 'dig',     icon: '⛏️', label: 'Đào',      jp: '掘る', tipJp: '掘る (horu)',   vi: 'Đào lớp bùn phía trên',                    time: 0.8 },
+  wash:    { id: 'wash',    icon: '💦', label: 'Xịt nước', jp: '洗う', tipJp: '洗う (arau)',   vi: 'Nhấn giữ để xịt sạch bùn (thả ở 80–100%)', time: 1.1 },
+  pull:    { id: 'pull',    icon: '🪴', label: 'Nhổ',      jp: '抜く', tipJp: '抜く (nuku)',   vi: 'Canh kim vào vùng xanh để nhổ củ sen',     time: 0 },
+  collect: { id: 'collect', icon: '🧺', label: 'Nhặt',     jp: '拾う', tipJp: '拾う (hirou)',  vi: 'Nhặt củ sen vào giỏ',                      time: 0.5 },
 };
 
 export const STEP_KEYS = ['dig', 'wash', 'pull', 'collect'];
+export const ALL_STEP_KEYS = ['cut', 'dig', 'wash', 'pull', 'collect'];
 
-export function createLotus(opts = {}) {
+/** Required step id ('cut' | 'dig' | 'wash' | 'pull' | 'collect' | null) for spot sp. */
+export function wantStepOf(sp) {
+  if (!sp || sp.state >= 4) return null;
+  return sp.state < 0 ? 'cut' : STEP_KEYS[sp.state];
+}
+export const nextStepId = wantStepOf;
+
+/** Short step order string shown on the spot sign during the 2-second preview. */
+export function spotOrderText(sp) {
+  return sp && sp.weedy
+    ? '🌿 刈る → 掘る → 洗う → 抜く → 拾う'
+    : '掘る → 洗う → 抜く → 拾う';
+}
+
+export function createLotus(opts = {}, rng = Math.random) {
   const goal = opts.goal || 2;
   const limit = opts.limit || 0;
+  const weeds = !!opts.weeds;
+  const pullPeriod = opts.pullPeriod || 1.2;
+  const pullZone = opts.pullZone || 0.35;
+
+  // On Days >= 3 (weeds: true), ~1/3 of spots (3 of 8) start with weeds (state = -1, needing 'cut' first)
+  const weedySet = new Set();
+  if (weeds) {
+    const nWeeds = Math.max(2, Math.round(LOTUS.SPOTS.length / 3)); // 3 spots
+    const indices = LOTUS.SPOTS.map((_, i) => i);
+    for (let k = 0; k < nWeeds && indices.length > 0; k++) {
+      const pick = Math.floor(rng() * indices.length) % indices.length;
+      weedySet.add(indices.splice(pick, 1)[0]);
+    }
+  }
+
   return {
     goal,
     limit,
     maxMiss: opts.maxMiss || 0,
     walk: opts.walk || 1,
     rain: !!opts.rain,
+    weeds,
+    pullPeriod,
+    pullZone,
+    pullTime: 0,
+    washing: null,
+    washProg: 0,
+    washHold: 0,
+    washSpot: -1,
+    broken: 0,
+    bruised: 0,
     time: limit,
     count: 0,
     miss: 0,
@@ -47,8 +92,23 @@ export function createLotus(opts = {}) {
     result: null,
     loseWhy: '',
     warned: false,
-    spots: LOTUS.SPOTS.map(([x, z], id) => ({ id, x, z, state: 0 })),
+    spots: LOTUS.SPOTS.map(([x, z], id) => {
+      const weedy = weedySet.has(id);
+      return { id, i: id, x, z, weedy, weeds: weedy, state: weedy ? -1 : 0, broken: false, bruised: false, seenT: 0 };
+    }),
   };
+}
+
+/** Current pull gauge needle position in [0, 1]; 0.5 is the center of the green target zone. */
+export function pullNeedle(st) {
+  const p = st.pullPeriod || 1.2;
+  return 0.5 + 0.5 * Math.sin(((st.pullTime || 0) / p) * Math.PI * 2);
+}
+
+/** Whether needle value `val` (in [0, 1]) is inside the central green zone of width `st.pullZone`. */
+export function inPullZone(st, val = pullNeedle(st)) {
+  const half = (st.pullZone || 0.35) / 2;
+  return Math.abs(val - 0.5) <= half + 1e-6;
 }
 
 /** Nearest unfinished spot (state < 4) within maxDist of (x, z), or null if none is in reach. */
@@ -62,33 +122,118 @@ export function nearestSpot(st, x, z, maxDist = LOTUS.REACH) {
   return best;
 }
 
+function addMiss(st, ev = null) {
+  st.miss++;
+  if (st.maxMiss && st.miss > st.maxMiss && !st.over) {
+    st.over = true;
+    st.result = 'lose';
+    st.loseWhy = 'Sai quá nhiều lần rồi.';
+    if (ev) ev.push('lose');
+  }
+}
+
+function ensureEnoughSpots(st, brokenId) {
+  const remaining = st.spots.filter((s) => s.state < 4).length;
+  const needed = st.goal - st.count;
+  if (remaining < needed) {
+    const candidate = st.spots.find((s) => s.state >= 4 && s.id !== brokenId) || st.spots[brokenId];
+    if (candidate) {
+      candidate.broken = false;
+      candidate.bruised = false;
+      candidate.state = candidate.weedy ? -1 : 0;
+      candidate.seenT = 0;
+    }
+  }
+}
+
 /**
- * Perform step `id` ('dig' | 'wash' | 'pull' | 'collect') at player position (x, z).
- * Returns:
- *  - 'busy' if the shift is over, player is still in the middle of an action, or id is unknown
- *  - 'far'  if no unfinished spot is within REACH (2.3 m) — does NOT count as a miss
- *  - 'bad'  if the step does not match the spot's current state — increments miss, keeps state unchanged
- *  - 'good' if the step matches — starts action timer, advances spot state (+1 root on collect)
+ * Start holding the water-spray button ('wash') at (x, z).
+ * Returns 'busy' | 'far' | 'bad' | 'washing'.
  */
-export function act(st, id, x, z) {
-  if (st.over || st.busy > 0 || !STEPS[id]) return 'busy';
+export function startWash(st, x, z) {
+  if (st.over || st.busy > 0 || st.washing) return 'busy';
   const sp = nearestSpot(st, x, z, LOTUS.REACH);
   if (!sp) return 'far';
-  const wantKey = STEP_KEYS[sp.state];
-  if (id !== wantKey) {
-    st.miss++;
-    if (st.maxMiss && st.miss > st.maxMiss) {
-      st.over = true;
-      st.result = 'lose';
-      st.loseWhy = 'Sai quá nhiều lần rồi.';
-    }
+  if (wantStepOf(sp) !== 'wash') {
+    addMiss(st);
     return 'bad';
   }
+  st.washing = { spotId: sp.id, fill: 0, overTime: 0 };
+  st.washProg = 0;
+  st.washHold = 0;
+  st.washSpot = sp.id;
+  return 'washing';
+}
+
+/**
+ * Release the water-spray button ('wash').
+ * Returns 'none' | 'short' (< 80% fill, must spray again, no miss) | 'good' (80–100% fill).
+ */
+export function endWash(st) {
+  if (!st.washing) return 'none';
+  const w = st.washing;
+  const sp = st.spots[w.spotId];
+  st.washing = null;
+  st.washProg = 0;
+  st.washHold = 0;
+  st.washSpot = -1;
+  if (w.fill < LOTUS.WASH_MIN - 1e-6) {
+    return 'short';
+  }
+  if (sp && sp.state === 1) {
+    sp.state = 2;
+    st.pullTime = 0;
+  }
+  return 'good';
+}
+
+/**
+ * Perform step `id` ('cut' | 'dig' | 'wash' | 'pull' | 'collect') at player position (x, z).
+ * Optional `param`:
+ *  - for 'pull': needle position in [0..1] (defaults to pullNeedle(st))
+ *  - for 'wash': hold duration in seconds (if provided, simulates hold-and-release for `param` seconds)
+ * Returns 'busy' | 'far' | 'bad' | 'good' | 'broken' | 'short' | 'bruised'.
+ */
+export function act(st, id, x, z, param = undefined) {
+  if (st.over || st.busy > 0 || st.washing || !STEPS[id]) return 'busy';
+  const sp = nearestSpot(st, x, z, LOTUS.REACH);
+  if (!sp) return 'far';
+  const wantKey = wantStepOf(sp);
+  if (id !== wantKey) {
+    addMiss(st);
+    return 'bad';
+  }
+
+  if (id === 'wash' && typeof param === 'number') {
+    startWash(st, x, z);
+    const ev = step(st, param);
+    if (ev.includes('overwash')) return 'bruised';
+    return endWash(st);
+  }
+
+  if (id === 'pull') {
+    const posVal = typeof param === 'number' ? param : pullNeedle(st);
+    if (!inPullZone(st, posVal)) {
+      st.broken++;
+      sp.broken = true;
+      sp.state = 4;
+      addMiss(st);
+      if (!st.over) ensureEnoughSpots(st, sp.id);
+      return 'broken';
+    }
+    // Instant pull (no passive 0.7 s wait)
+    sp.state = 3;
+    return 'good';
+  }
+
   const stepDef = STEPS[id];
-  st.busy = stepDef.time;
-  st.busyStep = id;
-  st.busySpot = sp.id;
+  if (stepDef.time > 0) {
+    st.busy = stepDef.time;
+    st.busyStep = id;
+    st.busySpot = sp.id;
+  }
   sp.state++;
+  if (sp.state === 2) st.pullTime = 0;
   if (sp.state >= 4) {
     st.count++;
     if (st.count >= st.goal) {
@@ -99,19 +244,72 @@ export function act(st, id, x, z) {
   return 'good';
 }
 
-/** Advance action timer and shift countdown by dt seconds. Returns array of events ('ready', 'warn10', 'lose'). */
-export function step(st, dt) {
+/**
+ * Advance action timer, pull gauge needle, active water-spray hold, spot preview timers, and shift countdown.
+ * Returns array of events ('ready', 'overwash', 'warn10', 'lose').
+ */
+export function step(st, dt, px = null, pz = null) {
   const ev = [];
+  const wasBusy = st.busy > 0;
+
   if (st.busy > 0) {
     st.busy = Math.max(0, st.busy - dt);
     if (st.busy === 0) {
+      if (st.busyStep === 'wash') st.pullTime = 0;
       st.busyStep = null;
       st.busySpot = -1;
       ev.push('ready');
     }
+  } else if (!st.washing && dt > 0) {
+    st.pullTime = (st.pullTime || 0) + dt;
   }
+
   if (st.over || dt <= 0) return ev;
-  if (st.limit > 0) {
+
+  // Hold-and-release wash progress
+  if (st.washing && !wasBusy) {
+    const w = st.washing;
+    const washTime = STEPS.wash.time || 1.1;
+    if (w.fill < 1) {
+      const remSec = (1 - w.fill) * washTime;
+      if (dt <= remSec) {
+        w.fill += dt / washTime;
+      } else {
+        w.fill = 1;
+        w.overTime += dt - remSec;
+      }
+    } else {
+      w.overTime += dt;
+    }
+    st.washProg = w.fill;
+    st.washHold = w.overTime;
+    if (w.overTime > LOTUS.WASH_OVER) {
+      const sp = st.spots[w.spotId];
+      st.washing = null;
+      st.washProg = 0;
+      st.washHold = 0;
+      st.washSpot = -1;
+      if (sp && sp.state === 1) {
+        sp.state = 2;
+        sp.bruised = true;
+        st.pullTime = 0;
+      }
+      st.bruised = (st.bruised || 0) + 1;
+      ev.push('overwash');
+      addMiss(st, ev);
+    }
+  }
+
+  // Track 2s order preview when player approaches a spot
+  let x = null, z = null;
+  if (typeof px === 'number' && typeof pz === 'number') { x = px; z = pz; }
+  else if (px && typeof px.x === 'number') { x = px.x; z = px.z; }
+  if (x !== null && z !== null) {
+    const near = nearestSpot(st, x, z, LOTUS.REACH);
+    if (near) near.seenT = (near.seenT || 0) + dt;
+  }
+
+  if (st.limit > 0 && !st.over) {
     st.time -= dt;
     if (st.time <= 10 && !st.warned) {
       st.warned = true;
@@ -127,6 +325,9 @@ export function step(st, dt) {
   }
   return ev;
 }
+
+/** Extra star condition for lotus paddy: never snapped a lotus root. */
+export const lotusExtra = (st) => (st.broken || 0) === 0;
 
 export function lotusFraction(st) {
   return Math.min(1, st.count / Math.max(1, st.goal));
