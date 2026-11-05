@@ -23,7 +23,7 @@ SPOTS:[
 export const STEPS={
 cut:{id:'cut',icon:'✂️',label:'Cắt cỏ',jp:'刈る',tipJp:'刈る (karu)',vi:'Cắt cỏ dại quanh gốc sen',time:0.6},
 dig:{id:'dig',icon:'⛏️',label:'Đào',jp:'掘る',tipJp:'掘る (horu)',vi:'Đào lớp bùn phía trên',time:0.8},
-wash:{id:'wash',icon:'💦',label:'Xịt nước',jp:'洗う',tipJp:'洗う (arau)',vi:'Nhấn giữ để xịt sạch bùn (thả ở 80–100%)',time:1.1},
+wash:{id:'wash',icon:'💦',label:'Xịt nước',jp:'洗う',tipJp:'洗う (arau)',vi:'Nhấn giữ để xịt sạch bùn (thả ở 80–100%)',time:2.0},
 pull:{id:'pull',icon:'🪴',label:'Nhổ',jp:'抜く',tipJp:'抜く (nuku)',vi:'Canh kim vào vùng xanh để nhổ củ sen',time:0},
 collect:{id:'collect',icon:'🧺',label:'Nhặt',jp:'拾う',tipJp:'拾う (hirou)',vi:'Nhặt củ sen vào giỏ',time:0.5},
 };
@@ -43,8 +43,8 @@ export function createLotus(opts={},rng=Math.random){
 const goal=opts.goal||2;
 const limit=opts.limit||0;
 const weeds=!!opts.weeds;
-const pullPeriod=opts.pullPeriod||1.2;
-const pullZone=opts.pullZone||0.35;
+const pullPeriod=opts.pullPeriod||2.4;
+const pullZone=opts.pullZone||0.38;
 const weedySet=new Set();
 if(weeds){
 const nWeeds=Math.max(2,Math.round(LOTUS.SPOTS.length/3));
@@ -87,11 +87,13 @@ return{id,i:id,x,z,weedy,weeds:weedy,state:weedy?-1:0,broken:false,bruised:false
 };
 }
 export function pullNeedle(st){
-const p=st.pullPeriod||1.2;
-return 0.5+0.5*Math.sin(((st.pullTime||0)/p)*Math.PI*2);
+const p=st.pullPeriod||2.4;
+const t=st.pullTime||0;
+const u=((t/p)%1+1)%1;
+return u<0.5?2*u:2-2*u;
 }
 export function inPullZone(st,val=pullNeedle(st)){
-const half=(st.pullZone||0.35)/2;
+const half=(st.pullZone||0.38)/2;
 return Math.abs(val-0.5)<=half+1e-6;
 }
 export function nearestSpot(st,x,z,maxDist=LOTUS.REACH){
@@ -218,7 +220,7 @@ st.pullTime=(st.pullTime||0)+dt;
 if(st.over||dt<=0)return ev;
 if(st.washing&&!wasBusy){
 const w=st.washing;
-const washTime=STEPS.wash.time||1.1;
+const washTime=STEPS.wash.time||2.0;
 if(w.fill<1){
 const remSec=(1-w.fill)*washTime;
 if(dt<=remSec){

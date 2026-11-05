@@ -237,12 +237,12 @@ button.small { font-size: 13px; padding: 8px 12px; }
 .bal-track i { position: absolute; top: -1px; bottom: -1px; width: 6px; margin-left: -3px; left: 50%; border-radius: 3px; background: #fff; box-shadow: 0 0 6px rgba(0,0,0,.6); }
 .bal-meter.danger { border-color: var(--bad); }
 
-.lotus-gauge { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(184px + env(safe-area-inset-bottom, 0px)); width: min(220px, 56vw); background: var(--panel); border: 1.5px solid var(--gold); border-radius: 12px; padding: 6px 10px 8px; display: grid; gap: 4px; text-align: center; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
-.lg-lbl { font-size: 11.5px; font-weight: 700; color: var(--gold); white-space: nowrap; }
-.lg-track { position: relative; height: 13px; border-radius: 7px; background: rgba(0,0,0,.45); border: 1px solid var(--line); overflow: hidden; }
+.lotus-gauge { position: absolute; left: 16px; bottom: calc(184px + env(safe-area-inset-bottom, 0px)); width: min(300px, calc(100vw - 32px)); box-sizing: border-box; background: var(--panel); border: 1.5px solid var(--gold); border-radius: 12px; padding: 6px 10px 8px; display: grid; gap: 4px; text-align: center; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+.lg-lbl { font-size: 11.5px; font-weight: 700; color: var(--gold); white-space: normal; line-height: 1.25; max-height: 2.5em; overflow: hidden; }
+.lg-track { position: relative; height: 18px; border-radius: 9px; background: rgba(0,0,0,.45); border: 1px solid var(--line); overflow: hidden; }
 .lg-zone { position: absolute; top: 0; bottom: 0; background: rgba(126, 214, 160, .55); border-inline: 1.5px solid var(--good); }
 .lg-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: rgba(116, 192, 252, .65); }
-.lg-needle { position: absolute; top: 0; bottom: 0; width: 5px; margin-left: -2.5px; left: 50%; background: #fff; border-radius: 2px; box-shadow: 0 0 6px rgba(0,0,0,.7); }
+.lg-needle { position: absolute; top: 0; bottom: 0; width: 6px; margin-left: -3px; left: 50%; background: #fff; border-radius: 2px; box-shadow: 0 0 6px rgba(0,0,0,.7); }
 .tag.care.urgent { background: #fff0ed; color: #b91c1c; border: 2px solid #dc2626; font-weight: 800; }
 
 @media (max-height: 500px) and (min-aspect-ratio: 1/1) {
@@ -252,7 +252,7 @@ button.small { font-size: 13px; padding: 8px 12px; }
   .bal-meter { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: min(190px, 32vw); }
   .bal-btn.left { bottom: calc(164px + env(safe-area-inset-bottom, 0px)); }
   .bal-btn.right { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
-  .lotus-gauge { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: min(210px, 34vw); }
+  .lotus-gauge { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: min(280px, calc(100vw - 32px)); }
 }
 /* care home: cream round action buttons (owner's reference image) and floating +/- satisfaction */
 .act.cream { background: #fff6ea; border-color: #e3c9a6; color: #5a3d2b; box-shadow: 0 4px 12px rgba(90,61,43,.28); }

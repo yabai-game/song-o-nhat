@@ -49,6 +49,55 @@ addEventListener('keyup',(e)=>{
 if(!this.active)return;
 if(e.code==='Digit2'){e.preventDefault();this.releaseWash();}
 });
+addEventListener('resize',()=>{
+if(this.active&&!$('sh-gauge').hidden)requestAnimationFrame(()=>this.placeGauge());
+});
+}
+placeGauge(){
+const gauge=$('sh-gauge');
+if(!gauge||gauge.hidden)return;
+const imp=(el,k,v)=>{if(el.style.getPropertyValue(k)!==v)el.style.setProperty(k,v,'important');};
+const vis=(el)=>el&&!el.hidden&&getComputedStyle(el).display!=='none';
+const W=window.innerWidth||375,H=window.innerHeight||812;
+const acts=$('acts'),joy=$('joy');
+const ar=vis(acts)?acts.getBoundingClientRect():null;
+const jr=vis(joy)?joy.getBoundingClientRect():null;
+if(W>H&&jr&&ar&&jr.width>0&&ar.width>0&&ar.left-jr.right>=200){
+const gap=ar.left-jr.right;
+const w=Math.round(Math.min(280,gap-20));
+const left=Math.round(jr.right+(gap-w)/2);
+imp(gauge,'width',`${w}px`);
+imp(gauge,'left',`${left}px`);
+imp(gauge,'bottom','18px');
+imp(gauge,'top','auto');
+imp(gauge,'transform','none');
+return;
+}
+const w=Math.round(Math.min(300,W-32));
+const left=Math.round((W-w)/2);
+let minTop=H;
+if(ar&&ar.height>0)minTop=Math.min(minTop,ar.top);
+if(jr&&jr.height>0)minTop=Math.min(minTop,jr.top);
+let bottom=Math.round(H-minTop+10);
+let topFloor=0;
+const hud=$('shifthud');
+for(const el of[hud&&hud.querySelector('.top'),$('sh-ticket'),$('sh-bars')]){
+if(!vis(el))continue;
+const r=el.getBoundingClientRect();
+if(r.height>0)topFloor=Math.max(topFloor,r.bottom);
+}
+imp(gauge,'width',`${w}px`);
+imp(gauge,'left',`${left}px`);
+imp(gauge,'bottom',`${bottom}px`);
+imp(gauge,'top','auto');
+imp(gauge,'transform','none');
+if(topFloor>0){
+const gr=gauge.getBoundingClientRect();
+if(gr.height>0&&gr.top<topFloor+6){
+bottom=Math.max(10,Math.round(H-(topFloor+6+gr.height)));
+imp(gauge,'bottom',`${bottom}px`);
+}
+}
 }
 start(opts,who,meta,onEnd){
 Object.assign(this,{opts,who,meta,onEnd});
@@ -164,26 +213,29 @@ this.btn[k].classList.toggle('hot',hot);
 this.btn[k].classList.toggle('on',k==='wash'&&!!s.washing);
 }
 const gauge=$('sh-gauge');
+const wasHidden=gauge.hidden;
 if(s.washing){
 show('sh-gauge',true);
+if(wasHidden)this.placeGauge();
 const pct=Math.min(100,s.washProg*100);
 const inZone=s.washProg>=LOTUS.WASH_MIN&&s.washHold<=LOTUS.WASH_OVER;
 $('lg-lbl').textContent=s.washProg>=1
-?`⚠️ Đã sạch 100% — thả nút ngay kẻo trầy củ!`
+?'⚠️ Thả ngay kẻo trầy củ!'
 :inZone
-?`💦 Đạt ${Math.round(pct)}% — thả nút ngay!`
-:`💦 Giữ nút xịt bùn (${Math.round(pct)}%) → thả ở 80–100%`;
+?`💦 Thả ngay! (${Math.round(pct)}%)`
+:`💦 Giữ để xịt… ${Math.round(pct)}%`;
 const z=$('lg-zone');z.style.left='80%';z.style.width='20%';
 $('lg-fill').style.width=`${pct.toFixed(1)}%`;
 $('lg-needle').style.left=`${pct.toFixed(1)}%`;
 }else if(near&&near.state===2&&s.busy<=0&&!s.over){
 show('sh-gauge',true);
+if(wasHidden)this.placeGauge();
 const needle=pullNeedle(s)*100;
 const zW=s.pullZone*100;
 const zL=50-zW/2;
 $('lg-lbl').textContent=inPullZone(s)
-?'🪴 Kim trong vùng xanh — bấm Nhổ (抜く) ngay!'
-:'🪴 Căn kim vào vùng xanh ở giữa rồi bấm Nhổ (抜く)';
+?'🪴 Bấm Nhổ ngay!'
+:'🪴 Chờ kim vào vùng xanh';
 const z=$('lg-zone');z.style.left=`${zL.toFixed(1)}%`;z.style.width=`${zW.toFixed(1)}%`;
 $('lg-fill').style.width='0%';
 $('lg-needle').style.left=`${needle.toFixed(1)}%`;
