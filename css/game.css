@@ -34,6 +34,8 @@ button:focus-visible { outline: 2.5px solid var(--sakura); outline-offset: 2px; 
 .screen { position: absolute; inset: 0; z-index: 6; display: grid; align-items: end; justify-items: center; padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); pointer-events: none; }
 .title-card, #modal .card, .tip { box-sizing: border-box; } /* width: 100% must include the padding (no overflow at 375 px) */
 .title-card { pointer-events: auto; width: min(420px, 100%); background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 20px; padding: 22px 18px 16px; display: grid; gap: 12px; text-align: center; }
+/* YABAI logo (the game maker's own brand): white letters on the dark panels, never stretched */
+.brand { display: block; width: 132px; max-width: 45%; height: auto; margin: 0 auto 2px; }
 .title-card .jp { color: var(--accent); letter-spacing: .25em; font-size: 13px; }
 .title-card h1 { margin: 0; font-size: 34px; font-weight: 800; text-wrap: balance; }
 .title-card .sub { margin: 0; color: var(--ink-dim); font-size: 14px; text-wrap: balance; }
