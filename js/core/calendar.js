@@ -90,6 +90,8 @@ export const EVENTS = [
     desc: 'Ba ngày Tết Năm mới (三が日), đi lễ đầu năm 初詣 tại đền さくら神社 cầu bình an.' },
   { id: 'seijin', season: 3, days: [8, 8], jp: '成人の日', vi: 'Lễ thành nhân', kind: 'red', icon: '👘', fx: { mental: 4, culture: 3 },
     desc: 'Ngày lễ chúc mừng các bạn trẻ bước sang tuổi trưởng thành 20.' },
+  { id: 'tet_vn', season: 3, days: [11, 11], jp: 'テト', vi: 'Tết Nguyên Đán', kind: 'event', time: 'evening', icon: '🧧', fx: { mental: 6, culture: 3 },
+    desc: 'Đêm Tết cổ truyền Việt Nam nơi đất khách — vẫn phải đi làm ban ngày, tối gọi về nhà đón giao thừa.' },
   { id: 'kenkoku', season: 3, days: [12, 12], jp: '建国記念の日', vi: 'Ngày Quốc khánh', kind: 'red', icon: '🎌', fx: { mental: 4, culture: 2 },
     desc: 'Ngày lễ kỷ niệm kiến quốc của Nhật Bản.' },
   { id: 'valentine', season: 3, days: [13, 13], jp: 'バレンタイン', vi: 'Ngày Valentine', kind: 'event', icon: '🍫', fx: { mental: 6, culture: 2 },

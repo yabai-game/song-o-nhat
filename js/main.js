@@ -38,6 +38,15 @@ import {
   eventsOn, isRedDay, isOffDay, isMandatoryOff, isSaturdayWorkable,
   weatherOf, weatherFx, paydayOn, payslip, applyPay,
 } from './core/calendar.js';
+import {
+  REMIT_ROUTES, ensureHome, inboxFor, unreadCount, sendMoney, callHome,
+  dayTick, afterShift, wash, missedDuty, availableVnDishes, cookVietnamese, homeChips, totalDays,
+} from './core/home_life.js';
+import {
+  HOLI, ensureHolidayState, holidayActs, openFukubukuro,
+  buyBox, openBox, marketPrice, sellOnApp, buyFromStranger,
+  sideJobOffer, takeSideJob, refuseSideJob, checkCaught,
+} from './core/holiday.js';
 
 const storage = (() => { try { return window.localStorage; } catch { return { getItem: () => null, setItem() {}, removeItem() {} }; } })();
 const G = {
@@ -225,17 +234,24 @@ function bindUi() {
   $('btn-career').addEventListener('click', careerScreen);
   $('btn-menu').addEventListener('click', pauseMenu);
   $('btn-cal').addEventListener('click', calendarModal);
+  $('btn-phone')?.addEventListener('click', phoneModal);
   $('day-label').parentElement?.addEventListener('click', calendarModal);
-  // the ☰ menu button and 📅 calendar button show whenever a game screen (not the title / creator) is up
+  // the ☰ menu button, 📅 calendar button, and 📱 LIME phone button show whenever a game screen is up
   setInterval(() => {
     const on = !['title', 'creator', 'jobs'].includes(G.mode) && $('title').hidden && $('creator').hidden;
     $('btn-menu').hidden = !on;
     $('btn-cal').hidden = !on || !G.S;
+    if ($('btn-phone')) $('btn-phone').hidden = !on || !G.S;
     $('app').classList.toggle('has-menu', on);
     if (G.S) {
-      const red = isRedPill(ensureCal(G.S));
+      const cal = ensureCal(G.S);
+      const red = isRedPill(cal);
       $('day-label').parentElement?.classList.toggle('red-day', red);
       $('sh-rank')?.classList.toggle('red-day', red);
+      const u = unreadCount(G.S, cal);
+      const bd = $('phone-badge');
+      if (bd) { bd.hidden = u <= 0; bd.textContent = String(u); }
+      renderHomeChips(G.S, cal);
     }
   }, 300);
   $('stats').addEventListener('click', onStatsTap);
@@ -251,7 +267,7 @@ function bindUi() {
     if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
     // sit just below whatever is on the left under the top bar (the day / rank pill can wrap to two lines)
     let bottom = 0;
-    for (const id of ['sh-rank', 'sh-place', 'sh-tip', 'sh-ticket']) {
+    for (const id of ['sh-rank', 'sh-chips', 'sh-place', 'sh-tip', 'sh-ticket']) {
       const el = $(id); if (!el || el.hidden) continue;
       const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
       if (r.height && r.left < b.right && r.right > b.left) bottom = Math.max(bottom, r.bottom);
@@ -415,6 +431,209 @@ function calendarModal() {
   renderCal();
 }
 
+function renderHomeChips(S = G.S, cal = ensureCal(S)) {
+  if (!S || S.flags?.demo) {
+    if ($('day-chips')) $('day-chips').hidden = true;
+    if ($('sh-chips')) $('sh-chips').hidden = true;
+    return;
+  }
+  const chips = homeChips(S, cal);
+  const html = chips.map((c) => `<span class="hchip" data-c="${c.id}">${esc(c.text)}</span>`).join('');
+  for (const id of ['day-chips', 'sh-chips']) {
+    const el = $(id);
+    if (!el) continue;
+    el.hidden = chips.length === 0;
+    if (el.dataset.h !== html) {
+      el.dataset.h = html;
+      el.innerHTML = html;
+    }
+  }
+}
+
+function phoneModal(startTab = 'lime') {
+  // the phone also opens over a choice card (day-off hub, morning…); closing it brings that card back
+  const overCard = !$('modal').hidden && G.mode === 'talk' && !!G.S?.life;
+  if ((!$('modal').hidden && !overCard) || !G.S) return;
+  const mod = activeModule(), was = mod ? mod.paused : false;
+  if (mod) mod.paused = true;
+  const S = G.S, cal = ensureCal(S);
+  const h = ensureHome(S);
+  ensureHolidayState(S);
+  let tab = startTab === 'chocu' ? 'chocu' : 'lime';
+
+  const renderPhone = () => {
+    const tabBar = `<div class="seg" style="margin-bottom:6px;width:100%;justify-content:center">
+      <button type="button" id="tab-lime" aria-pressed="${tab === 'lime'}">💬 Tin nhắn LIME</button>
+      <button type="button" id="tab-chocu" aria-pressed="${tab === 'chocu'}">🛒 Chợ Cũ フリマ (${S.cards.length})</button>
+    </div>`;
+
+    if (tab === 'chocu') {
+      const today = totalDays(cal);
+      const cardRows = S.cards.map((c, idx) => {
+        const daysHeld = Math.max(0, today - (c.boughtDay || today));
+        const est = c.opened ? c.value : marketPrice(c, daysHeld, () => ((idx * 37 + today * 13) % 100) / 100);
+        c.askPrice = est;
+        const net = Math.max(0, est - Math.round(est * HOLI.APP_FEE_RATE) - HOLI.APP_SHIP_FEE);
+        return `<div class="lime-msg">
+          <div class="lime-head"><b>🃏 ${c.opened ? `Thẻ đã mở · ${esc(c.rarity || 'Thường')}` : 'モンスターカード 限定BOX (Nguyên seal)'}</b><span>Mua: ${yen(c.price || 5500)}</span></div>
+          <div>Giá thị trường Chợ Cũ: <b>${yen(est)}</b> · Thực nhận sau phí 10% + ship 700 ¥: <b>${yen(net)}</b></div>
+          <div class="lime-acts">
+            ${!c.opened ? `<button type="button" class="pri" data-cidx="${idx}" data-cact="open">✨ Bóc hộp xem thẻ</button>` : ''}
+            <button type="button" class="pri" data-cidx="${idx}" data-cact="sell">💰 Đăng bán (nhận ${yen(net)})</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      card(`<h2>🛒 フリマ App "Chợ Cũ"</h2>
+        ${tabBar}
+        <p style="font-size:12.5px;color:var(--ink-dim)">Sàn mua bán đồ cũ & thẻ sưu tầm モンスターカード (phí sàn 10% + phí ship 700 ¥) · 💴 Tiền mặt: <b>${yen(S.money)}</b></p>
+        <div class="lime-list" id="chocu-list">${cardRows || '<p>Bạn chưa có hộp thẻ hay món đồ nào trong kho. Sáng ngày lễ có thể xếp hàng mua モンスターカード 限定BOX trước 10:00!</p>'}</div>`, [
+        { label: '🤝 Mua lại hộp từ người lạ trên Chợ Cũ (4.800 ¥ · coi chừng hàng giả)', cls: 'ghost', on: () => {
+          const r = buyFromStranger(S, 4800);
+          if (!r.ok) { toast('💴 Chưa đủ tiền', 'Cần 4.800 ¥'); renderPhone(); return; }
+          if (!S.flags?.demo) save(S, storage);
+          if (r.fake) toast('😱 Mua phải hộp giả dán lại seal!', 'Bên trong toàn giấy vụn! Mất trắng 4.800 ¥ · 🧠 −6', 5);
+          else toast('📦 Đã mua 1 hộp モンスターカード 限定BOX!', 'May quá, hộp thật nguyên seal!');
+          if (!$('dayhud').hidden) $('stats').innerHTML = statsHtml();
+          renderPhone();
+        } },
+        { label: 'Đóng điện thoại', on: () => { if (mod) mod.paused = was; if (overCard) runStep(); } },
+      ]);
+
+      $('tab-lime')?.addEventListener('click', () => { tab = 'lime'; renderPhone(); });
+      $('tab-chocu')?.addEventListener('click', () => { tab = 'chocu'; renderPhone(); });
+      for (const b of document.querySelectorAll('#chocu-list button[data-cidx]')) {
+        b.addEventListener('click', () => {
+          const idx = Number(b.dataset.cidx);
+          const item = S.cards[idx];
+          if (!item) return;
+          if (b.dataset.cact === 'open') {
+            const r = openBox(S, item);
+            toast(`✨ Mở ra thẻ ${r.rarity}!`, `Định giá ${yen(r.value)} · Giữ sưu tầm 🧠 +2`, 4.5);
+          } else if (b.dataset.cact === 'sell') {
+            const r = sellOnApp(S, item);
+            const pf = r.profit >= 0 ? `Lãi +${yen(r.profit)}` : `Lỗ −${yen(-r.profit)}`;
+            toast(`💰 Đã bán trên Chợ Cũ +${yen(r.net)}`, `Phí 10% (${yen(r.fee)}) + ship 700 ¥ · ${pf}`, 4.5);
+          }
+          if (!S.flags?.demo) save(S, storage);
+          if (!$('dayhud').hidden) $('stats').innerHTML = statsHtml();
+          renderPhone();
+        });
+      }
+      return;
+    }
+
+    const list = inboxFor(S, cal).slice().reverse();
+    let marked = false;
+    for (const m of list) {
+      if (!m.read) { m.read = true; marked = true; }
+    }
+    if (marked && !S.flags?.demo) save(S, storage);
+
+    const sj = S.life ? sideJobOffer(S, cal, S.seed) : null;
+    const sjHtml = sj && !S.lDay?.sideJobHandled ? `<div class="lime-msg unread">
+      <div class="lime-head"><b>🕵️ Người quen giới thiệu việc chui</b><span>Ngày nghỉ · Tiền mặt</span></div>
+      <div>「${esc(sj.jp)}」 — Ê, hôm nay nghỉ có chỗ cần người phụ dọn kho trả tiền mặt <b>${yen(sj.pay)}</b> liền tay không qua sổ sách. Đi không?</div>
+      <div class="lime-acts">
+        <button type="button" class="pri" id="sj-refuse">🙅 Từ chối (giữ đúng luật 資格外活動 · 🧠 +1)</button>
+        <button type="button" id="sj-take">⚠️ Đi làm chui (+${yen(sj.pay)}, ❤️ −10 · rủi ro bị phát hiện)</button>
+      </div>
+    </div>` : '';
+
+    const rows = list.slice(0, 12).map((m) => {
+      let acts = '';
+      if (!m.replied) {
+        if (m.ask > 0) {
+          acts = `<div class="lime-acts">
+            <button type="button" class="pri" data-uid="${esc(m.uid)}" data-act="legal">💸 Gửi qua dịch vụ chính thức (${yen(m.ask)} + phí 1.500 ¥)</button>
+            <button type="button" class="pri" data-uid="${esc(m.uid)}" data-act="cheap">💸 Nhờ người quen chuyển chui (${yen(m.ask)} + phí 300 ¥, tỉ giá tốt)</button>
+            <button type="button" data-uid="${esc(m.uid)}" data-act="later">Nhắn lại: tháng sau con gửi</button>
+          </div>`;
+        } else {
+          acts = `<div class="lime-acts">
+            <button type="button" data-uid="${esc(m.uid)}" data-act="reply">💬 Nhắn lại hỏi thăm gia đình</button>
+          </div>`;
+        }
+      } else {
+        acts = `<div style="font-size:11.5px;color:var(--ink-dim)">✓ ${esc(m.replyNote || 'Đã phản hồi')}</div>`;
+      }
+      return `<div class="lime-msg">
+        <div class="lime-head"><b>💬 ${esc(m.from)}</b><span>Ngày ${m.totalDay}${m.why ? ` · ${esc(m.why)}` : ''}</span></div>
+        <div>${esc(m.text)}</div>
+        ${acts}
+      </div>`;
+    }).join('');
+
+    card(`<h2>📱 Điện thoại · LIME & Chợ Cũ</h2>
+      ${tabBar}
+      <p style="font-size:12.5px;color:var(--ink-dim)">🏠 Nhớ nhà: <b>${h.homesick}/100</b> · 👕 Quần áo bẩn: <b>${h.dirty}/100</b> · 💴 Tiền mặt: <b>${yen(S.money)}</b></p>
+      <div class="lime-list" id="lime-list">${sjHtml}${rows || '<p>Chưa có tin nhắn mới.</p>'}</div>`, [
+      { label: 'Đóng LIME', on: () => { if (mod) mod.paused = was; if (overCard) runStep(); } },
+    ]);
+
+    $('tab-lime')?.addEventListener('click', () => { tab = 'lime'; renderPhone(); });
+    $('tab-chocu')?.addEventListener('click', () => { tab = 'chocu'; renderPhone(); });
+    $('sj-refuse')?.addEventListener('click', () => {
+      const r = refuseSideJob(S);
+      S.lDay = S.lDay || {};
+      S.lDay.sideJobHandled = 'refused';
+      if (!S.flags?.demo) save(S, storage);
+      toast('🙅 Đã từ chối làm thêm chui', `${r.lesson} · 🧠 +1`, 5);
+      if (!$('dayhud').hidden) $('stats').innerHTML = statsHtml();
+      renderPhone();
+    });
+    $('sj-take')?.addEventListener('click', () => {
+      takeSideJob(S);
+      S.lDay = S.lDay || {};
+      S.lDay.sideJobHandled = 'taken';
+      if (S.lDay.min) S.lDay.min += 240;
+      if (!S.flags?.demo) save(S, storage);
+      toast('⚠️ Đã đi làm thêm chui ngày nghỉ', `Nhận +${yen(HOLI.SIDE_JOB_PAY)} tiền mặt · ❤️ −10 · Nơm nớp lo bị phát hiện trong 10 ngày tới!`, 5);
+      if (!$('dayhud').hidden) $('stats').innerHTML = statsHtml();
+      renderPhone();
+    });
+
+    for (const b of document.querySelectorAll('#lime-list button[data-uid]')) {
+      b.addEventListener('click', () => {
+        const uid = b.dataset.uid, act = b.dataset.act;
+        const msg = h.inbox.find((x) => x.uid === uid);
+        if (!msg || msg.replied) return;
+        if (act === 'legal' || act === 'cheap') {
+          const r = sendMoney(S, msg.ask, act);
+          if (!r.ok) {
+            toast('💴 Chưa đủ tiền gửi', `Cần ${yen(msg.ask + r.fee)} (gồm phí ${yen(r.fee)})`);
+            return;
+          }
+          msg.replied = true;
+          if (r.lost) {
+            msg.replyNote = `Bị lừa mất ${yen(msg.ask + r.fee)} khi chuyển chui!`;
+            toast('😱 Bị lừa chuyển tiền chui!', `Kẻ trung gian chặn LIME! Mất trắng ${yen(msg.ask + r.fee)} · 🧠 −10`, 5);
+          } else {
+            msg.replyNote = `Đã gửi ${yen(msg.ask)} (${act === 'legal' ? 'chính thức' : 'nhờ người quen'})`;
+            toast(`💸 Đã gửi ${yen(msg.ask)} cho ${msg.from}`, `Phí ${yen(r.fee)} · Gia đình mừng rỡ cảm ơn!`, 4.5);
+          }
+        } else if (act === 'later') {
+          msg.replied = true;
+          msg.replyNote = 'Đã hẹn tháng sau gửi';
+          h.homesick = Math.min(100, (h.homesick || 0) + 3);
+          toast(`💬 Đã nhắn lại cho ${msg.from}`, 'Hẹn tháng sau lĩnh lương con gửi về nhé');
+        } else if (act === 'reply') {
+          msg.replied = true;
+          msg.replyNote = 'Đã nhắn hỏi thăm';
+          applyFx(S, msg.fx || { mental: 2 });
+          h.homesick = Math.max(0, (h.homesick || 0) - 4);
+          toast(`💬 Đã nhắn cho ${msg.from}`, 'Cả nhà yên tâm hơn · 🧠 +2');
+        }
+        if (!S.flags?.demo) save(S, storage);
+        if (!$('dayhud').hidden) $('stats').innerHTML = statsHtml();
+        renderHomeChips(S, cal);
+        renderPhone();
+      });
+    }
+  };
+  renderPhone();
+}
+
 // ---------- changing job (player feedback S13) ----------
 function careerScreen() {
   const S = load(storage); if (!S) return;
@@ -567,6 +786,7 @@ async function runStep() {
 
   // Endless 4-season calendar life loop (S.life === true)
   S.lDay = S.lDay || {};
+  if (S.lDay.caughtReport) return caughtSideJobCard();
   if (S.sStep === 0 && paydayOn(S.cal) && !S.lDay.paid) return paydayCard();
   const out = S.sStep < 5 ? checkCollapse(S) : null;
   if (out) return sickDay(out);
@@ -613,19 +833,50 @@ function paydayCard() {
   const P = G.player; P.holder.rotation.x = 0; P.holder.position.set(0.2, 0, 0.8); P.yaw = 0; P.play('idle');
   const remDebt = Math.max(0, (S.debt || 0) - p.debt);
   const avail = (S.money || 0) + p.net;
-  const pickRemit = (remit, mental) => {
-    applyPay(S, remit);
+
+  const finishNoRemit = () => {
+    applyPay(S, 0);
     S.lDay.paid = true;
     save(S, storage);
-    if (remit > 0) toast(`💸 Đã gửi ${yen(remit)} về nhà`, `Gia đình nhắn cảm ơn · 🧠 +${mental}`, 4.5);
-    else toast(`💴 Nhận lương thực lĩnh +${yen(p.net)}`, remDebt > 0 ? `Còn nợ ${yen(remDebt)}` : '🎉 Đã trả hết nợ môi giới!', 4);
+    toast(`💴 Nhận lương thực lĩnh +${yen(p.net)}`, remDebt > 0 ? `Còn nợ ${yen(remDebt)}` : '🎉 Đã trả hết nợ môi giới!', 4);
     runStep();
   };
+
+  const chooseRouteFor = (amount) => {
+    const doSend = (route) => {
+      applyPay(S, 0);
+      const r = sendMoney(S, amount, route);
+      S.lDay.paid = true;
+      save(S, storage);
+      if (r.lost) {
+        card(`<div class="big">😱</div><h2>Bị lừa mất tiền chuyển chui!</h2>
+          <p>Người nhận chuyển tiền tay ba đột nhiên khóa tài khoản LIME và biến mất. Bạn mất trắng <b>${yen(amount + r.fee)}</b>!</p>
+          <p class="lesson">⚠️ Chuyển tiền chui (<span class="jp">地下銀行</span>) tuy phí rẻ và tỉ giá cao hơn chút nhưng vừa phạm luật vừa có nguy cơ mất trắng toàn bộ tiền mồ hôi nước mắt.</p>`, [
+          { label: 'Đau xót tiếp tục →', on: runStep },
+        ]);
+        return;
+      }
+      toast(`💸 Đã gửi ${yen(amount)} về nhà`, `Phí ${yen(r.fee)} · Gia đình nhắn cảm ơn!`, 4.5);
+      runStep();
+    };
+    card(`<h2>💸 Chọn cách gửi ${yen(amount)} về quê · 海外送金</h2>
+      <p>Chọn dịch vụ chuyển tiền cho gia đình:</p>
+      <ul>
+        <li>🏦 <b>${esc(REMIT_ROUTES.legal.vi)}:</b> phí <b>${yen(REMIT_ROUTES.legal.fee)}</b>, tỉ giá chuẩn 100%, an toàn tuyệt đối.</li>
+        <li>🤝 <b>${esc(REMIT_ROUTES.cheap.vi)}:</b> phí <b>${yen(REMIT_ROUTES.cheap.fee)}</b>, tỉ giá +3%, nhưng có rủi ro 15% bị bùng mất trắng!</li>
+      </ul>`, [
+      { label: `🏦 Dịch vụ chính thức / ゆうちょ (phí ${yen(REMIT_ROUTES.legal.fee)})`, on: () => doSend('legal') },
+      { label: `🤝 Nhờ người quen chuyển chui (phí ${yen(REMIT_ROUTES.cheap.fee)}, tỉ giá tốt)`, on: () => doSend('cheap') },
+      { label: '← Chọn lại mức tiền', cls: 'ghost', on: paydayCard },
+    ]);
+  };
+
   const btns = [
-    { label: 'Không gửi (giữ lại tiêu dùng)', cls: 'ghost', on: () => pickRemit(0, 0) },
+    { label: 'Không gửi (giữ lại tiêu dùng)', cls: 'ghost', on: finishNoRemit },
   ];
-  if (avail >= 10000) btns.unshift({ label: '💸 Gửi 10.000 ¥ về nhà (🧠 +5)', on: () => pickRemit(10000, 5) });
-  if (avail >= 30000) btns.unshift({ label: '💸 Gửi 30.000 ¥ về nhà (🧠 +8)', on: () => pickRemit(30000, 8) });
+  if (avail >= 10000 + REMIT_ROUTES.legal.fee) btns.unshift({ label: '💸 Gửi 10.000 ¥ về nhà (🧠 +3)', on: () => chooseRouteFor(10000) });
+  if (avail >= 30000 + REMIT_ROUTES.legal.fee) btns.unshift({ label: '💸 Gửi 30.000 ¥ về nhà (🧠 +6)', on: () => chooseRouteFor(30000) });
+  if (avail >= 50000 + REMIT_ROUTES.legal.fee) btns.unshift({ label: '💸 Gửi 50.000 ¥ về nhà (🧠 +9)', on: () => chooseRouteFor(50000) });
 
   card(`<h2>💴 Phiếu lương · 給与明細</h2>
     <div class="payslip">
@@ -690,6 +941,7 @@ function saturdayPrompt() {
 
 function seasonalWorkEventCard(ev) {
   const S = G.S;
+  if (ev.id === 'tet_vn') return tetVnEveningCard(ev);
   setStage('town'); G.stages.town.setTime(ev.time === 'evening' ? 'night' : 'day'); hideNpcs();
   G.mode = 'talk';
   dayHud(`${ev.icon} ${ev.vi}`);
@@ -701,6 +953,81 @@ function seasonalWorkEventCard(ev) {
     <div class="deltas">${deltaChips(deltas)}</div>`, [
     { label: 'Tiếp tục →', on: () => runStep() },
   ]);
+}
+
+function tetVnEveningCard(ev) {
+  const S = G.S;
+  setStage('dorm'); G.stages.dorm.setTime('night'); hideNpcs();
+  G.mode = 'talk';
+  dayHud(`🧧 ${ev.vi}`);
+  if (!S.lDay.tetBaseFx) {
+    applyFx(S, ev.fx || { mental: 6, culture: 3 });
+    S.lDay.tetBaseFx = true;
+    save(S, storage);
+  }
+  const sendTetLixi = (amount) => {
+    card(`<h2>🧧 Gửi lì xì Tết ${yen(amount)} về quê</h2>
+      <p>Chọn cách gửi tiền lì xì năm mới cho gia đình:</p>`, [
+      { label: `🏦 Dịch vụ chính thức / ゆうちょ (phí ${yen(REMIT_ROUTES.legal.fee)})`, on: () => {
+        const r = sendMoney(S, amount, 'legal');
+        if (!r.ok) { toast('💴 Không đủ tiền', `Cần ${yen(amount + r.fee)}`); tetVnEveningCard(ev); return; }
+        S.lDay.tetLixi = true; save(S, storage);
+        toast(`🧧 Đã gửi lì xì ${yen(amount)} về nhà!`, 'Cả nhà chúc Tết rộn ràng qua LIME!');
+        tetVnEveningCard(ev);
+      } },
+      { label: `🤝 Nhờ người quen chuyển chui (phí ${yen(REMIT_ROUTES.cheap.fee)}, tỉ giá tốt)`, on: () => {
+        const r = sendMoney(S, amount, 'cheap');
+        if (!r.ok) { toast('💴 Không đủ tiền', `Cần ${yen(amount + r.fee)}`); tetVnEveningCard(ev); return; }
+        S.lDay.tetLixi = true; save(S, storage);
+        if (r.lost) toast('😱 Bị lừa mất tiền lì xì!', `Mất trắng ${yen(amount + r.fee)} · 🧠 −10`, 5);
+        else toast(`🧧 Đã gửi lì xì ${yen(amount)} về nhà!`, 'Cả nhà mừng tuổi đầu xuân!');
+        tetVnEveningCard(ev);
+      } },
+      { label: '← Quay lại đêm Tết', cls: 'ghost', on: () => tetVnEveningCard(ev) },
+    ]);
+  };
+  const btns = [];
+  if (!S.lDay.tetCalled) {
+    btns.push({
+      label: '📹 Gọi video đón giao thừa cùng cả nhà (🧠 +6, nhớ nhà −30)',
+      on: () => {
+        const r = callHome(S, 'video');
+        S.lDay.tetCalled = true;
+        save(S, storage);
+        toast('📹 Đón giao thừa qua màn hình điện thoại', `Chúc mừng năm mới cả nhà! · Nhớ nhà còn ${r.homesick}/100`);
+        tetVnEveningCard(ev);
+      },
+    });
+  }
+  if (!S.lDay.tetLixi) {
+    btns.push({ label: '🧧 Gửi lì xì 5.000 ¥ về nhà', on: () => sendTetLixi(5000) });
+    btns.push({ label: '🧧 Gửi lì xì 10.000 ¥ về nhà', on: () => sendTetLixi(10000) });
+  }
+  if (!S.lDay.tetCooked) {
+    btns.push({
+      label: '🟩 Nấu bánh chưng với bạn phòng (góp 1.500 ¥ · 🧠 +12, ❤️ +3, 🤝 +3)',
+      on: () => {
+        const r = cookVietnamese(S, 'banh_chung');
+        if (!r.ok) { toast('💴 Chưa đủ tiền góp', 'Cần 1.500 ¥'); return; }
+        S.lDay.tetCooked = true;
+        save(S, storage);
+        toast('🟩 Cắt bánh chưng đêm Tết nơi đất khách', 'Ấm lòng hương vị quê nhà · 🧠 +12, ❤️ +3, 🤝 +3');
+        tetVnEveningCard(ev);
+      },
+    });
+  }
+  btns.push({
+    label: 'Tiếp tục buổi tối →',
+    cls: btns.length > 0 ? 'ghost' : '',
+    on: () => {
+      S.lDay.eventDone = true;
+      save(S, storage);
+      runStep();
+    },
+  });
+  card(`<div class="big">🧧</div><h2>🎉 ${esc(ev.jp)} — ${esc(ev.vi)}</h2>
+    <p>${esc(ev.desc)}</p>
+    <p class="lesson">Ở Nhật ngày mùng 1 Tết âm lịch vẫn là ngày đi làm bình thường. Tối về ký túc xá, anh em thực tập sinh mới quây quần gọi về quê đón giao thừa và cắt bánh chưng.</p>`, btns);
 }
 
 async function lifeDayOffHub() {
@@ -748,6 +1075,40 @@ async function lifeDayOffHub() {
         });
       },
     });
+    if (!d.washed) {
+      btns.push({
+        label: '🧺 Tiệm giặt コインランドリー (500 ¥ · +1h30 · sấy khô ngay)',
+        on: () => {
+          const r = wash(S, 'coin', curWeather(S));
+          if (!r.ok) { toast('💴 Chưa đủ tiền', 'Cần 500 ¥ để giặt sấy tại コインランドリー'); return; }
+          d.washed = true;
+          d.min += r.min;
+          save(S, storage);
+          toast('🧺 Đã giặt sấy sạch thơm ở コインランドリー', '−500 ¥ · Quần áo bẩn về 0/100 · ⏰ ' + fmtClock(d.min));
+          runStep();
+        },
+      });
+    }
+    for (const hAct of holidayActs(S, S.cal)) {
+      if (d['holi_' + hAct.id] && hAct.id !== 'cards') continue;
+      btns.push({
+        label: `${hAct.icon} ${hAct.vi} (${hAct.cost ? yen(hAct.cost) : 'Miễn phí'} · +${Math.round(hAct.min / 60 * 10) / 10}h)`,
+        on: () => runHolidayAct(hAct),
+      });
+    }
+    const sj = sideJobOffer(S, S.cal, S.seed);
+    if (sj && !d.sideJobHandled) {
+      btns.push({
+        label: `🕵️ Lời rủ làm thêm chui ngày nghỉ (+${yen(sj.pay)} tiền mặt · xem trong LIME)`,
+        on: () => phoneModal('lime'),
+      });
+    }
+  }
+  if (!d.cookedVn) {
+    btns.push({
+      label: '🍜 Nấu món Việt với bạn phòng (+2h–3h · 🧠 +8..+12, ❤️ +3, 🤝 +3)',
+      on: () => lifeVnCookPicker(),
+    });
   }
   btns.push({
     label: '📚 Học tiếng Nhật ở nhà (+2h · 🗣️ +2, 🧠 −2)',
@@ -774,14 +1135,23 @@ async function lifeDayOffHub() {
   }
   if (!d.called) {
     btns.push({
-      label: '📱 Gọi về nhà (+1h · 🧠 +6)',
+      label: '📱 Gọi về nhà (+30p–1h · giảm nhớ nhà)',
       on: () => {
-        applyFx(S, { mental: 6 });
-        d.called = true;
-        d.min += 60;
-        save(S, storage);
-        toast('📱 Gọi điện về nhà', `Gia đình động viên · 🧠 +6 · ⏰ ${fmtClock(d.min)}`);
-        runStep();
+        card('<h2>📱 Gọi điện về nhà ngày nghỉ</h2><p>Chọn cách gọi cho gia đình:</p>', [
+          { label: '📞 Gọi thoại (30 phút · 🧠 +3, nhớ nhà −10)', on: () => {
+            const r = callHome(S, 'voice');
+            d.called = true; d.min += r.min; save(S, storage);
+            toast('📞 Đã gọi thoại về nhà', `🧠 +3 · Nhớ nhà còn ${r.homesick}/100 · ⏰ ${fmtClock(d.min)}`);
+            runStep();
+          } },
+          { label: '📹 Gọi video cả nhà (60 phút · 🧠 +6, nhớ nhà −30)', on: () => {
+            const r = callHome(S, 'video');
+            d.called = true; d.min += r.min; save(S, storage);
+            toast('📹 Đã gọi video cả nhà', `🧠 +6 · Nhớ nhà còn ${r.homesick}/100 · ⏰ ${fmtClock(d.min)}`);
+            runStep();
+          } },
+          { label: '← Quay lại', cls: 'ghost', on: () => runStep() },
+        ]);
       },
     });
   }
@@ -800,6 +1170,143 @@ async function lifeDayOffHub() {
   card(`<h2>${isTyphoon ? '🌀 Nghỉ bão tại phòng' : '🎌 Hôm nay đi đâu?'}</h2>
     <p>⏰ Bây giờ là <b>${fmtClock(d.min)}</b> (tới 21:00 về phòng) · Thời tiết: <b>${fx.icon} ${esc(fx.vi)}</b></p>
     ${ev ? `<p class="lesson">🎉 <b>${esc(ev.jp)} — ${esc(ev.vi)}:</b> ${esc(ev.desc)}</p>` : ''}`, btns);
+}
+
+function lifeVnCookPicker() {
+  const S = G.S, d = S.lDay;
+  const dishes = availableVnDishes(ensureCal(S));
+  const btns = dishes.map((dish) => ({
+    label: `${dish.icon || '🍜'} ${dish.vi} (góp ${yen(dish.share)} · +${Math.round(dish.min / 60)}h · 🧠 +${dish.fx.mental}, ❤️ +${dish.fx.health}, 🤝 +${dish.fx.team})`,
+    on: () => {
+      const r = cookVietnamese(S, dish);
+      if (!r.ok) {
+        toast('💴 Không đủ tiền góp nấu ăn', `Cần ${yen(dish.share)}`);
+        return;
+      }
+      d.cookedVn = true;
+      d.min = (d.min || 540) + dish.min;
+      save(S, storage);
+      toast(`${dish.icon || '🍜'} Đã nấu ${dish.vi} cùng bạn phòng!`, `🧠 +${dish.fx.mental} · ❤️ +${dish.fx.health} · 🤝 +${dish.fx.team} · ⏰ ${fmtClock(d.min)}`, 4.5);
+      runStep();
+    },
+  }));
+  btns.push({ label: '← Quay lại', cls: 'ghost', on: () => runStep() });
+  card(`<h2>🍜 Nấu món Việt cuối tuần · ベトナム料理</h2>
+    <p>Góp tiền mua nguyên liệu nấu bữa cơm quê hương cùng anh em cùng phòng ký túc xá:</p>
+    <p class="lesson">Nấu ăn chung giúp vơi nỗi nhớ nhà, hồi phục thể lực và gắn kết tình anh em cùng phòng.</p>`, btns);
+}
+
+function caughtSideJobCard() {
+  const S = G.S, rep = S.lDay.caughtReport;
+  delete S.lDay.caughtReport;
+  save(S, storage);
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('🚨 Vi phạm quy định');
+  if (rep.lostJob) {
+    card(`<div class="big">🚨</div><h2>Bị chấm dứt hợp đồng vì tái phạm làm thêm chui!</h2>
+      <p>Nghiệp đoàn và công ty phát hiện bạn tiếp tục đi làm thêm ngoài tư cách lưu trú (<span class="jp">資格外活動違反</span>) lần thứ ${rep.count}. Bạn bị buộc thôi việc tại nơi làm hiện tại (👷 −30, 🧠 −20).</p>
+      <p class="lesson">⚠️ Để không phải về nước giữa chừng, bạn bắt buộc phải đăng ký chuyển sang ngành khác và làm lại từ bậc 1 (S13).</p>`, [
+      { label: '🔄 Chuyển ngành bắt buộc →', on: () => {
+        const nextJob = targets(S)[0] || 'bento';
+        S.job = nextJob;
+        S.jobXp = 0;
+        S.risk.lostJob = false;
+        save(S, storage);
+        careerScreen();
+      } },
+    ]);
+    return;
+  }
+  card(`<div class="big">🚨</div><h2>Bị phát hiện làm thêm chui · 資格外活動違反</h2>
+    <p>Nghiệp đoàn nhận được tin báo bạn đi làm thêm nhận tiền mặt ngày nghỉ. Bạn bị lập biên bản kỷ luật lần 1:</p>
+    <ul>
+      <li>💸 Phạt vi phạm hợp đồng: <b>−${yen(rep.fine || 30000)}</b></li>
+      <li>👷 Uy tín với quản lý <b>−20</b> · 🧠 Tinh thần <b>−15</b></li>
+    </ul>
+    <p class="lesson">⚠️ Thực tập sinh chỉ được làm việc tại đúng đơn vị tiếp nhận đã đăng ký. Tái phạm lần 2 sẽ bị mất việc ngay lập tức!</p>`, [
+    { label: 'Xin lỗi và tiếp tục →', on: () => runStep() },
+  ]);
+}
+
+function runHolidayAct(hAct) {
+  const S = G.S, d = S.lDay;
+  ensureHolidayState(S);
+  if (hAct.id === 'cards') {
+    const r = buyBox(S, d.min || 540);
+    if (!r.ok) {
+      if (r.soldOut) {
+        card(`<div class="big">🪧</div><h2>売り切れ！ — Đã bán hết sạch!</h2>
+          <p>Bạn tới cửa hàng lúc <b>${fmtClock(d.min || 600)}</b> (sau 10:00 sáng), toàn bộ hộp <b>モンスターカード — Thẻ Quái Thú 限定BOX</b> đã bị dân xếp hàng mua sạch từ sớm!</p>
+          <p class="lesson">💡 Muốn mua giá gốc ${yen(HOLI.BOX_PRICE)} phải đi xếp hàng ngay đầu buổi sáng (trước 10:00). Ngoài cổng có người lạ rao bán lại hộp lẻ với giá 4.800 ¥ nhưng có 25% nguy cơ hàng giả dán lại seal.</p>`, [
+          { label: '🤝 Mua liều từ người lạ ngoài cổng (4.800 ¥)', on: () => {
+            const sr = buyFromStranger(S, 4800);
+            if (!sr.ok) { toast('💴 Chưa đủ tiền', 'Cần 4.800 ¥'); runStep(); return; }
+            d.min = (d.min || 540) + 45;
+            save(S, storage);
+            if (sr.fake) toast('😱 Bị lừa hộp giả dán lại seal!', 'Bên trong toàn giấy bìa! Mất 4.800 ¥ · 🧠 −6', 5);
+            else toast('📦 Mua được hộp thật!', 'Đã cất vào túi đồ Chợ Cũ (📱)!');
+            runStep();
+          } },
+          { label: '← Quay lại', cls: 'ghost', on: () => runStep() },
+        ]);
+        return;
+      }
+      if (r.limit) {
+        toast('🃏 Giới hạn 1 hộp/người/dịp', 'Hôm nay bạn đã xếp hàng mua 1 hộp rồi. Mở 📱 Chợ Cũ để xem hoặc bán!');
+        return;
+      }
+      toast('💴 Chưa đủ tiền', `Cần ${yen(HOLI.BOX_PRICE)} để mua モンスターカード 限定BOX`);
+      return;
+    }
+    d.min = (d.min || 540) + r.min;
+    save(S, storage);
+    card(`<div class="big">🃏</div><h2>Mua được モンスターカード 限定BOX!</h2>
+      <p>Sau 1 tiếng rưỡi xếp hàng từ sớm, bạn đã mua được 1 hộp <b>Thẻ Quái Thú 限定BOX</b> nguyên seal với giá gốc <b>${yen(HOLI.BOX_PRICE)}</b>!</p>
+      <p class="lesson">Bạn muốn giữ nguyên seal chờ đăng bán trên <b>📱 Chợ Cũ (フリマ)</b> hay bóc ngay thử vận may?</p>`, [
+      { label: '✨ Bóc hộp ngay xem thẻ bên trong! (giữ sưu tầm 🧠 +2)', on: () => {
+        const ob = openBox(S, r.box);
+        save(S, storage);
+        toast(`✨ Mở trúng thẻ ${ob.rarity}!`, `Định giá ${yen(ob.value)} · 🧠 +2 (có thể bán trên 📱 Chợ Cũ)`, 5);
+        runStep();
+      } },
+      { label: '📦 Giữ nguyên seal (cất vào 📱 Chợ Cũ chờ được giá)', cls: 'ghost', on: () => {
+        toast('📦 Đã cất hộp nguyên seal', 'Mở nút 📱 trên góc trái → tab Chợ Cũ để theo dõi giá và đăng bán!');
+        runStep();
+      } },
+    ]);
+    return;
+  }
+
+  if (hAct.id === 'fukubukuro') {
+    const r = openFukubukuro(S);
+    if (!r.ok) { toast('💴 Chưa đủ tiền', 'Cần 3.000 ¥ để mua túi may mắn 福袋'); return; }
+    d['holi_' + hAct.id] = true;
+    d.min = (d.min || 540) + hAct.min;
+    save(S, storage);
+    card(`<div class="big">🛍️</div><h2>福袋 — Mở túi may mắn đầu năm!</h2>
+      <p>Bạn mua túi may mắn <b>福袋</b> giá <b>3.000 ¥</b>. Khi mở ra, bên trong là món đồ trị giá <b>${yen(r.value)}</b> (${r.net >= 0 ? `lời +${yen(r.net)}` : `lỗ −${yen(-r.net)}`})!</p>
+      <div class="deltas">${deltaChips(r.deltas)}</div>`, [
+      { label: 'Tiếp tục ngày Tết →', on: () => runStep() },
+    ]);
+    return;
+  }
+
+  if ((S.money || 0) < (hAct.cost || 0)) {
+    toast('💴 Chưa đủ tiền', `Cần ${yen(hAct.cost)} cho hoạt động này`);
+    return;
+  }
+  const fx = { ...(hAct.fx || {}) };
+  if (hAct.cost) fx.money = -(hAct.cost || 0);
+  const deltas = applyFx(S, fx);
+  d['holi_' + hAct.id] = true;
+  d.min = (d.min || 540) + (hAct.min || 120);
+  save(S, storage);
+  card(`<div class="big">${hAct.icon}</div><h2>${esc(hAct.jp)} — ${esc(hAct.vi)}</h2>
+    <p>${esc(hAct.desc || '')}</p>
+    <div class="deltas">${deltaChips(deltas)}</div>`, [
+    { label: 'Tiếp tục ngày nghỉ →', on: () => runStep() },
+  ]);
 }
 
 async function lifeShrineVisit() {
@@ -843,16 +1350,31 @@ function sickDay(kind) {
 }
 
 function finishStep(extraHtml = '') {
-  const r = completeStep(G.S);
-  const spoiled = r.dayEnd ? spoil(G.S) : [];
-  save(G.S, storage);
-  if (r.levels) toast(`⬆️ Lên cấp ${G.S.lv}!`, 'Hồi ❤️ 🧠 +15 · làm việc bớt mệt hơn');
+  const S = G.S;
+  const hadMissedDuty = !!S?.home?.missedDutyPending;
+  const r = completeStep(S);
+  const spoiled = r.dayEnd ? spoil(S) : [];
+  let dutyNote = '';
+  if (r.dayEnd && !r.weekEnd) {
+    if (hadMissedDuty) {
+      missedDuty(S);
+      dutyNote = ' · 🧹 Quên trực nhật 掃除当番 (🤝 −3, 🧠 −2)';
+    }
+    dayTick(S, ensureCal(S));
+    const cRes = checkCaught(S);
+    if (cRes.caught) {
+      S.lDay = S.lDay || {};
+      S.lDay.caughtReport = cRes;
+    }
+  }
+  save(S, storage);
+  if (r.levels) toast(`⬆️ Lên cấp ${S.lv}!`, 'Hồi ❤️ 🧠 +15 · làm việc bớt mệt hơn');
   else toast(`⭐ +${r.xp} XP`, extraHtml);
   if (r.dayEnd && !r.weekEnd) {
     const spoilNote = spoiled.length
       ? ` · 🥀 Hỏng: ${spoiled.map((id) => `${goodOf(id)?.icon || ''} ${goodOf(id)?.vi || id}`).join(', ')}`
       : '';
-    toast('🌅 Sáng hôm sau · おはようございます！', `${hudCalText(G.S)}${spoilNote}`);
+    toast('🌅 Sáng hôm sau · おはようございます！', `${hudCalText(S)}${spoilNote}${dutyNote}`);
   }
   runStep();
 }
@@ -1146,6 +1668,7 @@ function shiftDone(st, r) {
   const starDay = S.life ? (((S.cal?.day || 1) - 1) % 5 + 5) % 5 : S.story;
   recordStars(S, job, starDay, st.hard ? 'b' : 'a', starCount);
   const res = shiftEnd(S, r, st.hard);
+  afterShift(S, job, curWeather(S));
   const isHeat = !!(st.data?.heat || curWeather(S) === 'heat');
   if (isHeat) {
     applyFx(S, { health: -3 });

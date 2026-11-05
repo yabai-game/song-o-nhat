@@ -42,6 +42,11 @@ export function newState(draft, rng = Math.random) {
     week: 0, story: 0, sStep: 0, ally: 0, watch: 0, wins: 0, fails: 0,
     cal: { year: 1, season: 0, day: 1 }, life: false, seed: draft.seed || 331, overtime: 0,
     recentTalks: [], recentEvenings: [], lDay: {},
+    home: {
+      homesick: 0, dirty: 0, drying: false, calledToday: false, cleanedToday: false,
+      missedDutyPending: false, lastCheckedDay: 0, nextMsgDay: 1, inbox: [], recentMsgs: [],
+    },
+    cards: [], risk: { sideJobs: 0, daysLeft: 0, caughtCount: 0, lostJob: false }, holidayLog: [],
     flags: {}, certs: [jpLevel(START_TTS.jp)], log: [], pantry: [],
   };
 }
@@ -107,6 +112,15 @@ export function load(storage) {
     if (!Array.isArray(S.recentTalks)) S.recentTalks = [];
     if (!Array.isArray(S.recentEvenings)) S.recentEvenings = [];
     if (!S.lDay) S.lDay = {};
+    if (!S.home || typeof S.home !== 'object') {
+      S.home = {
+        homesick: 0, dirty: 0, drying: false, calledToday: false, cleanedToday: false,
+        missedDutyPending: false, lastCheckedDay: 0, nextMsgDay: 1, inbox: [], recentMsgs: [],
+      };
+    }
+    if (!Array.isArray(S.cards)) S.cards = [];
+    if (!S.risk || typeof S.risk !== 'object') S.risk = { sideJobs: 0, daysLeft: 0, caughtCount: 0, lostJob: false };
+    if (!Array.isArray(S.holidayLog)) S.holidayLog = [];
     return S;
   } catch { return null; }
 }

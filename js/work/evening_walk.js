@@ -20,12 +20,15 @@ import {
   SEASONS, nextDay, weatherOf, weatherFx, label as calLabel,
   eventsOn, isMandatoryOff, isSaturdayWorkable, paydayOn,
 } from '../core/calendar.js';
+import { ensureHome, callHome, wash, dutyToday, clean } from '../core/home_life.js';
 
 const BUTTONS = [
   { id: 'sleep',  icon: '🛏️', label: 'Đi ngủ',     jp: 'おやすみ', main: true },
   { id: 'cook',   icon: '🍳', label: 'Nấu cơm',    jp: '自炊' },
   { id: 'bath',   icon: '🛁', label: 'Tắm',        jp: 'お風呂' },
   { id: 'call',   icon: '📱', label: 'Gọi về nhà', jp: '電話' },
+  { id: 'wash',   icon: '🧺', label: 'Giặt đồ',    jp: '洗濯' },
+  { id: 'clean',  icon: '🧹', label: 'Dọn phòng',  jp: '掃除当番' },
   { id: 'tv',     icon: '📺', label: 'Dự báo',     jp: '天気予報' },
   { id: 'study',  icon: '📚', label: 'Học chứng chỉ', jp: '勉強' },
   { id: 'market', icon: '🛒', label: 'Siêu thị',   jp: 'スーパー' },
@@ -35,7 +38,7 @@ const SHOW = {
   toSpot: ['market', 'run'],
   toDorm: ['market', 'run'],
   talk:   [],
-  room:   ['sleep', 'cook', 'bath', 'call', 'tv', 'study'],
+  room:   ['sleep', 'cook', 'bath', 'call', 'wash', 'clean', 'tv', 'study'],
   bed:    [],
 };
 const WALK = 3.0, RUN_MUL = 1.6;
@@ -248,6 +251,14 @@ export class EveningWalk {
         this.btn.cook.hidden = e.phase !== 'room' || !canCookTonight(this.S) || !!this.cookState;
       } else if (a.id === 'tv') {
         this.btn.tv.hidden = e.phase !== 'room' || !!this.cookState;
+      } else if (a.id === 'bath') {
+        this.btn.bath.hidden = e.phase !== 'room' || !!e.bath || !!this.cookState;
+      } else if (a.id === 'call') {
+        this.btn.call.hidden = e.phase !== 'room' || !!e.call || !!this.cookState;
+      } else if (a.id === 'wash') {
+        this.btn.wash.hidden = e.phase !== 'room' || !!e.washed || !!this.cookState;
+      } else if (a.id === 'clean') {
+        this.btn.clean.hidden = e.phase !== 'room' || !dutyToday(this.S, this.S?.cal) || !!this.S?.home?.cleanedToday || !!this.cookState;
       } else if (a.id === 'market') {
         this.btn.market.hidden = !SHOW[e.phase]?.includes('market') || !this.onMarket;
       } else {
@@ -262,6 +273,10 @@ export class EveningWalk {
     }
     this.btn.call.disabled = e.call || !!this.cookState;
     this.btn.sleep.disabled = !!this.cookState;
+    for (const overflowId of ['tv', 'wash', 'study']) {
+      if (this.mine.filter((b) => !b.hidden).length <= 6) break;
+      if (this.btn[overflowId] && !this.btn[overflowId].hidden) this.btn[overflowId].hidden = true;
+    }
     const visCount = this.mine.filter((b) => !b.hidden).length;
     $('acts').classList.toggle('many', visCount >= 5);
   }
@@ -292,6 +307,9 @@ export class EveningWalk {
       return;
     }
     if (id === 'tv') { this.openTvForecast(); return; }
+    if (id === 'wash') { this.openWashMenu(); return; }
+    if (id === 'clean') { this.doCleanDuty(); return; }
+    if (id === 'call') { this.openCallMenu(); return; }
     if (id === 'study') { this.studyOrExam(); return; }
     if (id === 'bath' || id === 'call') {
       const r = act(this.S, e, id); if (!r.ok) return;
@@ -302,6 +320,10 @@ export class EveningWalk {
     }
     if (id === 'sleep') {
       if (!toBed(e)) return;
+      if (dutyToday(this.S, this.S?.cal) && !this.S?.home?.cleanedToday) {
+        ensureHome(this.S).missedDutyPending = true;
+        if (this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+      }
       show('sh-tip', false);
       // walk to the futon, then lie down (the reverse of getting up in the morning)
       this.controls.target = new THREE.Vector3(DORM.bed.x, 0, DORM.bed.z + 0.3);
@@ -333,8 +355,87 @@ export class EveningWalk {
       <p style="text-align:center"><b>Ngày mai:</b> ${esc(calLabel(tom, fx))}</p>
       ${notes.length ? `<ul>${notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
       <p class="lesson">📡 ${esc(advice)}</p>`, [
+      { label: '🧺 Tiện thể giặt đồ', cls: 'ghost', on: () => { show('modal', false); this.paused = false; this.openWashMenu(); } },
       { label: 'Đã xem →', on: () => { show('modal', false); this.paused = false; } },
     ]);
+  }
+
+  openCallMenu() {
+    const e = this.ev, P = this.who.player;
+    if (e.call) return;
+    this.paused = true;
+    const h = ensureHome(this.S);
+    const runCall = (kind) => {
+      show('modal', false);
+      this.paused = false;
+      const r = callHome(this.S, kind);
+      if (!r.ok) return;
+      e.call = true;
+      e.min += r.min;
+      this.busy = 1.4;
+      P.play('talk');
+      this.overhead.say(P, kind === 'video' ? 'Cả nhà ơi, con khỏe lắm! — みんな元気？' : 'Mẹ ơi, con khỏe! — 元気だよ', 3);
+      toast(kind === 'video' ? '📹 Gọi video cả nhà' : '📞 Gọi thoại về nhà', `${deltaText(r.deltas)} · Nhớ nhà còn ${r.homesick}/100 · ${clock(e.min)}`);
+      if (this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+      this.hud();
+    };
+    card(`<h2>📱 Gọi điện về nhà · 家族に電話</h2>
+      <p>Độ nhớ nhà hiện tại: <b>🏠 ${h?.homesick || 0}/100</b>${(h?.homesick || 0) >= 60 ? ' (đang nhớ nhà nhiều, dễ tụt tinh thần!)' : ''}.</p>
+      <p class="lesson">Nghe giọng người thân giúp vơi nỗi nhớ quê sau ngày làm việc vất vả.</p>`, [
+      { label: '📞 Gọi thoại (30 phút · 🧠 +3, nhớ nhà −10)', on: () => runCall('voice') },
+      { label: '📹 Gọi video cả nhà (60 phút · 🧠 +6, nhớ nhà −30)', on: () => runCall('video') },
+      { label: 'Đóng', cls: 'ghost', on: () => { show('modal', false); this.paused = false; } },
+    ]);
+  }
+
+  openWashMenu() {
+    const e = this.ev, P = this.who.player;
+    this.paused = true;
+    const h = ensureHome(this.S);
+    const cal = this.S?.cal || { year: 1, season: 0, day: 1 };
+    const w = weatherOf(cal, this.S?.seed || 1);
+    const fx = weatherFx(w);
+    const doWash = (way) => {
+      show('modal', false);
+      this.paused = false;
+      const r = wash(this.S, way, w);
+      if (!r.ok) {
+        toast('💴 Không đủ tiền giặt đồ', `Cần ${yen(r.cost)}`);
+        return;
+      }
+      e.washed = true;
+      e.min += r.min;
+      this.busy = 1.4;
+      this.overhead.say(P, '洗濯完了！ — Quần áo sạch thơm rồi!', 2.5);
+      const dryNote = r.drying ? ' · Trời mưa nên phơi trong phòng qua đêm mới khô' : ' · Khô ráo sạch sẽ';
+      toast(way === 'coin' ? '🧺 Tiệm giặt コインランドリー' : '🧺 Giặt máy ký túc xá', `${deltaText(r.deltas)}${dryNote} · ${clock(e.min)}`);
+      if (this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+      this.hud();
+    };
+    const btns = [
+      { label: `🧺 Máy giặt ký túc xá (200 ¥ · 60 phút${fx.rain || fx.snow ? ' · phơi trong phòng qua đêm' : ''})`, on: () => doWash('dorm') },
+      { label: '🏪 Ra tiệm コインランドリー (500 ¥ · 90 phút · sấy khô ngay)', on: () => doWash('coin') },
+    ];
+    if (dutyToday(this.S, cal) && !h?.cleanedToday) {
+      btns.push({ label: '🧹 Trực nhật dọn phòng 掃除当番 (30 phút · 🤝 +2)', on: () => { show('modal', false); this.paused = false; this.doCleanDuty(); } });
+    }
+    btns.push({ label: '📺 Xem dự báo thời tiết ngày mai', cls: 'ghost', on: () => { show('modal', false); this.paused = false; this.openTvForecast(); } });
+    btns.push({ label: 'Đóng', cls: 'ghost', on: () => { show('modal', false); this.paused = false; } });
+    card(`<h2>🧺 Giặt quần áo · 洗濯</h2>
+      <p>Độ bẩn quần áo đi làm: <b>👕 ${h?.dirty || 0}/100</b> · Thời tiết: <b>${fx.icon} ${esc(fx.vi)}</b></p>
+      <p class="lesson">Quần áo bẩn từ 60 trở lên sẽ hiện nhắc nhở; nếu để tới 100 đi làm sẽ bị quản lý nhắc nhở (🧠 −3, 👷 −1).</p>`, btns);
+  }
+
+  doCleanDuty() {
+    const e = this.ev, P = this.who.player;
+    const r = clean(this.S);
+    if (!r.ok) return;
+    e.min += r.min;
+    this.busy = 1.3;
+    this.overhead.say(P, '掃除当番終わり！ — Dọn phòng trực nhật xong rồi!', 2.5);
+    toast('🧹 Đã trực nhật 掃除当番', `${deltaText(r.deltas)} · ${clock(e.min)}`);
+    if (this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+    this.hud();
   }
 
   enterMarket() {
