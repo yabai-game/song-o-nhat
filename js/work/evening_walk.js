@@ -13,7 +13,7 @@ import { clock } from '../core/morning.js';
 import { DORM } from '../gfx/dorm.js';
 import { ROUTE } from '../gfx/site.js';
 import { camera, isPortrait } from '../gfx/stage.js';
-import { $, show, card, esc, deltaText, toast } from '../ui/ui.js';
+import { $, show, card, esc, deltaChips, deltaText, toast } from '../ui/ui.js';
 import { CAREER, study, examReady, examQuestions, takeExam } from '../core/career.js';
 import { JOBS } from '../core/jobs.js';
 import {
@@ -21,6 +21,9 @@ import {
   eventsOn, isMandatoryOff, isSaturdayWorkable, paydayOn,
 } from '../core/calendar.js';
 import { ensureHome, callHome, wash, dutyToday, clean } from '../core/home_life.js';
+import { illWalkMul, buyMedicine } from '../core/clinic.js';
+import { commuteMul, commuteExtraMin } from '../core/bicycle.js';
+import { QUAKE_STEPS, SHELTER_QUESTION, quakeToday, resolveQuake, markStormReady, answerShelter } from '../core/disaster.js';
 
 const BUTTONS = [
   { id: 'sleep',  icon: '🛏️', label: 'Đi ngủ',     jp: 'おやすみ', main: true },
@@ -103,12 +106,12 @@ export class EveningWalk {
     show('dayhud', false); show('shifthud'); show('sh-gust', false);
     $('sh-rank').textContent = dayLabel;
     this.active = true; this.paused = false; this.busy = 0; this.bestD = Infinity; this.stuckT = 0;
-    this.running = false; this.lie = -1; this.toFuton = false; this.toMarket = false; this.cookState = null;
+    this.running = false; this.lie = -1; this.toFuton = false; this.toMarket = false; this.cookState = null; this.quakeShakeT = 0; clearInterval(this.quakeTimer);
     if (this.stages?.dorm?.setSteam) this.stages.dorm.setSteam(false);
     this.btn.run.classList.remove('on');
   }
   _hide() {
-    this.active = false; this.controls.enabled = false;
+    this.active = false; this.controls.enabled = false; clearInterval(this.quakeTimer);
     if (this.stages?.dorm?.setSteam) this.stages.dorm.setSteam(false);
     if (this.saved) { $('acts').replaceChildren(...this.saved); this.saved = null; }
     show('shifthud', false); show('sh-tip', false);
@@ -132,6 +135,10 @@ export class EveningWalk {
     Object.assign(this, { S, stages, who, setStage, onSleep, onMarket, storage, dayLabel });
     if (!this.ev) { this.ev = createEvening('room'); this.ev.talked = true; this.ev.phase = 'room'; this.ev.min = 20 * 60 + 30; }
     else if (!this.ev.talked) talked(this.ev);
+    if (S?.bike?.owned && !S.bike.stolen && !this.ev.bikeBonus) {
+      this.ev.min = Math.max(18 * 60, this.ev.min - commuteExtraMin(S));
+      this.ev.bikeBonus = true;
+    }
     this._show(dayLabel);
     if (this.ev.phase === 'room') {
       this.room();
@@ -182,6 +189,19 @@ export class EveningWalk {
     this.camRig.init = false;
     if (this.ev.talked) {
       const hasCook = canCookTonight(this.S);
+      if (this.S?.lDay?.planDrugstore && this.S?.ill) {
+        delete this.S.lDay.planDrugstore;
+        const mRes = buyMedicine(this.S);
+        if (mRes.ok) {
+          this.ev.min += mRes.min;
+          if (this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+          toast('💊 Đã ghé ドラッグストア さくら mua thuốc', `${mRes.note} (−${yen(mRes.cost)})`, 5);
+        }
+      }
+      if (this.S?.life && !this.S?.lDay?.quakeDone && quakeToday(this.S, this.S.cal, this.S.seed)) {
+        this.S.lDay.quakeDone = true;
+        setTimeout(() => this.active && this.triggerQuake(), 550);
+      }
       this.tip('ただいま！', hasCook ? 'Có nguyên liệu trong bếp! Bấm 🍳 Nấu cơm, 🛁 Tắm, 📱 Gọi về nhà, rồi 🛏️ Đi ngủ' : 'Tắm 🛁, gọi về nhà 📱, rồi lên futon đi ngủ 🛏️', 6);
     } else {
       this.paused = true; this._hide(); this.onArrive();
@@ -354,10 +374,84 @@ export class EveningWalk {
       <p class="jpline" style="text-align:center">${esc(fx.jp)} — ${esc(fx.vi)}</p>
       <p style="text-align:center"><b>Ngày mai:</b> ${esc(calLabel(tom, fx))}</p>
       ${notes.length ? `<ul>${notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
-      <p class="lesson">📡 ${esc(advice)}</p>`, [
-      { label: '🧺 Tiện thể giặt đồ', cls: 'ghost', on: () => { show('modal', false); this.paused = false; this.openWashMenu(); } },
-      { label: 'Đã xem →', on: () => { show('modal', false); this.paused = false; } },
-    ]);
+      <p class="lesson">📡 ${esc(advice)}</p>`, (() => {
+        const b = [];
+        if (fx.dayOff && !this.S?.prep?.stormReady) {
+          b.push({ label: '🌀 Chuẩn bị đón bão: mua nước, dán kính, sạc pin (500 ¥)', on: () => {
+            markStormReady(this.S, 500);
+            if (this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+            toast('🌀 Đã chuẩn bị đón bão!', 'Đã tích nước, dán băng keo cửa kính và sạc đầy pin dự phòng!');
+            this.openTvForecast();
+          } });
+        }
+        if (!this.S?.prep?.shelterKnown) {
+          b.push({ label: '🏫 Kiểm tra nơi sơ tán 避難所 gần nhà (🎌 +2)', on: () => this.openShelterQuiz() });
+        }
+        b.push({ label: '🧺 Tiện thể giặt đồ', cls: 'ghost', on: () => { show('modal', false); this.paused = false; this.openWashMenu(); } });
+        b.push({ label: 'Đã xem →', on: () => { show('modal', false); this.paused = false; } });
+        return b;
+      })());
+  }
+
+  openShelterQuiz() {
+    this.paused = true;
+    card(`<h2>🏫 Nơi sơ tán khẩn cấp · ${esc(SHELTER_QUESTION.jp)}</h2>
+      <p>${esc(SHELTER_QUESTION.q)}</p>`,
+      SHELTER_QUESTION.options.map((opt, idx) => ({
+        label: opt,
+        on: () => {
+          const r = answerShelter(this.S, idx);
+          if (this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+          if (r.ok) toast('🏫 Chính xác! Trường học gần nhà là 避難所', '🎌 Văn hóa +2 · Khi có lệnh sơ tán hãy tới trường công lập gần nhất', 4.5);
+          else toast('💡 Chưa đúng!', 'Ở Nhật, trường tiểu học / trung học công lập gần khu dân cư là nơi sơ tán 避難所 chính thức.', 4.5);
+          this.openTvForecast();
+        },
+      })));
+  }
+
+  triggerQuake() {
+    if (!this.active) return;
+    this.paused = true;
+    this.quakeShakeT = 2.0;
+    const answers = [];
+    const runQuakeStep = (idx) => {
+      clearInterval(this.quakeTimer);
+      if (idx >= QUAKE_STEPS.length) {
+        const res = resolveQuake(this.S, answers[0], answers[1]);
+        if (this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+        card(`<div class="big">${res.ok ? '😮‍💨' : '🚨'}</div>
+          <h2>${res.ok ? 'An toàn qua cơn động đất!' : 'Bị va đập trong lúc động đất!'}</h2>
+          <p>${res.ok
+            ? 'Bạn đã bình tĩnh trốn dưới gầm bàn bảo vệ đầu, sau đó tắt bếp ga và mở hé cửa thoát hiểm đúng chuẩn phòng灾 Nhật Bản!'
+            : 'Khi động đất xảy ra, tuyệt đối không chạy vội ra đường, không đứng gần kính và không đi thang máy! Hãy chui xuống gầm bàn rồi tắt lửa, mở cửa thoát hiểm.'}</p>
+          <div class="deltas">${deltaChips(res.deltas)}</div>`, [
+          { label: 'Bình tĩnh tiếp tục buổi tối →', on: () => { show('modal', false); this.paused = false; this.hud(); } },
+        ]);
+        return;
+      }
+      const st = QUAKE_STEPS[idx];
+      let secLeft = st.countdownSec || 4;
+      const pick = (optId) => {
+        clearInterval(this.quakeTimer);
+        answers.push(optId);
+        if (idx === 0) this.quakeShakeT = 1.2;
+        runQuakeStep(idx + 1);
+      };
+      card(`<div class="big">📳</div><h2>🚨 ${esc(st.title)}</h2>
+        <p>${esc(st.prompt)}</p>
+        <p class="jpline" id="quake-cd" style="text-align:center;color:var(--bad);font-size:22px">⏱ Còn ${secLeft} giây!</p>`,
+        st.options.map((o) => ({ label: `${o.vi}`, on: () => pick(o.id) })));
+      this.quakeTimer = setInterval(() => {
+        secLeft -= 1;
+        const el = $('quake-cd');
+        if (el) el.textContent = `⏱ Còn ${Math.max(0, secLeft)} giây!`;
+        if (secLeft <= 0) {
+          clearInterval(this.quakeTimer);
+          pick('timeout');
+        }
+      }, 1000);
+    };
+    runQuakeStep(0);
   }
 
   openCallMenu() {
@@ -631,7 +725,9 @@ export class EveningWalk {
           moving = true;
           const ox = pos.x, oz = pos.z;
           const room = e.phase === 'room' || e.phase === 'bed', B = room ? DORM.bounds : ROUTE.bounds, blocks = room ? DORM.blocks : ROUTE.blocks;
-          const sp = WALK * (this.running && !room ? RUN_MUL : 1) * (room ? 0.6 : 1) * mag * dt;
+          const hasBike = !room && !!(this.S?.bike?.owned && !this.S.bike.stolen);
+          const streetMul = !room ? (hasBike ? commuteMul(this.S) : (this.running ? RUN_MUL : 1)) : 1;
+          const sp = WALK * streetMul * illWalkMul(this.S) * (room ? 0.6 : 1) * mag * dt;
           pos.x += this.dir.x * sp; pos.z += this.dir.z * sp;
           for (const o of blocks) {
             const dx = pos.x - o.x, dz = pos.z - o.z, dd = Math.hypot(dx, dz), rr = o.r + 0.3;
@@ -669,6 +765,14 @@ export class EveningWalk {
       this.camPos.set(fx, 2.9 * (portrait ? 1.25 : 1), fz + (portrait ? 4.9 : 3.9));
       this.camLook.set(fx * 1.2, 0.55, fz - 0.7);
       this.camRig.to(this.camPos, this.camLook, dt, 4);
+      if (this.quakeShakeT > 0) {
+        this.quakeShakeT = Math.max(0, this.quakeShakeT - dt);
+        const sx = Math.sin(this.quakeShakeT * 44) * 0.14;
+        const sy = Math.cos(this.quakeShakeT * 58) * 0.08;
+        this.camRig.pos.x += sx;
+        this.camRig.pos.y += sy;
+        camera.position.copy(this.camRig.pos);
+      }
     } else if (e.phase !== 'talk') {
       if (moving && !c.drag && Math.abs(c.joy.x) < 0.4) {
         let dy = P.yaw + Math.PI - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));

@@ -45,8 +45,8 @@ export const FAMILY_MSGS = [
 export const REMIT_ROUTES = {
   legal: {
     id: 'legal',
-    vi: 'Dịch vụ chuyển tiền chính thức / Bưu điện ゆうちょ',
-    jp: '公式送金・ゆうちょ銀行',
+    vi: 'Dịch vụ chuyển tiền chính thức / Bưu điện 郵便局',
+    jp: '公式送金・郵便局の口座',
     fee: 1500,
     rate: 1.0,
     scam: 0,
@@ -367,6 +367,7 @@ export function homeChips(S, cal = S?.cal) {
   const h = ensureHome(S);
   if (!h) return [];
   const chips = [];
+  if (S?.ill && S.ill.daysLeft > 0) chips.push({ id: 'ill', text: S.ill.chip || `${S.ill.icon || '🤒'} ${S.ill.vi}` });
   if (h.homesick >= HOME.HOMESICK_WARN) chips.push({ id: 'homesick', text: '🏠 Nhớ nhà' });
   if (h.dirty >= HOME.DIRTY_WARN) chips.push({ id: 'dirty', text: '👕 Quần áo bẩn' });
   if (dutyToday(S, cal) && !h.cleanedToday) chips.push({ id: 'duty', text: '🧹 Trực nhật' });

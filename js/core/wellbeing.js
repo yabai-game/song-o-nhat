@@ -26,16 +26,21 @@ export const lowBars = (S) => ['health', 'mental'].filter((k) => S[k] < WELL.WAR
 /** A day off sick: lost wage, hospital co-pay when the body gave out; both bars back to 60. */
 export function sickLeave(S, kind) {
   const hospital = kind === 'health' || kind === 'both';
-  const copay = hospital ? Math.round(WELL.HOSPITAL * WELL.COPAY) : 0;
+  const hasHoken = !S?.papers || S.papers.hoken !== false;
+  const rate = hasHoken ? WELL.COPAY : 1.0;
+  const copay = hospital ? Math.round(WELL.HOSPITAL * rate) : 0;
   const money = -(WELL.DAY_PAY + copay);
   S.money += money;
   S.health = WELL.BACK_TO; S.mental = WELL.BACK_TO;
   S.boss = clamp(S.boss - WELL.BOSS_LOSS);
   const lines = [`💴 Mất 1 ngày lương: −${WELL.DAY_PAY.toLocaleString('ja-JP')} ¥`];
-  if (hospital) lines.push(`🏥 Viện phí ${WELL.HOSPITAL.toLocaleString('ja-JP')} ¥ — bảo hiểm y tế 国民健康保険 trả 70 %, bạn trả 30 %: −${copay.toLocaleString('ja-JP')} ¥`);
-  else lines.push('📞 Nghỉ ở nhà, gọi đường dây tư vấn tinh thần (miễn phí)');
+  if (hospital) {
+    lines.push(hasHoken
+      ? `🏥 Viện phí ${WELL.HOSPITAL.toLocaleString('ja-JP')} ¥ — bảo hiểm y tế 国民健康保険 trả 70 %, bạn trả 30 %: −${copay.toLocaleString('ja-JP')} ¥`
+      : `🏥 Viện phí ${WELL.HOSPITAL.toLocaleString('ja-JP')} ¥ — chưa có thẻ bảo hiểm 国民健康保険 nên phải trả 100 %: −${copay.toLocaleString('ja-JP')} ¥`);
+  } else lines.push('📞 Nghỉ ở nhà, gọi đường dây tư vấn tinh thần (miễn phí)');
   lines.push(`❤️ 🧠 nghỉ ngơi xong về ${WELL.BACK_TO} · 👷 Quản lý −${WELL.BOSS_LOSS}`);
-  return { hospital, money, copay, lines };
+  return { hospital, hasHoken, money, copay, lines };
 }
 
 /** Job-skill bar: rank 0..9, progress inside the rank, title, monthly skill allowance. */

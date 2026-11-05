@@ -47,6 +47,9 @@ export function newState(draft, rng = Math.random) {
       missedDutyPending: false, lastCheckedDay: 0, nextMsgDay: 1, inbox: [], recentMsgs: [],
     },
     cards: [], risk: { sideJobs: 0, daysLeft: 0, caughtCount: 0, lostJob: false }, holidayLog: [],
+    papers: { tennyu: false, hoken: false, yucho: false, juminzei: false, zairyu: false },
+    ill: null, bike: null,
+    prep: { water: false, food: false, light: false, radio: false, bag: false, stormReady: false, shelterKnown: false },
     flags: {}, certs: [jpLevel(START_TTS.jp)], log: [], pantry: [],
   };
 }
@@ -121,6 +124,16 @@ export function load(storage) {
     if (!Array.isArray(S.cards)) S.cards = [];
     if (!S.risk || typeof S.risk !== 'object') S.risk = { sideJobs: 0, daysLeft: 0, caughtCount: 0, lostJob: false };
     if (!Array.isArray(S.holidayLog)) S.holidayLog = [];
+    if (!S.papers || typeof S.papers !== 'object') {
+      const totalD = ((S.cal.year || 1) - 1) * 112 + (S.cal.season || 0) * 28 + (S.cal.day || 1);
+      const pastSpring14 = totalD > 14;
+      S.papers = { tennyu: pastSpring14, hoken: pastSpring14, yucho: pastSpring14, juminzei: false, zairyu: false };
+    }
+    if (S.ill === undefined) S.ill = null;
+    if (S.bike === undefined) S.bike = null;
+    if (!S.prep || typeof S.prep !== 'object') {
+      S.prep = { water: false, food: false, light: false, radio: false, bag: false, stormReady: false, shelterKnown: false };
+    }
     return S;
   } catch { return null; }
 }

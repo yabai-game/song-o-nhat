@@ -4,6 +4,7 @@ import { renderer, camera, resize, isPortrait, CamRig, loadModel, loadBrand } fr
 import { OUTFITS, SWATCH, ensureSrc, makeCharacter, makeHelmet, makeSanitaryCap, wearHelmet, wearWaders, refHex } from './gfx/chars.js';
 import { buildTown } from './gfx/town.js';
 import { buildSite, DECK_Y, WANDER, ROUTE } from './gfx/site.js';
+import { SERVICES } from './gfx/services.js';
 import { Controls } from './gfx/controls.js';
 import { SiteShift } from './work/site_shift.js';
 import { MorningWalk } from './work/morning_walk.js';
@@ -47,6 +48,21 @@ import {
   buyBox, openBox, sellToShop, marketPrice, sellOnApp, buyFromStranger,
   sideJobOffer, takeSideJob, refuseSideJob, checkCaught,
 } from './core/holiday.js';
+import {
+  PAPER_DOCS, HANKYU_COST, ensurePapers, isOpen as isPaperOpen,
+  paperTodo, overdue as checkPaperOverdue, takeHankyu, waitTime, formFields, checkForm, completePaper,
+} from './core/paperwork.js';
+import {
+  ILLNESSES, CLINIC, isClinicOpen, illWalkMul, catchIll, illDayTick, visitClinic, buyMedicine,
+} from './core/clinic.js';
+import {
+  BIKE, bikeRules, buyBike, register as registerBike,
+  commuteMul, commuteExtraMin, policeStop, answerBikeRules, checkBikeTheft, reportStolenBike,
+} from './core/bicycle.js';
+import {
+  PREP_ITEMS, QUAKE_STEPS, SHELTER_QUESTION,
+  ensurePrep, prepScore, buyPrep, quakeToday, resolveQuake, markStormReady, stormPrep, answerShelter,
+} from './core/disaster.js';
 
 const storage = (() => { try { return window.localStorage; } catch { return { getItem: () => null, setItem() {}, removeItem() {} }; } })();
 const G = {
@@ -499,13 +515,49 @@ function phoneModal(startTab = 'lime') {
   const S = G.S, cal = ensureCal(S);
   const h = ensureHome(S);
   ensureHolidayState(S);
-  let tab = startTab === 'chocu' ? 'chocu' : 'lime';
+  ensurePapers(S);
+  ensurePrep(S);
+  let tab = startTab === 'chocu' ? 'chocu' : startTab === 'todo' ? 'todo' : 'lime';
 
   const renderPhone = () => {
+    const todos = paperTodo(S, cal);
     const tabBar = `<div class="seg" style="margin-bottom:6px;width:100%;justify-content:center">
-      <button type="button" id="tab-lime" aria-pressed="${tab === 'lime'}">💬 Tin nhắn LIME</button>
-      <button type="button" id="tab-chocu" aria-pressed="${tab === 'chocu'}">🛒 Chợ Cũ フリマ (${S.cards.length})</button>
+      <button type="button" id="tab-lime" aria-pressed="${tab === 'lime'}">💬 LIME</button>
+      <button type="button" id="tab-chocu" aria-pressed="${tab === 'chocu'}">🛒 Chợ Cũ (${S.cards.length})</button>
+      <button type="button" id="tab-todo" aria-pressed="${tab === 'todo'}">📋 Việc cần làm (${todos.length})</button>
     </div>`;
+
+    if (tab === 'todo') {
+      const todoRows = todos.map((d) => {
+        const red = d.daysLeft <= 3;
+        const leftTxt = d.daysLeft < 0 ? `Quá hạn ${-d.daysLeft} ngày!` : `Còn ${d.daysLeft} ngày`;
+        return `<div class="lime-msg${red ? ' unread' : ''}">
+          <div class="lime-head"><b>📋 ${esc(d.jp)} — ${esc(d.vi)}</b><span style="${red ? 'color:var(--bad);font-weight:700' : ''}">${esc(leftTxt)}</span></div>
+          <div>Nơi làm: <b>${esc(d.placeVi)}</b> · Hạn: <b>${esc(d.dueLabel)}</b>${d.cost ? ` · Phí: <b>${yen(d.cost)}</b>` : ''}</div>
+          <div style="font-size:12px;color:var(--ink-dim)">${esc(d.desc)}</div>
+        </div>`;
+      }).join('');
+      const doneRows = Object.values(PAPER_DOCS).filter((d) => S.papers?.[d.id]).map((d) =>
+        `<div style="font-size:12.5px;color:var(--ink-dim);padding:3px 0">✅ <b>${esc(d.jp)}</b> — ${esc(d.vi)}: Đã hoàn thành</div>`,
+      ).join('');
+      const bikeTxt = S.bike?.owned
+        ? `🚲 Đang có xe (${S.bike.registered ? 'đã đăng ký 防犯登録' : '⚠️ chưa đăng ký 防犯登録 600 ¥'})`
+        : S.bike?.stolen ? '🚲 Xe đạp đang bị mất (báo お巡りさん)' : '🚶 Chưa mua xe đạp';
+      card(`<h2>📋 Việc cần làm · 手続き・メモ</h2>
+        ${tabBar}
+        <p style="font-size:12.5px;color:var(--ink-dim)">🎒 Túi khẩn cấp 非常持ち出し袋: <b>${prepScore(S)}/5</b> · ${bikeTxt}</p>
+        <div class="lime-list" id="todo-list">
+          ${todoRows || '<p>🎉 Bạn đã hoàn thành hết các giấy tờ cần làm hiện tại!</p>'}
+          ${doneRows ? `<div style="margin-top:8px;border-top:1px solid rgba(0,0,0,0.08);padding-top:6px">${doneRows}</div>` : ''}
+        </div>
+        <p class="lesson">🏛️ <b>市役所</b> mở T2–T6 (8:30–17:15) và sáng thứ Bảy ngày 13 mỗi mùa (<b>土曜開庁</b> 9:00–12:00). <b>郵便局</b> mở T2–T6 (9:00–17:00).</p>`, [
+        { label: 'Đóng điện thoại', on: () => { if (mod) mod.paused = was; if (overCard) runStep(); } },
+      ]);
+      $('tab-lime')?.addEventListener('click', () => { tab = 'lime'; renderPhone(); });
+      $('tab-chocu')?.addEventListener('click', () => { tab = 'chocu'; renderPhone(); });
+      $('tab-todo')?.addEventListener('click', () => { tab = 'todo'; renderPhone(); });
+      return;
+    }
 
     if (tab === 'chocu') {
       const today = totalDays(cal);
@@ -542,6 +594,7 @@ function phoneModal(startTab = 'lime') {
 
       $('tab-lime')?.addEventListener('click', () => { tab = 'lime'; renderPhone(); });
       $('tab-chocu')?.addEventListener('click', () => { tab = 'chocu'; renderPhone(); });
+      $('tab-todo')?.addEventListener('click', () => { tab = 'todo'; renderPhone(); });
       for (const b of document.querySelectorAll('#chocu-list button[data-cidx]')) {
         b.addEventListener('click', () => {
           const idx = Number(b.dataset.cidx);
@@ -614,6 +667,7 @@ function phoneModal(startTab = 'lime') {
 
     $('tab-lime')?.addEventListener('click', () => { tab = 'lime'; renderPhone(); });
     $('tab-chocu')?.addEventListener('click', () => { tab = 'chocu'; renderPhone(); });
+    $('tab-todo')?.addEventListener('click', () => { tab = 'todo'; renderPhone(); });
     $('sj-refuse')?.addEventListener('click', () => {
       const r = refuseSideJob(S);
       S.lDay = S.lDay || {};
@@ -827,7 +881,18 @@ async function runStep() {
 
   // Endless 4-season calendar life loop (S.life === true)
   S.lDay = S.lDay || {};
+  ensurePapers(S);
+  ensurePrep(S);
   if (S.lDay.caughtReport) return caughtSideJobCard();
+  if (S.lDay.stolenBikeReport) return stolenBikeCard();
+  if (S.sStep === 0 && !S.lDay.overdueChecked) {
+    S.lDay.overdueChecked = true;
+    const oRes = checkPaperOverdue(S, S.cal);
+    if (oRes.items.length) {
+      save(S, storage);
+      return overdueAlertCard(oRes);
+    }
+  }
   if (S.sStep === 0 && paydayOn(S.cal) && !S.lDay.paid) return paydayCard();
   const out = S.sStep < 5 ? checkCollapse(S) : null;
   if (out) return sickDay(out);
@@ -844,6 +909,17 @@ async function runStep() {
     } else {
       S.lDay.kind = 'work';
       save(S, storage);
+    }
+  }
+
+  if (S.sStep === 0 && S.ill && !S.lDay.illPrompted) return morningIllCard();
+
+  if (S.lDay.kind === 'work' && S.sStep === 0 && !S.lDay.hankyuAsked) {
+    const urgentDocs = paperTodo(S, S.cal).filter((d) => d.daysLeft <= 5 && isPaperOpen(d.place, S.cal, 600));
+    if (urgentDocs.length) {
+      S.lDay.hankyuAsked = true;
+      save(S, storage);
+      return morningHankyuCard(urgentDocs);
     }
   }
 
@@ -874,18 +950,21 @@ function paydayCard() {
   const P = G.player; P.holder.rotation.x = 0; P.holder.position.set(0.2, 0, 0.8); P.yaw = 0; P.play('idle');
   const remDebt = Math.max(0, (S.debt || 0) - p.debt);
   const avail = (S.money || 0) + p.net;
+  const noYucho = !!(S.papers && !S.papers.yucho);
 
   const finishNoRemit = () => {
     applyPay(S, 0);
+    if (noYucho) applyFx(S, { mental: -2 });
     S.lDay.paid = true;
     save(S, storage);
-    toast(`💴 Nhận lương thực lĩnh +${yen(p.net)}`, remDebt > 0 ? `Còn nợ ${yen(remDebt)}` : '🎉 Đã trả hết nợ môi giới!', 4);
+    toast(`💴 Nhận lương thực lĩnh +${yen(p.net)}`, noYucho ? 'Lương tiền mặt, phải tự đi nhận (🧠 −2)' : remDebt > 0 ? `Còn nợ ${yen(remDebt)}` : '🎉 Đã trả hết nợ môi giới!', 4);
     runStep();
   };
 
   const chooseRouteFor = (amount) => {
     const doSend = (route) => {
       applyPay(S, 0);
+      if (noYucho) applyFx(S, { mental: -2 });
       const r = sendMoney(S, amount, route);
       S.lDay.paid = true;
       save(S, storage);
@@ -906,7 +985,7 @@ function paydayCard() {
         <li>🏦 <b>${esc(REMIT_ROUTES.legal.vi)}:</b> phí <b>${yen(REMIT_ROUTES.legal.fee)}</b>, tỉ giá chuẩn 100%, an toàn tuyệt đối.</li>
         <li>🤝 <b>${esc(REMIT_ROUTES.cheap.vi)}:</b> phí <b>${yen(REMIT_ROUTES.cheap.fee)}</b>, tỉ giá +3%, nhưng có rủi ro 15% bị bùng mất trắng!</li>
       </ul>`, [
-      { label: `🏦 Dịch vụ chính thức / ゆうちょ (phí ${yen(REMIT_ROUTES.legal.fee)})`, on: () => doSend('legal') },
+      { label: `🏦 Dịch vụ chính thức / 郵便局の口座 (phí ${yen(REMIT_ROUTES.legal.fee)})`, on: () => doSend('legal') },
       { label: `🤝 Nhờ người quen chuyển chui (phí ${yen(REMIT_ROUTES.cheap.fee)}, tỉ giá tốt)`, on: () => doSend('cheap') },
       { label: '← Chọn lại mức tiền', cls: 'ghost', on: paydayCard },
     ]);
@@ -928,6 +1007,7 @@ function paydayCard() {
       <div class="prow"><span>Tiền nhà ký túc xá (寮費)</span><span class="neg">−${yen(p.rent)}</span></div>
       <div class="prow"><span>Thuế & bảo hiểm (12%)</span><span class="neg">−${yen(p.tax)}</span></div>
       <div class="prow"><span>Trả nợ môi giới (返済)</span><span class="neg">−${yen(p.debt)}</span></div>
+      ${noYucho ? '<div class="prow"><span class="neg">⚠️ Chưa mở tài khoản 郵便局の口座: lương tiền mặt, phải tự đi nhận</span><span class="neg">🧠 −2</span></div>' : ''}
       <div class="prow net"><span>Thực lĩnh (手取り)</span><span>+${yen(p.net)}</span></div>
     </div>
     <p class="lesson">💳 Dư nợ còn lại: <b>${yen(remDebt)}</b> · Tiền mặt sau lương: <b>${yen(avail)}</b>.<br>Bạn có muốn gửi tiền về cho gia đình (海外送金) kỳ này không?</p>`, btns);
@@ -939,9 +1019,18 @@ function typhoonCard() {
   G.mode = 'talk';
   dayHud('🌀 Nghỉ bão');
   const P = G.player; P.holder.rotation.x = 0; P.holder.position.set(0.2, 0, 0.8); P.yaw = 0; P.play('idle');
+  if (!S.lDay.stormChecked) {
+    S.lDay.stormChecked = stormPrep(S);
+    save(S, storage);
+  }
+  const sRes = S.lDay.stormChecked;
+  const prepNote = sRes.prepared
+    ? '✅ Tối qua bạn đã mua nước, dán băng keo cửa kính và sạc đầy pin nên ở trong phòng rất yên tâm (🧠 không giảm).'
+    : `⚠️ Bạn chưa kịp chuẩn bị nước và sạc pin trước bão nên khá lo lắng khi gió rít ngoài cửa sổ (🧠 ${sRes.mentalDelta}).`;
   card(`<div class="big">🌀</div><h2>台風で会社は休みです — Bão, công ty cho nghỉ</h2>
     <p>Ngoài trời mưa to gió giật mạnh. Quản lý nhắn tin cho cả tổ ở yên trong ký túc xá, hôm nay được nghỉ ở nhà.</p>
-    <p class="lesson">🌀 Khi bão lớn (台風) đổ bộ, tàu điện ngừng chạy và công ty cho nghỉ để đảm bảo an toàn.</p>`, [
+    <p class="lesson">${esc(prepNote)}</p>
+    ${sRes.deltas?.length ? `<div class="deltas">${deltaChips(sRes.deltas)}</div>` : ''}`, [
     { label: 'Ở trong phòng nghỉ ngơi →', on: () => {
       S.lDay.kind = 'typhoonOff';
       S.lDay.min = 9 * 60;
@@ -1009,7 +1098,7 @@ function tetVnEveningCard(ev) {
   const sendTetLixi = (amount) => {
     card(`<h2>🧧 Gửi lì xì Tết ${yen(amount)} về quê</h2>
       <p>Chọn cách gửi tiền lì xì năm mới cho gia đình:</p>`, [
-      { label: `🏦 Dịch vụ chính thức / ゆうちょ (phí ${yen(REMIT_ROUTES.legal.fee)})`, on: () => {
+      { label: `🏦 Dịch vụ chính thức / 郵便局の口座 (phí ${yen(REMIT_ROUTES.legal.fee)})`, on: () => {
         const r = sendMoney(S, amount, 'legal');
         if (!r.ok) { toast('💴 Không đủ tiền', `Cần ${yen(amount + r.fee)}`); tetVnEveningCard(ev); return; }
         S.lDay.tetLixi = true; save(S, storage);
@@ -1071,7 +1160,7 @@ function tetVnEveningCard(ev) {
     <p class="lesson">Ở Nhật ngày mùng 1 Tết âm lịch vẫn là ngày đi làm bình thường. Tối về ký túc xá, anh em thực tập sinh mới quây quần gọi về quê đón giao thừa và cắt bánh chưng.</p>`, btns);
 }
 
-async function lifeDayOffHub() {
+async function lifeDayOffHub(group = null) {
   const S = G.S, d = S.lDay, isTyphoon = d.kind === 'typhoonOff';
   d.min = d.min || 9 * 60;
   await dress(false);
@@ -1081,41 +1170,66 @@ async function lifeDayOffHub() {
   const evs = eventsOn(S.cal);
   const ev = evs[0] || null;
   dayHud(isTyphoon ? '🌀 Nghỉ bão ở nhà' : ev ? `${ev.icon} ${ev.vi}` : '🎌 Ngày nghỉ');
+  const fx = curWeatherFx(S);
+  const hActs = !isTyphoon ? holidayActs(S, S.cal).filter((a) => !d['holi_' + a.id] || a.id === 'cards') : [];
+  const hasHolidayGroup = !!(ev && !d.eventDone) || hActs.length > 0;
+  const openDocs = !isTyphoon
+    ? paperTodo(S, S.cal).filter((doc) => isPaperOpen(doc.place, S.cal, d.min) || doc.id === 'juminzei')
+    : [];
 
-  const btns = [];
-  if (ev && !d.eventDone) {
-    btns.push({
-      label: `🎉 ${ev.jp} — ${ev.vi} (+1h)`,
-      on: () => {
-        const deltas = applyFx(S, ev.fx || { mental: 5, culture: 3 });
-        d.eventDone = true;
-        d.min += 60;
-        save(S, storage);
-        card(`<div class="big">${ev.icon}</div><h2>🎉 ${esc(ev.jp)} — ${esc(ev.vi)}</h2>
-          <p>${esc(ev.desc)}</p>
-          <div class="deltas">${deltaChips(deltas)}</div>`, [
-          { label: 'Tiếp tục ngày nghỉ →', on: () => runStep() },
-        ]);
-      },
-    });
-  }
-  if (!isTyphoon) {
-    btns.push({
-      label: '⛩ Đền さくら神社 (dạo phố, đi lễ, rút quẻ, ngắm hoa)',
-      on: () => lifeShrineVisit(),
-    });
-    btns.push({
-      label: '🛒 Siêu thị スーパー さくら (mua đồ nấu ăn · 15:00)',
-      on: () => {
-        const mEv = createEvening('room');
-        mEv.min = Math.min(18 * 60, Math.max(15 * 60, d.min));
-        openMarket(mEv, () => {
-          d.min = Math.max(d.min + 90, mEv.min);
+  if (group === 'holiday') {
+    const btns = [];
+    if (ev && !d.eventDone) {
+      btns.push({
+        label: `🎉 ${ev.jp} — ${ev.vi} (+1h)`,
+        on: () => {
+          const deltas = applyFx(S, ev.fx || { mental: 5, culture: 3 });
+          d.eventDone = true;
+          d.min += 60;
           save(S, storage);
-          runStep();
-        });
-      },
-    });
+          card(`<div class="big">${ev.icon}</div><h2>🎉 ${esc(ev.jp)} — ${esc(ev.vi)}</h2>
+            <p>${esc(ev.desc)}</p>
+            <div class="deltas">${deltaChips(deltas)}</div>`, [
+            { label: 'Tiếp tục ngày nghỉ →', on: () => runStep() },
+          ]);
+        },
+      });
+    }
+    for (const hAct of hActs) {
+      if (btns.length >= 5) break;
+      const effCost = (hAct.id === 'hanabi' && S.bike?.owned) ? 0 : (hAct.cost || 0);
+      btns.push({
+        label: `${hAct.icon} ${hAct.vi} (${effCost ? yen(effCost) : (hAct.id === 'hanabi' && S.bike?.owned ? '🚲 Đạp xe miễn phí' : 'Miễn phí')} · +${Math.round(hAct.min / 60 * 10) / 10}h)`,
+        on: () => runHolidayAct(hAct),
+      });
+    }
+    btns.push({ label: '← Quay lại nhóm ngày nghỉ', cls: 'ghost', on: () => lifeDayOffHub(null) });
+    card(`<h2>🎉 Dịp lễ & Sự kiện mùa</h2>
+      <p>⏰ Bây giờ là <b>${fmtClock(d.min)}</b> · Chọn hoạt động ngày lễ:</p>`, btns);
+    return;
+  }
+
+  if (group === 'out' && !isTyphoon) {
+    const btns = [
+      { label: '⛩ Đền さくら神社 (dạo phố, đi lễ, rút quẻ)', on: () => lifeShrineVisit() },
+      { label: '🛒 Siêu thị スーパー さくら (mua đồ ăn · túi khẩn cấp)', on: () => {
+        card(`<h2>🛒 Siêu thị スーパー さくら & ホームセンター</h2><p>Chọn khu vực muốn mua sắm:</p>`, [
+          { label: '🥦 Vào quầy thực phẩm スーパー さくら (mua đồ nấu ăn)', on: () => {
+            const mEv = createEvening('room');
+            mEv.min = Math.min(18 * 60, Math.max(15 * 60, d.min));
+            openMarket(mEv, () => {
+              d.min = Math.max(d.min + 90, mEv.min);
+              save(S, storage);
+              runStep();
+            });
+          } },
+          { label: `🎒 Mua túi khẩn cấp 非常持ち出し袋 (${prepScore(S)}/5 món)`, on: () => emergencyBagModal(() => lifeDayOffHub('out')) },
+          { label: '← Quay lại', cls: 'ghost', on: () => lifeDayOffHub('out') },
+        ]);
+      } },
+      { label: S.bike?.owned ? '🚲 Xe đạp & Luật giao thông (リサイクルショップ)' : '🚲 Tiệm xe cũ リサイクルショップ (mua xe đạp)', on: () => townBikeShopVisit(() => lifeDayOffHub(null)) },
+      { label: S.ill ? `🏥 Đi khám クリニック / 💊 Mua thuốc (${S.ill.vi})` : '💊 Nhà thuốc ドラッグストア さくら & 🏥 Phòng khám', on: () => townMedicalVisit(() => lifeDayOffHub(null)) },
+    ];
     if (!d.washed) {
       btns.push({
         label: '🧺 Tiệm giặt コインランドリー (500 ¥ · +1h30 · sấy khô ngay)',
@@ -1130,70 +1244,104 @@ async function lifeDayOffHub() {
         },
       });
     }
-    for (const hAct of holidayActs(S, S.cal)) {
-      if (d['holi_' + hAct.id] && hAct.id !== 'cards') continue;
+    btns.push({ label: '← Quay lại nhóm ngày nghỉ', cls: 'ghost', on: () => lifeDayOffHub(null) });
+    card(`<h2>🚶 Ra ngoài dạo phố</h2>
+      <p>⏰ Bây giờ là <b>${fmtClock(d.min)}</b> · Chọn địa điểm trong khu phố:</p>`, btns);
+    return;
+  }
+
+  if (group === 'home') {
+    const btns = [];
+    if (!d.cookedVn) {
       btns.push({
-        label: `${hAct.icon} ${hAct.vi} (${hAct.cost ? yen(hAct.cost) : 'Miễn phí'} · +${Math.round(hAct.min / 60 * 10) / 10}h)`,
-        on: () => runHolidayAct(hAct),
+        label: '🍜 Nấu món Việt với bạn phòng (+2h–3h · 🧠 +8..+12, ❤️ +3)',
+        on: () => lifeVnCookPicker(),
       });
     }
-    const sj = sideJobOffer(S, S.cal, S.seed);
-    if (sj && !d.sideJobHandled) {
-      btns.push({
-        label: `🕵️ Lời rủ làm thêm chui ngày nghỉ (+${yen(sj.pay)} tiền mặt · xem trong LIME)`,
-        on: () => phoneModal('lime'),
-      });
-    }
-  }
-  if (!d.cookedVn) {
     btns.push({
-      label: '🍜 Nấu món Việt với bạn phòng (+2h–3h · 🧠 +8..+12, ❤️ +3, 🤝 +3)',
-      on: () => lifeVnCookPicker(),
-    });
-  }
-  btns.push({
-    label: '📚 Học tiếng Nhật ở nhà (+2h · 🗣️ +2, 🧠 −2)',
-    on: () => {
-      applyFx(S, { jp: 3, mental: -2 });
-      d.min += 120;
-      save(S, storage);
-      toast('📚 Tự học tiếng Nhật ở nhà', `🗣️ +2 · 🧠 −2 · ⏰ ${fmtClock(d.min)}`);
-      runStep();
-    },
-  });
-  if (!d.napped) {
-    btns.push({
-      label: '🛌 Ngủ bù (+3h · ❤️ +12, 🧠 +6)',
+      label: '📚 Học tiếng Nhật ở nhà (+2h · 🗣️ +2, 🧠 −2)',
       on: () => {
-        applyFx(S, { health: 12, mental: 6 });
-        d.napped = true;
-        d.min += 180;
+        applyFx(S, { jp: 3, mental: -2 });
+        d.min += 120;
         save(S, storage);
-        toast('🛌 Ngủ bù khỏe người', `❤️ +12 · 🧠 +6 · ⏰ ${fmtClock(d.min)}`);
+        toast('📚 Tự học tiếng Nhật ở nhà', `🗣️ +2 · 🧠 −2 · ⏰ ${fmtClock(d.min)}`);
         runStep();
       },
     });
+    if (!d.napped) {
+      btns.push({
+        label: '🛌 Ngủ bù (+3h · ❤️ +12, 🧠 +6)',
+        on: () => {
+          applyFx(S, { health: 12, mental: 6 });
+          d.napped = true;
+          d.min += 180;
+          save(S, storage);
+          toast('🛌 Ngủ bù khỏe người', `❤️ +12 · 🧠 +6 · ⏰ ${fmtClock(d.min)}`);
+          runStep();
+        },
+      });
+    }
+    if (!d.called) {
+      btns.push({
+        label: '📱 Gọi về nhà (+30p–1h · giảm nhớ nhà)',
+        on: () => {
+          card('<h2>📱 Gọi điện về nhà ngày nghỉ</h2><p>Chọn cách gọi cho gia đình:</p>', [
+            { label: '📞 Gọi thoại (30 phút · 🧠 +3, nhớ nhà −10)', on: () => {
+              const r = callHome(S, 'voice');
+              d.called = true; d.min += r.min; save(S, storage);
+              toast('📞 Đã gọi thoại về nhà', `🧠 +3 · Nhớ nhà còn ${r.homesick}/100 · ⏰ ${fmtClock(d.min)}`);
+              runStep();
+            } },
+            { label: '📹 Gọi video cả nhà (60 phút · 🧠 +6, nhớ nhà −30)', on: () => {
+              const r = callHome(S, 'video');
+              d.called = true; d.min += r.min; save(S, storage);
+              toast('📹 Đã gọi video cả nhà', `🧠 +6 · Nhớ nhà còn ${r.homesick}/100 · ⏰ ${fmtClock(d.min)}`);
+              runStep();
+            } },
+            { label: '← Quay lại', cls: 'ghost', on: () => lifeDayOffHub('home') },
+          ]);
+        },
+      });
+    }
+    if (btns.length < 5) {
+      btns.push({
+        label: `🎒 Kiểm tra túi khẩn cấp 非常持ち出し袋 (${prepScore(S)}/5)`,
+        on: () => emergencyBagModal(() => lifeDayOffHub('home')),
+      });
+    }
+    btns.push({ label: '← Quay lại nhóm ngày nghỉ', cls: 'ghost', on: () => lifeDayOffHub(null) });
+    card(`<h2>🏠 Ở nhà · Ký túc xá さくら寮</h2>
+      <p>⏰ Bây giờ là <b>${fmtClock(d.min)}</b> · Nghỉ ngơi và sinh hoạt tại phòng:</p>`, btns);
+    return;
   }
-  if (!d.called) {
+
+  if (group === 'paper') {
+    townPaperworkVisit(() => lifeDayOffHub(null));
+    return;
+  }
+
+  // Main hub: <= 5 category buttons
+  const btns = [];
+  if (hasHolidayGroup) {
     btns.push({
-      label: '📱 Gọi về nhà (+30p–1h · giảm nhớ nhà)',
-      on: () => {
-        card('<h2>📱 Gọi điện về nhà ngày nghỉ</h2><p>Chọn cách gọi cho gia đình:</p>', [
-          { label: '📞 Gọi thoại (30 phút · 🧠 +3, nhớ nhà −10)', on: () => {
-            const r = callHome(S, 'voice');
-            d.called = true; d.min += r.min; save(S, storage);
-            toast('📞 Đã gọi thoại về nhà', `🧠 +3 · Nhớ nhà còn ${r.homesick}/100 · ⏰ ${fmtClock(d.min)}`);
-            runStep();
-          } },
-          { label: '📹 Gọi video cả nhà (60 phút · 🧠 +6, nhớ nhà −30)', on: () => {
-            const r = callHome(S, 'video');
-            d.called = true; d.min += r.min; save(S, storage);
-            toast('📹 Đã gọi video cả nhà', `🧠 +6 · Nhớ nhà còn ${r.homesick}/100 · ⏰ ${fmtClock(d.min)}`);
-            runStep();
-          } },
-          { label: '← Quay lại', cls: 'ghost', on: () => runStep() },
-        ]);
-      },
+      label: `🎉 Dịp lễ (${ev && !d.eventDone ? ev.vi : `${hActs.length} hoạt động`})`,
+      on: () => lifeDayOffHub('holiday'),
+    });
+  }
+  if (!isTyphoon) {
+    btns.push({
+      label: '🚶 Ra ngoài (đền, siêu thị, tiệm giặt, xe đạp, khám bệnh)',
+      on: () => lifeDayOffHub('out'),
+    });
+  }
+  btns.push({
+    label: '🏠 Ở nhà (học tiếng Nhật, ngủ bù, gọi về, nấu món Việt)',
+    on: () => lifeDayOffHub('home'),
+  });
+  if (openDocs.length > 0) {
+    btns.push({
+      label: `📋 Giấy tờ (${openDocs.map((x) => x.jp).join(' · ')})`,
+      on: () => lifeDayOffHub('paper'),
     });
   }
   btns.push({
@@ -1207,10 +1355,14 @@ async function lifeDayOffHub() {
     },
   });
 
-  const fx = curWeatherFx(S);
+  const pendingPapers = paperTodo(S, S.cal);
+  const paperHint = pendingPapers.length && !openDocs.length
+    ? `<p style="font-size:12px;color:var(--ink-dim)">📋 Còn ${pendingPapers.length} giấy tờ cần làm (${pendingPapers.map((x) => x.jp).join(', ')}). 市役所 mở T2–T6 (8:30–17:15) & sáng T7 ngày 13 (土曜開庁 9:00–12:00).</p>`
+    : '';
   card(`<h2>${isTyphoon ? '🌀 Nghỉ bão tại phòng' : '🎌 Hôm nay đi đâu?'}</h2>
     <p>⏰ Bây giờ là <b>${fmtClock(d.min)}</b> (tới 21:00 về phòng) · Thời tiết: <b>${fx.icon} ${esc(fx.vi)}</b></p>
-    ${ev ? `<p class="lesson">🎉 <b>${esc(ev.jp)} — ${esc(ev.vi)}:</b> ${esc(ev.desc)}</p>` : ''}`, btns);
+    ${ev ? `<p class="lesson">🎉 <b>${esc(ev.jp)} — ${esc(ev.vi)}:</b> ${esc(ev.desc)}</p>` : ''}
+    ${paperHint}`, btns);
 }
 
 function lifeVnCookPicker() {
@@ -1235,6 +1387,464 @@ function lifeVnCookPicker() {
   card(`<h2>🍜 Nấu món Việt cuối tuần · ベトナム料理</h2>
     <p>Góp tiền mua nguyên liệu nấu bữa cơm quê hương cùng anh em cùng phòng ký túc xá:</p>
     <p class="lesson">Nấu ăn chung giúp vơi nỗi nhớ nhà, hồi phục thể lực và gắn kết tình anh em cùng phòng.</p>`, btns);
+}
+
+function overdueAlertCard(oRes) {
+  const S = G.S;
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('⚠️ Quá hạn giấy tờ hành chính');
+  card(`<div class="big">⚠️</div><h2>Quá hạn thủ tục hành chính!</h2>
+    <p>Bạn có giấy tờ hành chính đã quá hạn quy định:</p>
+    <ul>${(oRes.notes || []).map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
+    <p class="lesson">💡 Mở <b>📱 Điện thoại → 📋 Việc cần làm</b> để kiểm tra hạn giấy tờ. <b>市役所</b> mở T2–T6 (8:30–17:15) và sáng T7 ngày 13 (<b>土曜開庁 9:00–12:00</b>), hoặc bạn có thể xin nghỉ nửa buổi sáng (<b>半休</b>) để đi làm thủ tục.</p>`, [
+    { label: 'Đã hiểu →', on: () => runStep() },
+  ]);
+}
+
+function morningIllCard() {
+  const S = G.S;
+  if (!S.ill) { runStep(); return; }
+  const meta = ILLNESSES[S.ill.id] || ILLNESSES.kaze;
+  const cal = ensureCal(S);
+  const hoken = !!S.papers?.hoken;
+  const clinicFee = hoken ? CLINIC.FEE_INSURED : CLINIC.FEE_UNINSURED;
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud(`${meta.icon} Đang bị ${meta.vi}`);
+  const btns = [];
+  if (isClinicOpen(cal, 9 * 60)) {
+    btns.push({
+      label: `🏥 Đi khám Phòng khám さくら (${yen(clinicFee)} · ${hoken ? 'có 保険証 30%' : 'chưa có 保険証'} · khỏi sau 1–2 ngày)`,
+      on: () => {
+        if (!cal.isOff) takeHankyu(S);
+        S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+        save(S, storage);
+        townMedicalVisit(() => runStep());
+      },
+    });
+  }
+  btns.push({
+    label: `💊 Ghé ドラッグストア さくら mua thuốc (${yen(1200)} · 30 phút)`,
+    on: () => {
+      S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+      save(S, storage);
+      townMedicalVisit(() => runStep());
+    },
+  });
+  btns.push({
+    label: '🚶 Tiếp tục ngày hôm nay (đi bộ ×0.9)',
+    cls: 'ghost',
+    on: () => runStep(),
+  });
+  card(`<div class="big">${meta.icon}</div><h2>${esc(meta.jp)} — ${esc(meta.vi)}</h2>
+    <p>${esc(meta.desc)} (Còn khoảng <b>${S.ill.daysLeft}</b> ngày · mỗi ngày không điều trị <b>❤️ −3</b>, đi bộ <b>×0.9</b>).</p>
+    <p class="lesson">💡 Có thẻ bảo hiểm y tế (<b>健康保険証</b>) đi khám chỉ trả 30% (${yen(CLINIC.FEE_INSURED)} thay vì ${yen(CLINIC.FEE_UNINSURED)}) và nhanh khỏi hơn thuốc tự mua.</p>`, btns);
+}
+
+function morningHankyuCard(urgentDocs) {
+  const S = G.S;
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('📋 Sắp tới hạn giấy tờ');
+  const names = urgentDocs.map((d) => `${d.icon} ${d.jp} (${d.vi})`).join(', ');
+  card(`<div class="big">📋</div><h2>Giấy tờ hành chính sắp hết hạn!</h2>
+    <p>Còn không quá 2 ngày là tới hạn: <b>${esc(names)}</b>.</p>
+    <p class="lesson">💡 <b>市役所</b> và <b>郵便局</b> làm việc giờ hành chính T2–T6 (riêng <b>市役所</b> có mở sáng T7 ngày 13 <b>土曜開庁 9:00–12:00</b>). Bạn có muốn xin nghỉ nửa buổi sáng (<b>半休 · 👷 −2</b>) để đi làm giấy tờ ngay không?</p>`, [
+    {
+      label: '📋 Xin nghỉ nửa buổi sáng (半休 · 👷 −2) đi làm giấy tờ ngay',
+      on: () => {
+        takeHankyu(S);
+        S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+        S.lDay.min = 9 * 60;
+        save(S, storage);
+        townPaperworkVisit(() => runStep());
+      },
+    },
+    {
+      label: '🚶 Đi làm bình thường',
+      cls: 'ghost',
+      on: () => runStep(),
+    },
+  ]);
+}
+
+function stolenBikeCard() {
+  const S = G.S;
+  if (S.lDay) delete S.lDay.stolenBikeReport;
+  save(S, storage);
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('🚲 Mất xe đạp!');
+  card(`<div class="big">🚲</div><h2>Xe đạp để quên không khoá đã bị lấy mất!</h2>
+    <p>Sáng nay xuống nhà để xe ký túc xá, bạn phát hiện chiếc xe đạp để quên không bấm khoá (<b>🔓</b>) tối qua đã biến mất.</p>
+    <p class="lesson">💡 Nếu đã đăng ký mã chống trộm <b>防犯登録 (600 ¥)</b>, bạn có thể ra Đồn cảnh sát (<b>交番</b>) trình báo để có 50% cơ hội tìm lại xe.</p>`, [
+    {
+      label: '🚓 Ra Đồn cảnh sát (交番) báo mất xe',
+      on: () => {
+        const r = reportStolenBike(S);
+        save(S, storage);
+        if (r.recovered) {
+          card(`<div class="big">🎉</div><h2>Tìm lại được xe đạp nhờ tem 防犯登録!</h2>
+            <p>Cảnh sát (<b>お巡りさん</b>) tra mã <b>防犯登録</b> và tìm thấy xe của bạn bị bỏ lại gần nhà ga! Xe đã được khoá lại cẩn thận.</p>`, [
+            { label: 'Mừng quá, tiếp tục →', on: () => runStep() },
+          ]);
+        } else {
+          card(`<div class="big">😔</div><h2>Chưa tìm lại được xe đạp</h2>
+            <p>${r.hasReg ? 'Dù đã tra mã 防犯登録 nhưng hiện chưa tìm thấy xe của bạn.' : 'Vì xe chưa đăng ký 防犯登録 nên cảnh sát không có mã số khung để tra cứu.'} (<b>🧠 −5</b>)</p>`, [
+            { label: 'Đành chịu, tiếp tục →', on: () => runStep() },
+          ]);
+        }
+      },
+    },
+    {
+      label: 'Đành chịu (🧠 −5)',
+      cls: 'ghost',
+      on: () => {
+        applyFx(S, { mental: -5 });
+        save(S, storage);
+        runStep();
+      },
+    },
+  ]);
+}
+
+function positionPlayerTown(placeKey = 'cityhall') {
+  setStage('site');
+  G.stages.site.setTime('day');
+  hideNpcs();
+  G.mode = 'talk';
+  const P = G.player;
+  const door = SERVICES?.[placeKey]?.door;
+  if (P && P.holder) {
+    P.holder.rotation.x = 0;
+    if (door) {
+      P.holder.position.set(door.x, 0, door.z);
+    } else {
+      P.holder.position.set(ROUTE.station.x + 1.2, 0, ROUTE.station.z + 1.5);
+    }
+    P.yaw = 0;
+    P.play('idle');
+  }
+}
+
+function townPaperworkVisit(returnTo) {
+  const S = G.S;
+  S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+  const d = S.lDay;
+  const cal = ensureCal(S);
+  const min = d.min ?? 9 * 60;
+  positionPlayerTown('cityhall');
+  dayHud('🏛️ Tòa hành chính / Bưu điện');
+
+  const todos = paperTodo(S, cal);
+  const shiyakuOpen = isPaperOpen('shiyakusho', cal, min);
+  const yubinOpen = isPaperOpen('yubinkyoku', cal, min);
+
+  const btns = [];
+  for (const doc of todos.slice(0, 5)) {
+    const open = isPaperOpen(doc.place, cal, min);
+    const placeLabel = doc.place === 'shiyakusho' ? '市役所' : '郵便局';
+    const wMin = waitTime(doc.id, cal, min);
+    btns.push({
+      label: `${doc.icon} ${doc.jp} — ${doc.vi} (${placeLabel} · ${open ? `chờ ~${wMin}p` : 'Đóng cửa'})`,
+      cls: open ? '' : 'ghost',
+      on: () => {
+        if (!open) {
+          toast(`🚪 ${placeLabel} đang đóng cửa`, doc.place === 'shiyakusho' ? 'Mở T2–T6 (8:30–17:15) & T7 ngày 13 (9:00–12:00)' : 'Mở T2–T6 (9:00–17:00)');
+          return;
+        }
+        runPaperworkForm(doc, () => townPaperworkVisit(returnTo));
+      },
+    });
+  }
+  btns.push({ label: '← Quay lại', cls: 'ghost', on: () => returnTo() });
+
+  card(`<h2>🏛️ Tòa hành chính (市役所) & Bưu điện (郵便局)</h2>
+    <p>⏰ Giờ hiện tại: <b>${fmtClock(min)}</b> · <b>市役所:</b> ${shiyakuOpen ? '🟢 Đang mở' : '🔴 Đóng cửa'} · <b>郵便局:</b> ${yubinOpen ? '🟢 Đang mở' : '🔴 Đóng cửa'}</p>
+    ${todos.length ? '<p>Chọn thủ tục cần điền tờ khai tiếng Nhật (5–6 mục):</p>' : '<p class="lesson">✅ Bạn đã hoàn thành tất cả giấy tờ hành chính cần thiết!</p>'}`, btns);
+}
+
+function runPaperworkForm(doc, onDone) {
+  const S = G.S;
+  S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+  const d = S.lDay;
+  const cal = ensureCal(S);
+  positionPlayerTown(doc.place === 'shiyakusho' ? 'cityhall' : 'post');
+  const fields = formFields(doc.id, S);
+  const wMin = waitTime(doc.id, cal, d.min ?? 9 * 60);
+  const answers = {};
+
+  function askField(idx) {
+    if (idx >= fields.length) {
+      const res = checkForm(doc.id, answers, S);
+      if (!res.ok) {
+        d.min = (d.min ?? 540) + res.extraMin;
+        save(S, storage);
+        const wrongLabels = res.wrong.map((fid) => {
+          const f = fields.find((x) => x.id === fid);
+          return f ? `${f.jp} (${f.vi})` : fid;
+        }).join(', ');
+        card(`<div class="big">📝</div><h2>Tờ khai có mục điền chưa đúng!</h2>
+          <p>Nhân viên quầy kiểm tra và gạch đỏ mục cần sửa: <b>${esc(wrongLabels)}</b>.</p>
+          <p class="lesson">⏳ Bạn mất thêm <b>+${res.extraMin} phút</b> để điền lại và xếp hàng nộp lại.</p>`, [
+          { label: '✍️ Điền lại tờ khai →', on: () => askField(0) },
+          { label: '← Để lúc khác', cls: 'ghost', on: () => onDone() },
+        ]);
+        return;
+      }
+      const done = completePaper(S, doc.id, wMin);
+      d.min = (d.min ?? 540) + done.min;
+      save(S, storage);
+      card(`<div class="big">✅</div><h2>Hoàn tất: ${esc(doc.jp)} (${esc(doc.vi)})</h2>
+        <p>${esc(doc.benefit)} · Thời gian chờ & làm thủ tục: <b>${done.min} phút</b> (⏰ ${fmtClock(d.min)}).</p>
+        <div class="deltas"><span class="chip pos">🎌 Tiếng Nhật +${done.jpGain}</span></div>`, [
+        { label: 'Tiếp tục →', on: () => onDone() },
+      ]);
+      return;
+    }
+
+    const f = fields[idx];
+    const btns = f.options.slice(0, 4).map((opt) => ({
+      label: opt,
+      on: () => {
+        answers[f.id] = opt;
+        askField(idx + 1);
+      },
+    }));
+    btns.push({ label: '← Hủy tờ khai', cls: 'ghost', on: () => onDone() });
+
+    card(`<h2>${doc.icon} Tờ khai ${esc(doc.jp)} (${idx + 1}/${fields.length})</h2>
+      <p>Điền mục <b>${esc(f.jp)}</b> (${esc(f.vi)}):</p>
+      <p class="lesson">⏳ Thời gian chờ tại quầy dự kiến: ~${wMin} phút.</p>`, btns);
+  }
+
+  askField(0);
+}
+
+function townMedicalVisit(returnTo) {
+  const S = G.S;
+  S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+  const d = S.lDay;
+  const cal = ensureCal(S);
+  const min = d.min ?? 9 * 60;
+  positionPlayerTown('clinic');
+  dayHud('🏥 Phòng khám & Hiệu thuốc');
+
+  const illMeta = S.ill ? (ILLNESSES[S.ill.id] || ILLNESSES.kaze) : null;
+  const clinicOpen = isClinicOpen(cal, min);
+  const hasHoken = !!S.papers?.hoken;
+  const clinicFee = hasHoken ? CLINIC.FEE_INSURED : CLINIC.FEE_UNINSURED;
+
+  const btns = [];
+  if (illMeta) {
+    btns.push({
+      label: `🏥 Khám Phòng khám さくら (${yen(clinicFee)} · ${hasHoken ? 'có 保険証 30%' : 'chưa có 保険証'} · ${clinicOpen ? '60–120p' : 'Đóng cửa'})`,
+      cls: clinicOpen ? '' : 'ghost',
+      on: () => {
+        if (!clinicOpen) {
+          toast('🚪 Phòng khám さくら đang đóng cửa', 'Mở T2–T6 (9:00–12:30, 14:00–18:00) & sáng T7 (9:00–12:30)');
+          return;
+        }
+        const r = visitClinic(S, hasHoken);
+        if (!r.ok) {
+          toast('💴 Không đủ tiền khám', `Cần ${yen(clinicFee)}`);
+          return;
+        }
+        d.min = min + r.min;
+        save(S, storage);
+        card(`<div class="big">🏥</div><h2>Đã khám tại ${esc(CLINIC.jp)}</h2>
+          <p>Bác sĩ khám <b>${esc(illMeta.jp)} (${esc(illMeta.vi)})</b> và kê đơn thuốc. Viện phí: <b>${yen(r.cost)}</b> (${r.insured ? 'đã giảm còn 30% nhờ 保険証' : '100% do chưa có 保険証'}).</p>
+          <p class="lesson">✅ Bệnh sẽ khỏi hẳn sau <b>${r.daysLeft} ngày</b> · <b>❤️ +8</b> · <b>🎌 +2</b> (⏰ ${fmtClock(d.min)}).</p>`, [
+          { label: 'Tiếp tục →', on: () => returnTo() },
+        ]);
+      },
+    });
+    btns.push({
+      label: `💊 Mua thuốc tại ドラッグストア さくら (${yen(1200)} · 30p)`,
+      on: () => {
+        const r = buyMedicine(S, 1200);
+        if (!r.ok) {
+          toast('💴 Không đủ tiền mua thuốc', 'Cần 1.200 ¥');
+          return;
+        }
+        d.min = min + r.min;
+        save(S, storage);
+        card(`<div class="big">💊</div><h2>Mua thuốc tại ドラッグストア さくら</h2>
+          <p>${r.effective
+            ? `Dược sĩ tư vấn thuốc hợp triệu chứng. Bệnh giảm còn <b>${r.daysLeft} ngày</b> (<b>❤️ +3</b>).`
+            : `Uống thuốc tự mua chưa đỡ rõ rệt (còn <b>${r.daysLeft} ngày</b>).`}</p>
+          ${r.reminder ? `<p class="lesson">⚠️ ${esc(r.reminder)}.</p>` : ''}`, [
+          { label: 'Tiếp tục →', on: () => returnTo() },
+        ]);
+      },
+    });
+  }
+  btns.push({ label: '← Quay lại', cls: 'ghost', on: () => returnTo() });
+
+  card(`<h2>🏥 Phòng khám さくら & ドラッグストア さくら</h2>
+    <p>⏰ Giờ hiện tại: <b>${fmtClock(min)}</b> · Phòng khám: ${clinicOpen ? '🟢 Đang mở' : '🔴 Đóng cửa (T2–T6 9:00–12:30 & 14:00–18:00; T7 9:00–12:30)'}</p>
+    ${illMeta
+      ? `<p>Tình trạng: <b>${illMeta.icon} ${esc(illMeta.jp)} — ${esc(illMeta.vi)}</b> (còn ~${S.ill.daysLeft} ngày).</p>`
+      : '<p class="lesson">💪 Hiện tại sức khỏe của bạn bình thường, không có triệu chứng ốm.</p>'}`, btns);
+}
+
+function townBikeShopVisit(returnTo) {
+  const S = G.S;
+  S.lDay = S.lDay || { dayKey: curDayKey(S), min: 9 * 60 };
+  const d = S.lDay;
+  const min = d.min ?? 9 * 60;
+  positionPlayerTown();
+  dayHud('🚲 Cửa hàng xe đạp さくら');
+
+  const b = S.bike || {};
+  const btns = [];
+  if (!b.owned) {
+    btns.push({
+      label: `🚲 Mua xe đạp cũ 中古自転車 (${yen(BIKE.USED_PRICE)} · đi bộ ×1.6, +10p dư giờ đi làm)`,
+      on: () => {
+        const r = buyBike(S, 'used');
+        if (!r.ok) { toast('💴 Chưa đủ tiền', `Cần ${yen(BIKE.USED_PRICE)}`); return; }
+        d.min = min + 30;
+        save(S, storage);
+        toast('🚲 Đã mua xe đạp cũ!', 'Nhớ đăng ký chống trộm 防犯登録 (600 ¥) nhé!');
+        townBikeShopVisit(returnTo);
+      },
+    });
+    btns.push({
+      label: `✨ Mua xe đạp mới 新車 (${yen(BIKE.NEW_PRICE)} · đi bộ ×1.6, 🧠 +3)`,
+      on: () => {
+        const r = buyBike(S, 'new');
+        if (!r.ok) { toast('💴 Chưa đủ tiền', `Cần ${yen(BIKE.NEW_PRICE)}`); return; }
+        d.min = min + 30;
+        save(S, storage);
+        toast('✨ Đã mua xe đạp mới!', '🧠 +3 · Nhớ đăng ký 防犯登録 (600 ¥) nhé!');
+        townBikeShopVisit(returnTo);
+      },
+    });
+  } else {
+    if (!b.registered) {
+      btns.push({
+        label: `🛡️ Đăng ký chống trộm 防犯登録 (${yen(BIKE.REG_FEE)} · bắt buộc tại Nhật)`,
+        on: () => {
+          const r = registerBike(S);
+          if (!r.ok) { toast('💴 Chưa đủ tiền', `Cần ${yen(BIKE.REG_FEE)}`); return; }
+          d.min = min + 15;
+          save(S, storage);
+          toast('🛡️ Đã dán tem 防犯登録!', 'Được cảnh sát kiểm tra hợp lệ & 50% tìm lại nếu mất xe.');
+          townBikeShopVisit(returnTo);
+        },
+      });
+    }
+    btns.push({
+      label: `${b.locked !== false ? '🔒 Đỗ xe: Luôn khoá (An toàn)' : '🔓 Đỗ xe: Quên khoá (3%/ngày mất xe)'}`,
+      on: () => {
+        S.bike.locked = b.locked === false;
+        save(S, storage);
+        townBikeShopVisit(returnTo);
+      },
+    });
+  }
+  btns.push({
+    label: `📘 Ôn 5 quy tắc đi xe đạp ở Nhật (${b.rulesDone ? 'đã đạt 5/5' : 'đạt 5/5 lần đầu: 🎌 +3'})`,
+    on: () => runBikeRulesQuiz(() => townBikeShopVisit(returnTo)),
+  });
+  btns.push({ label: '← Quay lại', cls: 'ghost', on: () => returnTo() });
+
+  card(`<h2>🚲 Cửa hàng xe đạp さくら · サイクルショップ</h2>
+    <p>Trạng thái xe: <b>${b.owned ? (b.kind === 'new' ? '✨ Xe đạp mới' : '🚲 Xe đạp cũ') : 'Chưa có xe đạp'}</b>
+      ${b.owned ? ` · 防犯登録: <b>${b.registered ? '✅ Đã đăng ký' : '⚠️ Chưa đăng ký'}</b>` : ''}</p>
+    <p class="lesson">💡 Có xe đạp giúp đi làm & đi chợ nhanh gấp <b>×1.6</b> (+10 phút dư giờ buổi sáng) và đi hội pháo hoa mùa hè ở xa không tốn 600 ¥ tiền tàu.</p>`, btns);
+}
+
+function runBikeRulesQuiz(onDone) {
+  const S = G.S;
+  const rules = bikeRules();
+  const answers = [];
+
+  function askRule(idx) {
+    if (idx >= rules.length) {
+      const res = answerBikeRules(S, answers);
+      save(S, storage);
+      card(`<div class="big">${res.allCorrect ? '🎉' : '📘'}</div><h2>Kết quả luật đi xe đạp: ${res.correct}/${res.total}</h2>
+        <p>${res.allCorrect
+          ? 'Bạn đã nắm vững cả 5 quy tắc an toàn khi đi xe đạp tại Nhật Bản!'
+          : 'Hãy chú ý: đi bên trái, bật đèn buổi tối, không vừa đi vừa cầm ô/điện thoại, không chở đôi và không uống rượu bia.'}</p>
+        ${res.jpGain ? `<div class="deltas"><span class="chip pos">🎌 Tiếng Nhật +${res.jpGain}</span></div>` : ''}`, [
+        { label: 'Hoàn tất →', on: () => onDone() },
+      ]);
+      return;
+    }
+    const q = rules[idx];
+    const btns = q.choices.map((c, cIdx) => ({
+      label: c,
+      on: () => {
+        answers[idx] = cIdx;
+        askRule(idx + 1);
+      },
+    }));
+    btns.push({ label: '← Quay lại', cls: 'ghost', on: () => onDone() });
+    card(`<h2>📘 Luật xe đạp Nhật Bản (${idx + 1}/${rules.length})</h2>
+      <p><b>${esc(q.jp)}</b></p>
+      <p>${esc(q.q)}</p>`, btns);
+  }
+
+  askRule(0);
+}
+
+function emergencyBagModal(returnTo) {
+  const S = G.S;
+  ensurePrep(S);
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('🎒 Túi khẩn cấp 非常持出袋');
+
+  const score = prepScore(S);
+  const unowned = PREP_ITEMS.filter((it) => !S.prep[it.id]);
+  const btns = [];
+  for (const it of unowned.slice(0, 4)) {
+    btns.push({
+      label: `${it.icon} Mua ${it.vi} (${it.jp} · ${yen(it.cost)})`,
+      on: () => {
+        const r = buyPrep(S, it.id);
+        if (!r.ok) {
+          toast('💴 Chưa đủ tiền', `Cần ${yen(it.cost)}`);
+          return;
+        }
+        save(S, storage);
+        toast(`${it.icon} Đã thêm vào túi khẩn cấp!`, `Mức chuẩn bị: ${r.score}/5`);
+        emergencyBagModal(returnTo);
+      },
+    });
+  }
+  if (!S.prep.shelterKnown) {
+    btns.push({
+      label: '🪧 Học biển báo Nơi sơ tán (避難所 · 🎌 +2)',
+      on: () => {
+        const q = SHELTER_QUESTION;
+        const qBtns = q.choices.map((c, idx) => ({
+          label: c,
+          on: () => {
+            const res = answerShelter(S, idx);
+            save(S, storage);
+            toast(res.correct ? '✅ Chính xác! 避難所 = Nơi sơ tán' : '💡 避難所 nghĩa là Nơi sơ tán khẩn cấp', res.jpGain ? `🎌 +${res.jpGain}` : '');
+            emergencyBagModal(returnTo);
+          },
+        }));
+        qBtns.push({ label: '← Quay lại', cls: 'ghost', on: () => emergencyBagModal(returnTo) });
+        card(`<h2>🪧 Biển báo phòng chống thiên tai</h2><p>${esc(q.prompt)}</p>`, qBtns);
+      },
+    });
+  }
+  btns.push({ label: '← Quay lại', cls: 'ghost', on: () => returnTo() });
+
+  const listHtml = PREP_ITEMS.map((it) =>
+    `<li>${S.prep[it.id] ? '✅' : '⬜'} ${it.icon} <b>${esc(it.jp)}</b> — ${esc(it.vi)} (${yen(it.cost)})</li>`
+  ).join('');
+
+  card(`<h2>🎒 Túi khẩn cấp · 非常持出袋 (${score}/5 món)</h2>
+    <p>Chuẩn bị sẵn 5 món thiết yếu tại góc phòng giúp giữ bình tĩnh khi có động đất hoặc bão lớn (đủ ≥ 4/5 món giảm một nửa tổn thất tinh thần khi động đất):</p>
+    <ul>${listHtml}</ul>`, btns);
 }
 
 function caughtSideJobCard() {
@@ -1330,12 +1940,13 @@ function runHolidayAct(hAct) {
     return;
   }
 
-  if ((S.money || 0) < (hAct.cost || 0)) {
-    toast('💴 Chưa đủ tiền', `Cần ${yen(hAct.cost)} cho hoạt động này`);
+  const effCost = (hAct.id === 'hanabi' && S.bike?.owned) ? 0 : (hAct.cost || 0);
+  if ((S.money || 0) < effCost) {
+    toast('💴 Chưa đủ tiền', `Cần ${yen(effCost)} cho hoạt động này`);
     return;
   }
   const fx = { ...(hAct.fx || {}) };
-  if (hAct.cost) fx.money = -(hAct.cost || 0);
+  if (effCost) fx.money = -effCost;
   const deltas = applyFx(S, fx);
   d['holi_' + hAct.id] = true;
   d.min = (d.min || 540) + (hAct.min || 120);
@@ -1403,6 +2014,18 @@ function finishStep(extraHtml = '') {
     if (cRes.caught) {
       S.lDay = S.lDay || {};
       S.lDay.caughtReport = cRes;
+    }
+    if (S.ill) {
+      illDayTick(S);
+    } else if (S.life) {
+      catchIll(S, ensureCal(S), curWeather(S), jobOf());
+    }
+    if (S.bike?.owned) {
+      const bRes = checkBikeTheft(S);
+      if (bRes.stolen) {
+        S.lDay = S.lDay || {};
+        S.lDay.stolenBikeReport = true;
+      }
     }
   }
   save(S, storage);
@@ -1846,6 +2469,9 @@ const CREDITS = [
   ['Giá phơi đồ', 'Drying Rack FREE Low Poly', 'LadyLionStudios', 'b2bcc6bd61d24d4b843fa78f75a4a8ca', 'CC BY 4.0'],
   ['Nồi cơm điện', 'Rice Cooker', 'AyunFat', '3f70c8b7cf704bdb952e09c0d5f5ab65', 'CC BY 4.0'],
   ['Nồi', 'Kitchen Cooking Pot', 'Replexx', 'c2acd4b4956c4a04a7bd7402bf918743', 'CC BY 4.0'],
+  ['Tòa thị chính', 'Modern Building - Gallery - Office', 'cjmitchell', '5546323923cf4b539071809d87a3e3b8', 'CC BY 4.0'],
+  ['Bưu điện', 'Japanese Store', 'Valentin.Gonzalez', '736b4ce139584ce6a8c48da118684b81', 'CC BY 4.0'],
+  ['Phòng khám, nhà thuốc', 'Old Japanese Store - Lowpoly', 'Fridqeir', 'baa1a12ed0984143adde52b5e165e288', 'CC BY 4.0'],
   ['Xe đạp', 'Low Poly Bicycles', 'EdwiixGG', 'c256e970e2874ad0ac04dcef730863af', 'CC BY 4.0'],
   ['Xe tải nhỏ', 'Simple Kei Truck', 'Spookyghostboo', 'fb477a6082c5442ca060dfcdf8eae928', 'CC BY 4.0'],
   ['Hàng rào cây', 'Shrub tiles pack (3 vars, seamless)', 'LOLIPOP', 'ce2fce219f634f328abc6280b2409613', 'CC BY 4.0'],

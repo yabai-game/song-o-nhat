@@ -7,6 +7,8 @@ import { MORNING, createMorning, clock, wake, tick, act, leaveRoom, arrive, toPl
 import { applyFx, save } from '../core/state.js';
 import { KINDS, DAY_JP, TRASH_MIN, createSort, answer, result, rng } from '../core/trash_rules.js';
 import { SEASONS, weekday, weatherOf, weatherFx } from '../core/calendar.js';
+import { illWalkMul } from '../core/clinic.js';
+import { commuteMul, commuteExtraMin, policeStop } from '../core/bicycle.js';
 import { DORM } from '../gfx/dorm.js';
 import { ROUTE } from '../gfx/site.js';
 import { STATION } from '../gfx/station.js';
@@ -108,6 +110,7 @@ export class MorningWalk {
     this.active = true; this.paused = false; this.running = false; this.rise = -1; this.busy = 0; this.bestD = Infinity; this.stuckT = 0;
     this.platT = 0; this.rideT = -1; this.boarding = false; this.warned = false; this.greetT = -1; this.pendingGreet = false;
     this.sorted = false; this.carryingBag = false; this.trashSt = null; this.pendingDrop = false;
+    this.ridingBike = false; this.policeChecked = false;
     if (this.stages.site) {
       if (this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
       if (this.stages.site.setTrashDropped) this.stages.site.setTrashDropped(false);
@@ -170,8 +173,13 @@ export class MorningWalk {
       const tDone = this.trashDone();
       this.btn.trash.hidden = tDone;
       this.btn.trash.classList.toggle('hot', !tDone && this.demoTrash);
+      const hasBike = !!(this.S?.bike?.owned && !this.S.bike.stolen);
+      this.btn.out.querySelector('.i').textContent = hasBike ? '🚲' : '🚪';
+      this.btn.out.querySelector('.l').textContent = hasBike ? 'Đạp xe đi làm' : 'Ra ngoài';
+      this.btn.out.querySelector('.j').textContent = hasBike ? '自転車で出勤' : '行ってきます';
       this.btn.out.classList.toggle('hot', this.near(DORM.door) || (this.demoTrash && this.carryingBag));
     } else if (s.phase === 'street') {
+      this.btn.run.hidden = !!this.ridingBike;
       this.btn.drop.hidden = !this.carryingBag;
       this.btn.drop.classList.toggle('hot', this.carryingBag && this.near(ROUTE.trash, 1.9));
       this.btn.drink.disabled = s.drank;
@@ -459,7 +467,13 @@ export class MorningWalk {
       this.openSortCard();
     } else if (id === 'out') {
       if (!this.near(DORM.door, 2.4)) { this.controls.target = new THREE.Vector3(DORM.door.x, 0, DORM.door.z); this.pendingOut = true; return; }
-      this.overhead.say(P, '行ってきます！', 1.5);
+      const hasBike = !!(S?.bike?.owned && !S.bike.stolen);
+      this.ridingBike = hasBike;
+      if (hasBike) {
+        s.min = Math.max(MORNING.READY, s.min - commuteExtraMin(S));
+        toast('🚲 Đạp xe đi làm · 自転車通勤', `Đi nhanh ×1,6 · Dư thêm 10 phút buổi sáng (⏰ ${clock(s.min)})`);
+      }
+      this.overhead.say(P, hasBike ? '自転車で行ってきます！' : '行ってきます！', 1.5);
       leaveRoom(s);
       this.fadeTo(() => this.enterStreet());
     } else if (id === 'drop') {
@@ -653,7 +667,8 @@ export class MorningWalk {
           const room = s.phase === 'room', plat = s.phase === 'platform', inside = s.phase === 'walkin';
           const B = room ? DORM.bounds : plat ? STATION.bounds : inside ? this.walkin.bounds : ROUTE.bounds;
           const blocks = room ? DORM.blocks : plat ? STATION.blocks : inside ? (this.walkin.blocks || []) : ROUTE.blocks;
-          const sp = WALK * (this.running && s.phase === 'street' ? RUN_MUL : 1) * (room ? 0.6 : inside ? 0.75 : 1) * mag * dt;
+          const streetMul = s.phase === 'street' ? (this.ridingBike ? commuteMul(this.S) : (this.running ? RUN_MUL : 1)) : 1;
+          const sp = WALK * streetMul * illWalkMul(this.S) * (room ? 0.6 : inside ? 0.75 : 1) * mag * dt;
           pos.x += this.dir.x * sp; pos.z += this.dir.z * sp;
           for (const o of blocks) {
             const dx = pos.x - o.x, dz = pos.z - o.z, dd = Math.hypot(dx, dz), rr = o.r + 0.3;
@@ -669,6 +684,21 @@ export class MorningWalk {
       if (this.pendingOut && !c.target && this.near(DORM.door, 2.4)) { this.pendingOut = false; this.action('out'); }
       if (this.pendingEat && !c.target) { this.pendingEat = false; if (this.near(DORM.table, 1.4)) { P.yaw = Math.PI / 2; this.action('eat'); } }
       if (this.pendingDrop && !c.target) { this.pendingDrop = false; if (this.near(ROUTE.trash, 1.9)) this.action('drop'); }
+      if (s.phase === 'street' && this.ridingBike && !this.policeChecked && pos.x > (ROUTE.start.x + ROUTE.gate.x) * 0.5) {
+        this.policeChecked = true;
+        const pStop = policeStop(this.S, this.S?.cal, false);
+        if (pStop.stopped) {
+          s.min += pStop.min;
+          if (this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+          this.paused = true;
+          card(`<div class="big">👮</div><h2>お巡りさん kiểm tra xe đạp</h2>
+            <p class="jpline" style="text-align:center">「${esc(pStop.jp)}」</p>
+            <p>${esc(pStop.vi)}</p>
+            ${pStop.deltas?.length ? `<div class="deltas">${deltaChips(pStop.deltas)}</div>` : ''}`, [
+            { label: 'Tiếp tục đi làm →', on: () => { this.paused = false; } },
+          ]);
+        }
+      }
       if (s.phase === 'street' && !this.demoTrash && this.commute !== 'train' && this.near(ROUTE.gate, 1.9)) this.finish();
       if (s.phase === 'street' && !this.demoTrash && this.commute === 'train' && this.near(ROUTE.station, 1.6)) { toPlatform(s); this.fadeTo(() => this.enterPlatform()); }
       if (s.phase === 'platform') this.platform(dt);

@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, signTexture, makeSun, skyDome, loadModel, loadBrand, BRAND_ASPECT } from './stage.js';
 import { STREET, asphaltTexture, lotTexture, buildStreetDetails } from './street.js';
 import { makeSeasonFx } from './season.js';
+import { buildServices } from './services.js';
 import { SITE, PIPE_KINDS, PIPE_ORDER } from '../core/site_rules.js';
 import { buildBackdrop } from './backdrop.js';
 
@@ -40,7 +41,7 @@ function pipePile(parent, x, y, z, rows, cols, len, ry = 0, r = 0.09, color = '#
   return mesh;
 }
 
-const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight', 'trash_bags', 'bicycle', 'kei_truck', 'hedge', 'stop_sign', 'curve_mirror'];
+const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight', 'trash_bags', 'bicycle', 'kei_truck', 'hedge', 'stop_sign', 'curve_mirror', 'city_hall', 'post_office', 'clinic_bldg'];
 const KONBINI_Z = 33.3;                  // mini mart lot centre: its 7.7 m deep lot fronts the sidewalk (z ≈ 29.4)
 const KONBINI_SIGN = { z: KONBINI_Z - 3.2 }; // shop front (for the light spilling out at night)
 const DORM_Z = 33.3;                     // dorm model centre: its 7.3 m deep block fronts the sidewalk (z ≈ 29.7)
@@ -351,7 +352,9 @@ export async function buildSite() {
     (i % 2 ? beigeN : woodN).push([-45.5, z + 2, Math.PI / 2, 1]);
   });
   for (let x = -52, i = 0; x <= 52; x += 13, i++) (i % 2 ? beigeF : woodF).push([x, -45, 0, 1]);
-  for (const [x, i] of [[-13, 0], [13, 1], [26, 2]]) (i % 2 ? woodN : beigeN).push([x, 35, Math.PI, 1]); // −26 is the dorm, 0 the konbini
+  for (const [x, i] of [[-13, 0]]) (i % 2 ? woodN : beigeN).push([x, 35, Math.PI, 1]); // −26 is the dorm, 0 the konbini
+  // east end of the south street: clinic over a drugstore, post office, city hall (S17, services.js)
+  buildServices(scene, gl, placeModel);
   placeModel(gl.house_beige, beigeN); placeModel(gl.house_wood, woodN);
   placeModel(gl.house_modern, beigeF); placeModel(gl.house_wood, woodF);
   // tower blocks ("LOW POLY - ASIAN TOWER BLOCK" by Colin.Greenall, CC BY; its shop signs are left out)
