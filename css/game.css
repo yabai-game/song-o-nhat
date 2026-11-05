@@ -274,3 +274,7 @@ button.small { font-size: 13px; padding: 8px 12px; }
 .sbar.mini { display: flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 99px; }
 .sbar.mini .sb-i { font-size: 12px; line-height: 1; } .sbar.mini .sb-t { flex: 1; height: 6px; }
 @media (orientation: landscape) { #shifthud .mini-bars { top: calc(86px + env(safe-area-inset-top, 0px)); } }
+/* ☰ pause / home button during play; the top row moves right to make room */
+.menu-btn { position: absolute; z-index: 6; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--hud); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: inherit; font-size: 18px; line-height: 1; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 10px rgba(40,25,15,.3); }
+.menu-btn[hidden] { display: none; }
+#app.has-menu .top { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 46px); }

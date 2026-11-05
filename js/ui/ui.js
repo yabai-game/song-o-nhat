@@ -60,7 +60,7 @@ export class Overhead {
     const W = canvas.clientWidth, H = canvas.clientHeight;
     // keep bubbles and tags inside the screen and below the top HUD row (no overlap with pills/stats)
     let minTop = 6;
-    for (const el of document.querySelectorAll('#dayhud:not([hidden]) .top, #shifthud:not([hidden]) .top, #shifthud:not([hidden]) .place, #shifthud:not([hidden]) .rank, #shifthud:not([hidden]) .tip:not([hidden]), #shifthud:not([hidden]) .gust:not([hidden])')) {
+    for (const el of document.querySelectorAll('#dayhud:not([hidden]) .top, #shifthud:not([hidden]) .top, #shifthud:not([hidden]) .place, #shifthud:not([hidden]) .rank, #shifthud:not([hidden]) .tip:not([hidden]), #shifthud:not([hidden]) .gust:not([hidden]), #shifthud:not([hidden]) .mini-bars:not([hidden])')) {
       const r = el.getBoundingClientRect(); if (r.height) minTop = Math.max(minTop, r.bottom + 6);
     }
     const placed = []; // bubble rects already laid out this frame: later bubbles move down below them

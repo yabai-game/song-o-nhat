@@ -213,6 +213,12 @@ function bindUi() {
   $('btn-continue').addEventListener('click', () => { const S = load(storage); if (S) { G.S = S; G.draft.colors = S.look.colors; G.draft.outfit = S.look.outfit; setPlayer().then(runStep); } });
   $('btn-demo').addEventListener('click', demoScreen);
   $('btn-career').addEventListener('click', careerScreen);
+  $('btn-menu').addEventListener('click', pauseMenu);
+  // the ☰ menu button shows whenever a game screen (not the title / creator) is up
+  setInterval(() => {
+    const on = !['title', 'creator', 'jobs'].includes(G.mode) && $('title').hidden && $('creator').hidden;
+    $('btn-menu').hidden = !on; $('app').classList.toggle('has-menu', on);
+  }, 300);
   $('stats').addEventListener('click', onStatsTap);
   $('sh-bars').addEventListener('click', onStatsTap);
   // compact bars on the walking / shift HUD, refreshed twice a second (S13)
@@ -226,7 +232,7 @@ function bindUi() {
     if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
     // sit just below whatever is on the left under the top bar (the day / rank pill can wrap to two lines)
     let bottom = 0;
-    for (const id of ['sh-rank', 'sh-place']) {
+    for (const id of ['sh-rank', 'sh-place', 'sh-tip', 'sh-ticket']) {
       const el = $(id); if (!el || el.hidden) continue;
       const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
       if (r.height && r.left < b.right && r.right > b.left) bottom = Math.max(bottom, r.bottom);
@@ -251,6 +257,26 @@ function bindUi() {
   $('c').addEventListener('pointerdown', (e) => { if (G.mode === 'creator') drag = { x: e.clientX, yaw: G.yaw }; });
   addEventListener('pointermove', (e) => { if (drag && G.mode === 'creator') { G.yaw = drag.yaw + (e.clientX - drag.x) * 0.012; G.spin = 0; } });
   addEventListener('pointerup', () => { drag = null; });
+}
+
+/** ☰ during play: pause, then resume or go back to the title screen (progress is saved per step). */
+function activeModule() {
+  return { shift: G.activeShift || G.shift, morning: G.morning, evening: G.evening, market: G.market, dayoff: G.dayoff }[G.mode] || null;
+}
+function pauseMenu() {
+  if (!$('modal').hidden) return; // another card is already open
+  const mod = activeModule(), was = mod ? mod.paused : false;
+  if (mod) mod.paused = true;
+  const demo = !G.S || G.S.flags.demo || G.demoJob;
+  card(`<h2>⏸ Tạm dừng</h2><p>${demo ? 'Đang ở chế độ thử, không lưu.' : 'Tiến độ đã lưu tới bước gần nhất. Về màn hình chính thì phần đang làm dở (ca làm, đường đi) sẽ làm lại từ đầu bước này.'}</p>`, [
+    { label: '▶ Tiếp tục', on: () => { if (mod) mod.paused = was; } },
+    { label: '🏠 Về màn hình chính', cls: 'ghost', on: () => {
+      try { if (mod && mod.stop) mod.stop(); } catch (e) { console.warn(e); }
+      if (mod) mod.active = false;
+      if (G.player) { G.player.unpinAll(); G.player.holder.rotation.x = 0; G.player.bendTo = 0; G.player.reachTo = 0; }
+      titleScreen();
+    } },
+  ]);
 }
 
 function hideAll() { for (const id of ['title', 'creator', 'jobs', 'dayhud', 'talk', 'shifthud', 'modal']) show(id, false); G.talkPair = null; }
