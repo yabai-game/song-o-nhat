@@ -278,10 +278,12 @@ export class SiteShift {
     if (this.intro > 0) {
       this.camRig.to(this.site.showcase.pos, this.site.showcase.look, dt, 3);
     } else {
-      if (moving && !c.drag && Math.abs(c.joy.x) < 0.4) {
-        const want = p.yaw + Math.PI;
-        let dy = want - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-        c.yaw += dy * Math.min(1, dt * 2.2);
+      // chase camera (player feedback 2026-11-05): swings behind the character while walking (slower while turning)
+      // and re-centres after a short stop, so the view and the way the character faces stay in line
+      c.idleT = moving ? 0 : (c.idleT || 0) + dt;
+      if (!c.drag && (moving || c.idleT > 0.5)) {
+        let dy = p.yaw + Math.PI - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        c.yaw += dy * Math.min(1, dt * (moving ? (Math.abs(c.joy.x) < 0.4 ? 3.2 : 0) : 2.4));
       }
       const dist = 4.6 * (portrait ? 1.1 : 1);
       const cp = Math.cos(c.pitch);

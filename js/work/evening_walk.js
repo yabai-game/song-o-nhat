@@ -774,9 +774,13 @@ export class EveningWalk {
         camera.position.copy(this.camRig.pos);
       }
     } else if (e.phase !== 'talk') {
-      if (moving && !c.drag && Math.abs(c.joy.x) < 0.4) {
+      // chase camera (player feedback 2026-11-05: the view stayed at an angle to the way the character faces):
+      // it swings behind the character while walking (slower while turning), and re-centres after a short stop
+      c.idleT = moving ? 0 : (c.idleT || 0) + dt;
+      if (!c.drag && (moving || c.idleT > 0.5)) {
         let dy = P.yaw + Math.PI - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-        c.yaw += dy * Math.min(1, dt * 2);
+        const rate = moving ? (Math.abs(c.joy.x) < 0.4 ? 3.2 : 0) : 2.4;
+        c.yaw += dy * Math.min(1, dt * rate);
       }
       const dist = 4.6 * (portrait ? 1.15 : 1), cp = Math.cos(c.pitch);
       this.camPos.set(pos.x + Math.sin(c.yaw) * dist * cp, 1.5 + Math.sin(c.pitch) * dist, pos.z + Math.cos(c.yaw) * dist * cp);
