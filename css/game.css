@@ -257,3 +257,20 @@ button.small { font-size: 13px; padding: 8px 12px; }
 .tag.care { background: rgba(255,255,255,.95); color: #3a2a1e; }
 .tag.care-float { background: none; box-shadow: none; font-size: 16px; font-weight: 900; text-shadow: 0 1px 3px rgba(255,255,255,.9); }
 .tag.care-float.good { color: #2f9e5a; } .tag.care-float.bad { color: #d64545; }
+
+/* S13: health / mental / skill bars (tap for help) */
+.sbars { display: grid; gap: 5px; width: min(210px, 56vw); }
+.sbar { appearance: none; display: grid; gap: 3px; padding: 5px 9px 6px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--hud); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: inherit; font: inherit; text-align: left; cursor: pointer; touch-action: manipulation; }
+.sbar .sb-h { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.sbar .sb-h b { font-variant-numeric: tabular-nums; font-weight: 800; }
+.sbar .sb-t { display: block; height: 7px; border-radius: 99px; background: rgba(0,0,0,.25); overflow: hidden; }
+.sbar .sb-t i { display: block; height: 100%; border-radius: 99px; transition: width .4s; }
+.sbar.ok .sb-t i { background: #4caf6a; } .sbar.mid .sb-t i { background: #e3b23c; }
+.sbar.bad .sb-t i { background: #e05252; } .sbar.bad { border-color: #e05252; animation: sbPulse 1s infinite alternate; }
+.sbar.skill .sb-t i { background: #4a8fe0; } .sbar.max .sb-t i { background: linear-gradient(90deg, #f5c542, #ffe28a); }
+@keyframes sbPulse { from { box-shadow: 0 0 0 0 rgba(224,82,82,.0); } to { box-shadow: 0 0 0 4px rgba(224,82,82,.35); } }
+.schips { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; margin-top: 5px; }
+#shifthud .mini-bars { position: absolute; top: calc(132px + env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); display: grid; gap: 4px; width: 112px; pointer-events: auto; }
+.sbar.mini { display: flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 99px; }
+.sbar.mini .sb-i { font-size: 12px; line-height: 1; } .sbar.mini .sb-t { flex: 1; height: 6px; }
+@media (orientation: landscape) { #shifthud .mini-bars { top: calc(86px + env(safe-area-inset-top, 0px)); } }

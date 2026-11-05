@@ -1,10 +1,12 @@
 // Bento factory (さくら食品, Chiba): bright stainless-and-white food processing hall with a 37.2 m
-// conveyor belt (4 segments of the Sketchfab conveyor model rotated 90° to run along x), black plastic
-// trays with floating side-dish icons that swap to a finished bento_box when completed, a yellow work-zone
-// overlay, and 「衛生第一」 / 「手洗い30秒」 wall signs.
+// food-grade PU conveyor belt on a bright stainless-steel frame, compartmentalized glossy black bento
+// trays, stainless-steel prep counters with 3 gastronorm food_pan trays in front of the player (and
+// along the line), 8 uniformed NPC workers on both sides of the belt, a steel_sink hand-washing station,
+// PVC strip curtains, stainless tray racks, and 「衛生第一」 / 「手洗い30秒」 / 「異物混入注意」 / 「作業中」 signs.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, signTexture, makeSun, loadModel } from './stage.js';
+import { makeCharacter, makeSanitaryCap, wearHelmet } from './chars.js';
 import { BENTO, ITEMS, ITEM_KEYS, DEFECTS } from '../core/bento_rules.js';
 
 const BELT_X0 = -22.5;   // belt coordinate u in [0, 37.2] maps to world x = BELT_X0 + u
@@ -12,20 +14,35 @@ const BELT_Y = 0.95;     // top surface of the conveyor model
 const BELT_Z = 0;        // belt centre line along z = 0
 const SEG_LEN = 9.3;     // each conveyor model is 0.78 × 9.3 m (along its local z)
 const POOL_SIZE = 16;
+const BENTO_UNIFORM = { top: '#f2f2ee', bottom: '#f2f2ee' };
+
+// 8 NPC factory workers standing on both sides of the conveyor belt (upstream & downstream of player)
+const WORKER_SPOTS = [
+  // Far side of the belt (z = -1.06, facing +Z toward the belt)
+  { x: -5.2, z: -1.06, yaw: 0, kind: 'f_casual', dish: 'karaage', panZ: -0.58 },
+  { x: -3.1, z: -1.06, yaw: 0, kind: 'hoodie',   dish: 'sausage', panZ: -0.58 },
+  { x: -1.1, z: -1.06, yaw: 0, kind: 'f_office', dish: 'veg',     panZ: -0.58 },
+  { x:  1.1, z: -1.06, yaw: 0, kind: 'suit',     dish: 'karaage', panZ: -0.58 },
+  { x:  3.2, z: -1.06, yaw: 0, kind: 'f_casual', dish: 'sausage', panZ: -0.58 },
+  // Near side of the belt (z = +1.08, facing -Z toward the belt, flanking the player at x = 0)
+  { x: -4.2, z:  1.08, yaw: Math.PI, kind: 'suit',     dish: 'veg',     panZ: 0.58 },
+  { x: -2.3, z:  1.08, yaw: Math.PI, kind: 'f_office', dish: 'karaage', panZ: 0.58 },
+  { x:  2.3, z:  1.08, yaw: Math.PI, kind: 'hoodie',   dish: 'sausage', panZ: 0.58 },
+];
 
 export const BENTO_ROOM = {
   beltX0: BELT_X0,
   beltY: BELT_Y,
   beltZ: BELT_Z,
-  // walking bounds on the front side of the belt (used during the morning walk-in greeting)
-  bounds: { x0: -7.5, x1: 7.5, z0: 0.85, z1: 4.8 },
+  // walking bounds on the front aisle during the morning walk-in greeting
+  bounds: { x0: -7.5, x1: 7.5, z0: 1.55, z1: 4.7 },
   start: { x: 2.6, z: 4.3, yaw: Math.PI },
-  greeterAt: { x: -1.2, z: 2.1, yaw: 0.45 },
+  greeterAt: { x: -1.2, z: 2.3, yaw: 0.45 },
   // fixed positions during the conveyor shift
-  player: { x: 0, z: 0.92, yaw: Math.PI },
-  foreman: { x: -2.2, z: -1.05, yaw: 0 },
-  talkPlayer: { x: -0.4, z: 2.1 },
-  showcase: { pos: [-4.2, 3.1, 4.8], look: [-1.5, 1.1, 0] },
+  player: { x: 0, z: 1.08, yaw: Math.PI },
+  foreman: { x: -2.4, z: -1.85, yaw: 0.25 },
+  talkPlayer: { x: -0.4, z: 2.3 },
+  showcase: { pos: [-3.6, 2.55, 4.1], look: [-0.8, 1.05, -0.4] },
 };
 
 function makeOrderSprite() {
@@ -99,42 +116,105 @@ function drawOrderBadge(badge, tray) {
   tex.needsUpdate = true;
 }
 
-function makeRawTray(trayMat, rimMat, riceMat, sideMats, hairMat) {
+/** Builds a procedural side-dish cluster (`karaage`, `sausage`, or `veg`) for a tray compartment. */
+function makeCompartmentDish(sideMats) {
   const g = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.032, 0.22), trayMat);
-  base.position.y = 0.016; base.castShadow = true; base.receiveShadow = true;
-  const rim = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.044, 0.24), rimMat);
-  rim.position.y = 0.022;
-  const rice = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.038, 0.18), riceMat);
-  rice.position.set(-0.065, 0.028, 0);
-  const side = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.032, 0.055), sideMats.karaage);
-  side.position.set(0.055, 0.028, -0.062);
-  // 3 slots for placed items in multi-item orders (left to right in the compartment)
-  const placedSlots = [-0.01, 0.045, 0.095].map((px, idx) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.036, 0.062), sideMats.karaage);
-    m.position.set(px, 0.03, idx % 2 === 0 ? 0.038 : -0.01);
-    m.visible = false;
-    g.add(m);
-    return m;
+  const n1 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.020, 0), sideMats.karaage);
+  n1.position.set(-0.022, 0.004, -0.004);
+  const n2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.019, 0), sideMats.karaage);
+  n2.position.set(0.004, 0.005, 0.006);
+  const n3 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.018, 0), sideMats.karaage);
+  n3.position.set(0.026, 0.003, -0.005);
+  g.add(n1, n2, n3);
+  g.userData.pieces = [n1, n2, n3];
+  return g;
+}
+
+function setDishClusterMaterial(cluster, mat) {
+  for (const m of cluster.userData.pieces) m.material = mat;
+}
+
+/**
+ * Glossy black compartmentalized bento tray (3 side-dish compartments + 1 white rice compartment):
+ * - Left compartment (`x = -0.08`): white rice bed with black sesame / red umeboshi topping.
+ * - Right side (`x = +0.055`): split by 2 horizontal divider walls into 3 compartments (`z = -0.070, 0, +0.070`).
+ */
+function makeRawTray(trayMat, rimMat, riceMat, umeboshiMat, sideMats, hairMat) {
+  const g = new THREE.Group();
+  // Glossy black tray floor
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.016, 0.22), trayMat);
+  base.position.y = 0.008;
+  base.castShadow = true;
+  base.receiveShadow = true;
+
+  // Raised outer perimeter walls + internal compartment divider walls
+  const rim = new THREE.Group();
+  const wallFB = new THREE.BoxGeometry(0.316, 0.044, 0.014);
+  const wallLR = new THREE.BoxGeometry(0.014, 0.044, 0.236);
+  const wFront = new THREE.Mesh(wallFB, rimMat); wFront.position.set(0, 0.022, 0.111);
+  const wBack = new THREE.Mesh(wallFB, rimMat); wBack.position.set(0, 0.022, -0.111);
+  const wLeft = new THREE.Mesh(wallLR, rimMat); wLeft.position.set(-0.151, 0.022, 0);
+  const wRight = new THREE.Mesh(wallLR, rimMat); wRight.position.set(0.151, 0.022, 0);
+  // Main vertical divider separating rice compartment (left) from 3 side-dish compartments (right)
+  const divMain = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.038, 0.21), rimMat);
+  divMain.position.set(-0.018, 0.020, 0);
+  // Two horizontal dividers creating 3 side-dish compartments on the right
+  const divSub1 = new THREE.Mesh(new THREE.BoxGeometry(0.158, 0.036, 0.010), rimMat);
+  divSub1.position.set(0.064, 0.019, -0.035);
+  const divSub2 = new THREE.Mesh(new THREE.BoxGeometry(0.158, 0.036, 0.010), rimMat);
+  divSub2.position.set(0.064, 0.019, 0.035);
+  rim.add(wFront, wBack, wLeft, wRight, divMain, divSub1, divSub2);
+
+  // White rice compartment (left side) with red umeboshi in the centre
+  const rice = new THREE.Group();
+  const riceBed = new THREE.Mesh(new THREE.BoxGeometry(0.112, 0.026, 0.188), riceMat);
+  riceBed.position.set(-0.082, 0.021, 0);
+  const ume = new THREE.Mesh(new THREE.SphereGeometry(0.013, 10, 8), umeboshiMat);
+  ume.scale.set(1, 0.55, 1);
+  ume.position.set(-0.082, 0.035, 0);
+  rice.add(riceBed, ume);
+
+  // 3 side-dish compartments on the right: z = -0.070 (back), z = 0.000 (middle), z = +0.070 (front)
+  const compZ = [-0.070, 0.000, 0.070];
+  const compartments = compZ.map((cz) => {
+    const cl = makeCompartmentDish(sideMats);
+    cl.position.set(0.064, 0.024, cz);
+    cl.visible = false;
+    g.add(cl);
+    return cl;
   });
+
   // Small dark hair strand on top of rice for defect === 'hair'
-  const hair = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.006, 0.008), hairMat);
-  hair.position.set(-0.065, 0.049, 0.01);
+  const hair = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.006, 0.008), hairMat);
+  hair.position.set(-0.082, 0.038, 0.015);
   hair.rotation.y = 0.45;
   hair.visible = false;
-  g.add(rim, base, rice, side, hair);
-  g.userData = { side, rim, rice, hair, placedSlots };
+
+  g.add(base, rim, rice, hair);
+  g.userData = { rim, rice, hair, compartments };
   return g;
 }
 
 export async function buildBento() {
-  const [conveyor, bentoBox] = await Promise.all(['conveyor', 'bento_box'].map(loadModel));
+  const [conveyor, bentoBox, steelSink, foodPan] = await Promise.all(
+    ['conveyor', 'bento_box', 'steel_sink', 'food_pan'].map(loadModel),
+  );
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#eef2f5');
-  scene.fog = new THREE.FogExp2(new THREE.Color('#eef2f5'), 0.008);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xc8d0d8, 1.15));
-  const fill = new THREE.DirectionalLight(0xf5f9ff, 0.65); fill.position.set(-6, 9, 8); scene.add(fill);
-  const sun = makeSun(scene, { color: 0xfffaf0, intensity: 1.85, size: 12, offset: [3, 11, 6] });
+  scene.background = new THREE.Color('#eef4f8');
+  scene.fog = new THREE.FogExp2(new THREE.Color('#eef4f8'), 0.007);
+
+  // Clean, bright white factory lighting (no yellow cast) + 2 real point lights under ceiling tubes
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xd4dfe8, 1.25));
+  const fill = new THREE.DirectionalLight(0xf4f9ff, 0.72);
+  fill.position.set(-6, 9, 8);
+  scene.add(fill);
+  const sun = makeSun(scene, { color: 0xf8fbff, intensity: 1.75, size: 12, offset: [3, 11, 6] });
+
+  const tubeLightL = new THREE.PointLight(0xf7fbff, 0.85, 14, 1.5);
+  tubeLightL.position.set(-2.5, 4.1, 0);
+  const tubeLightR = new THREE.PointLight(0xf7fbff, 0.85, 14, 1.5);
+  tubeLightR.position.set(2.5, 4.1, 0);
+  scene.add(tubeLightL, tubeLightR);
 
   const batch = new Map(), mats = {};
   const col = (c, o = {}) => mats[c] || (mats[c] = new THREE.MeshStandardMaterial({ color: c, roughness: 0.75, ...o }));
@@ -147,122 +227,314 @@ export async function buildBento() {
   }
   const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
-  // Light grey ceramic tiled floor
-  const floorTex = canvasTexture(64, 64, (g) => {
-    g.fillStyle = '#e7ecef'; g.fillRect(0, 0, 64, 64);
-    g.strokeStyle = '#cfd6dc'; g.lineWidth = 2; g.strokeRect(1, 1, 62, 62);
-  }, [22, 8]);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(42, 14), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.32 }));
-  floor.rotation.x = -Math.PI / 2; floor.position.set(-4, 0, 0); floor.receiveShadow = true; scene.add(floor);
+  // Slightly glossy light blue-grey epoxy factory floor with subtle expansion joints & safety line
+  const floorTex = canvasTexture(128, 128, (g) => {
+    g.fillStyle = '#cbdbe3'; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = '#b9ccd6'; g.lineWidth = 2; g.strokeRect(1, 1, 126, 126);
+    g.fillStyle = 'rgba(255, 255, 255, 0.14)'; g.fillRect(8, 8, 48, 16);
+  }, [20, 7]);
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(42, 14),
+    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.22, metalness: 0.08 }),
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(-4, 0, 0);
+  floor.receiveShadow = true;
+  scene.add(floor);
 
-  // Clean white factory walls (back, left, right), hygienic trim, ceiling fluorescent light panels
-  const wall = col('#f8fafb', { roughness: 0.65 });
-  const steel = col('#c5cdd3', { metalness: 0.45, roughness: 0.4 });
-  const trim = col('#2b7a9b', { roughness: 0.5 });
-  const lamp = col('#ffffff', { emissive: '#eef7ff', emissiveIntensity: 0.9, roughness: 0.2 });
+  // White sandwich-panel walls with horizontal brushed stainless-steel band & ceiling fluorescent tubes
+  const wallTex = canvasTexture(128, 128, (g) => {
+    g.fillStyle = '#f6f9fb'; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = '#e1e8ee'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(64, 0); g.lineTo(64, 128); g.stroke();
+  }, [18, 2]);
+  const wall = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.55 });
+  const brightSteel = col('#d6dee4', { metalness: 0.80, roughness: 0.22 });
+  const darkSteel = col('#aeb8c0', { metalness: 0.72, roughness: 0.28 });
+  const trim = col('#2b7a9b', { roughness: 0.45 });
+  const lampHood = col('#e8eef2', { metalness: 0.45, roughness: 0.3 });
+  const lampTube = col('#ffffff', { emissive: '#f2f9ff', emissiveIntensity: 1.35, roughness: 0.15 });
+  const ceilingMat = col('#f2f6f9', { roughness: 0.7 });
+
   const H = 4.5, Z_BACK = -5.1;
+  // Back, left, and right white panel walls + ceiling
   put(B(42, H, 0.16), wall, -4, H / 2, Z_BACK);
   put(B(0.16, H, 14), wall, -25, H / 2, 0);
   put(B(0.16, H, 14), wall, 17, H / 2, 0);
-  put(B(42, 0.22, 0.06), steel, -4, 0.11, Z_BACK + 0.1);
-  put(B(42, 0.08, 0.05), trim, -4, 1.15, Z_BACK + 0.1);
-  // Ceiling beams and fluorescent light tubes
-  for (let x = -20; x <= 12; x += 4) {
-    put(B(2.4, 0.07, 0.32), lamp, x, H - 0.12, -1.2);
-    put(B(2.4, 0.07, 0.32), lamp, x, H - 0.12, 1.8);
+  put(B(42, 0.12, 14), ceilingMat, -4, H + 0.06, 0);
+
+  // Horizontal brushed stainless-steel wall strips (baseboard, mid-wall bumper band, top trim)
+  put(B(42, 0.22, 0.05), brightSteel, -4, 0.11, Z_BACK + 0.09);
+  put(B(42, 0.26, 0.06), brightSteel, -4, 1.22, Z_BACK + 0.09);
+  put(B(42, 0.07, 0.05), trim, -4, 1.40, Z_BACK + 0.09);
+  put(B(0.06, 0.26, 14), brightSteel, -24.9, 1.22, 0);
+  put(B(0.06, 0.26, 14), brightSteel, 16.9, 1.22, 0);
+
+  // Long glowing fluorescent tube fixtures across the ceiling (3 rows along the hall)
+  for (let x = -18; x <= 10; x += 3.6) {
+    for (const cz of [-2.4, 0.0, 2.2]) {
+      put(B(2.8, 0.06, 0.34), lampHood, x, H - 0.06, cz);
+      put(B(2.65, 0.045, 0.09), lampTube, x, H - 0.10, cz - 0.08);
+      put(B(2.65, 0.045, 0.09), lampTube, x, H - 0.10, cz + 0.08);
+    }
   }
-  // Stainless steel ingredient tables beside the player and along the back wall
-  for (const [x, z, c] of [[1.95, 0.9, '#d98a2e'], [2.55, 0.9, '#c8423a'], [3.15, 0.9, '#4c9a4a']]) {
-    put(B(0.52, 0.82, 0.52), steel, x, 0.41, z);
-    put(B(0.42, 0.08, 0.42), col(c), x, 0.84, z);
+
+  // Continuous stainless-steel ingredient prep tables along both sides of the conveyor belt
+  // Front side (z = +0.58, for the player and near-side workers) & Back side (z = -0.58, for far-side workers)
+  for (const sideZ of [-0.58, 0.58]) {
+    put(B(11.6, 0.045, 0.36), brightSteel, -1.0, 0.86, sideZ);
+    for (let lx = -6.4; lx <= 4.4; lx += 1.8) {
+      put(B(0.045, 0.84, 0.045), darkSteel, lx, 0.42, sideZ - 0.14);
+      put(B(0.045, 0.84, 0.045), darkSteel, lx, 0.42, sideZ + 0.14);
+    }
   }
-  // Hand-washing station & mirror near the back wall, plus stacked shipping crates (さくら食品)
-  put(B(1.6, 0.9, 0.65), steel, 5.2, 0.45, Z_BACK + 0.45);
-  put(B(1.4, 0.9, 0.05), col('#cbe3f0', { metalness: 0.3, roughness: 0.2 }), 5.2, 1.55, Z_BACK + 0.12);
-  const crateMat = col('#f4f3ee');
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-    put(B(0.65, 0.42, 0.5), crateMat, -6.5 + c * 0.72, 0.21 + r * 0.43, Z_BACK + 0.55);
+
+  // Multi-tier stainless-steel racks holding stacked bento trays along the back wall
+  const stackTrayMat = col('#1b1d22', { roughness: 0.22, metalness: 0.15 });
+  for (const rx of [-5.2, -3.4]) {
+    const rz = -3.85;
+    for (const dx of [-0.55, 0.55]) {
+      for (const dz of [-0.28, 0.28]) {
+        put(B(0.04, 1.85, 0.04), brightSteel, rx + dx, 0.925, rz + dz);
+      }
+    }
+    for (let sy = 0.28; sy <= 1.75; sy += 0.36) {
+      put(B(1.16, 0.03, 0.60), brightSteel, rx, sy, rz);
+      // Stacks of glossy black trays on each shelf
+      for (const sx of [-0.32, 0.0, 0.32]) {
+        put(B(0.28, 0.14, 0.22), stackTrayMat, rx + sx, sy + 0.085, rz);
+      }
+    }
   }
+  // Place a few finished bento_box models on a stainless inspection table near the back wall
+  put(B(1.6, 0.86, 0.65), brightSteel, -1.2, 0.43, -3.95);
+  for (let i = 0; i < 3; i++) {
+    const b = bentoBox.scene.clone(true);
+    b.position.set(-1.65 + i * 0.45, 0.87, -3.95);
+    b.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(b);
+  }
+
+  // PVC strip curtains (rèm nhựa PVC dải) at the factory airlock doorway on the back-right wall
+  // and at the front-right walk-in entrance
+  const pvcMat = new THREE.MeshStandardMaterial({
+    color: '#b4e0f8',
+    transparent: true,
+    opacity: 0.46,
+    roughness: 0.14,
+    metalness: 0.05,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  function addPvcDoorway(cx, cz) {
+    put(B(1.92, 0.12, 0.18), brightSteel, cx, 2.42, cz);
+    put(B(0.10, 2.45, 0.18), brightSteel, cx - 0.92, 1.225, cz);
+    put(B(0.10, 2.45, 0.18), brightSteel, cx + 0.92, 1.225, cz);
+    for (let i = 0; i < 9; i++) {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.21, 2.34, 0.012), pvcMat);
+      strip.position.set(cx - 0.76 + i * 0.19, 1.18, cz + (i % 2 ? 0.012 : -0.012));
+      scene.add(strip);
+    }
+  }
+  addPvcDoorway(5.1, Z_BACK + 0.10);
+  addPvcDoorway(2.6, 4.92);
+
+  // Commercial stainless-steel hand-washing sink (`steel_sink`, 2.39 × 1.02 × 1.15 m) + mirror
+  const placeSink = (sx, sz, rotY) => {
+    const s = steelSink.scene.clone(true);
+    s.position.set(sx, 0, sz);
+    s.rotation.y = rotY;
+    s.traverse((o) => {
+      if (o.isMesh) {
+        o.material = brightSteel;
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+    scene.add(s);
+  };
+  // Main hand-washing station under the 「手洗い30秒」 sign on the back wall (rotated 180° so faucet is at back)
+  placeSink(2.2, Z_BACK + 0.56, Math.PI);
+  put(B(2.1, 0.78, 0.04), col('#cfe6f3', { metalness: 0.55, roughness: 0.15 }), 2.2, 1.62, Z_BACK + 0.11);
+
   for (const [m, list] of batch) {
     const mesh = new THREE.Mesh(mergeGeometries(list, false), m);
-    mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
   }
 
-  // Wall signs: 「衛生第一」 and 「手洗い30秒」
-  const sign1 = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.5, 0.72),
-    new THREE.MeshStandardMaterial({ map: signTexture('衛生第一', 512, 148, '#f2f7f2', '#1f6b3a'), roughness: 0.5 }),
-  );
-  sign1.position.set(-1.7, 3.15, Z_BACK + 0.1);
-  scene.add(sign1);
+  // 4 Japanese factory signs: 「衛生第一」, 「手洗い30秒」, 「異物混入注意」, 「作業中」
+  const addSign = (text, w, h, bg, fg, x, y, z) => {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshStandardMaterial({ map: signTexture(text, 512, 148, bg, fg), roughness: 0.45 }),
+    );
+    m.position.set(x, y, z);
+    scene.add(m);
+  };
+  addSign('衛生第一', 2.3, 0.66, '#f2f7f2', '#1f6b3a', -3.8, 3.25, Z_BACK + 0.10);
+  addSign('異物混入注意', 2.6, 0.66, '#fff6f4', '#c92a1d', -0.8, 3.25, Z_BACK + 0.10);
+  addSign('手洗い30秒', 2.3, 0.66, '#eef5fb', '#1c5a96', 2.2, 2.55, Z_BACK + 0.10);
+  addSign('作業中', 1.8, 0.56, '#fff9db', '#b45309', 5.1, 3.15, Z_BACK + 0.10);
 
-  const sign2 = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.5, 0.72),
-    new THREE.MeshStandardMaterial({ map: signTexture('手洗い30秒', 512, 148, '#eef5fb', '#1c5a96'), roughness: 0.5 }),
-  );
-  sign2.position.set(1.9, 3.15, Z_BACK + 0.1);
-  scene.add(sign2);
-
-  // 4 segments of conveyor joined along x (model runs along z, so rotate 90° around Y)
+  // 4 segments of conveyor joined along x: frame & legs in bright stainless steel + top in light grey-white PU
   for (let i = 0; i < 4; i++) {
     const seg = conveyor.scene.clone(true);
     seg.rotation.y = Math.PI / 2;
     seg.position.set(BELT_X0 + (i + 0.5) * SEG_LEN, 0, BELT_Z);
-    seg.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    seg.traverse((o) => {
+      if (o.isMesh) {
+        o.material = brightSteel;
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
     scene.add(seg);
+  }
+
+  // Food-grade light grey-white PU conveyor belt surface running on top of the stainless frame
+  const puBeltTex = canvasTexture(128, 64, (g) => {
+    g.fillStyle = '#eaeeef'; g.fillRect(0, 0, 128, 64);
+    g.strokeStyle = '#d8dfe2'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 64); g.moveTo(64, 0); g.lineTo(64, 64); g.stroke();
+  }, [48, 1]);
+  const puBelt = new THREE.Mesh(
+    new THREE.BoxGeometry(BENTO.BELT_LEN, 0.014, 0.64),
+    new THREE.MeshStandardMaterial({ map: puBeltTex, roughness: 0.34, metalness: 0.04 }),
+  );
+  puBelt.position.set(BELT_X0 + BENTO.BELT_LEN / 2, BELT_Y + 0.004, BELT_Z);
+  puBelt.receiveShadow = true;
+  scene.add(puBelt);
+
+  // Gastronorm 1/2 porcelain pans (`food_pan`) on the stainless prep tables:
+  // 3 pans directly in front of the player (x = -0.38, 0, +0.38, z = +0.58) + pans in front of all 8 NPC workers
+  const panMat = new THREE.MeshStandardMaterial({ color: '#f8fafb', roughness: 0.26, metalness: 0.05 });
+  const panAssignments = [
+    // Player's 3 ingredient pans (left to right: karaage, sausage, veg)
+    { x: -0.38, z: 0.58, kind: 'karaage' },
+    { x:  0.00, z: 0.58, kind: 'sausage' },
+    { x:  0.38, z: 0.58, kind: 'veg' },
+  ];
+  for (const w of WORKER_SPOTS) {
+    panAssignments.push({ x: w.x - 0.19, z: w.panZ, kind: w.dish });
+    panAssignments.push({ x: w.x + 0.19, z: w.panZ, kind: ITEM_KEYS[(ITEM_KEYS.indexOf(w.dish) + 1) % 3] });
+  }
+  for (const pa of panAssignments) {
+    const fp = foodPan.scene.clone(true);
+    fp.position.set(pa.x, 0.882, pa.z);
+    fp.traverse((o) => {
+      if (o.isMesh) {
+        o.material = panMat;
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+    scene.add(fp);
+  }
+
+  // Procedural food pieces inside every `food_pan` using 3 InstancedMeshes (1 per dish type)
+  const piecesPerPan = 12;
+  const sideMats = {
+    karaage: new THREE.MeshStandardMaterial({ color: '#d98a2e', roughness: 0.65 }),
+    sausage: new THREE.MeshStandardMaterial({ color: '#c8423a', roughness: 0.55 }),
+    veg:     new THREE.MeshStandardMaterial({ color: '#4c9a4a', roughness: 0.65 }),
+  };
+  const dishGeos = {
+    karaage: new THREE.DodecahedronGeometry(0.026, 0),
+    sausage: new THREE.CapsuleGeometry(0.013, 0.032, 4, 8),
+    veg:     new THREE.DodecahedronGeometry(0.024, 1),
+  };
+  for (const key of ITEM_KEYS) {
+    const pans = panAssignments.filter((p) => p.kind === key);
+    const inst = new THREE.InstancedMesh(dishGeos[key], sideMats[key], pans.length * piecesPerPan);
+    inst.castShadow = true;
+    inst.receiveShadow = true;
+    let idx = 0;
+    for (let pi = 0; pi < pans.length; pi++) {
+      const pa = pans[pi];
+      for (let k = 0; k < piecesPerPan; k++) {
+        const colIdx = k % 4, rowIdx = Math.floor(k / 4);
+        const ox = (colIdx - 1.5) * 0.058 + ((k * 17) % 5 - 2) * 0.004;
+        const oz = (rowIdx - 1) * 0.056 + ((k * 13) % 5 - 2) * 0.004;
+        const oy = 0.916 + (k % 2) * 0.012;
+        e.set(key === 'sausage' ? Math.PI / 2 : 0.2 * k, 0.5 * k, key === 'sausage' ? 0.3 * (k % 3 - 1) : 0.1 * k);
+        q.setFromEuler(e);
+        p.set(pa.x + ox, oy, pa.z + oz);
+        inst.setMatrixAt(idx++, m4.compose(p, q, s1));
+      }
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    scene.add(inst);
   }
 
   // Yellow work-zone strip on top of the belt spanning [ZONE0, ZONE1]
   const zoneW = BENTO.ZONE1 - BENTO.ZONE0;
   const zoneCenterX = BELT_X0 + (BENTO.ZONE0 + BENTO.ZONE1) / 2;
   const zonePlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(zoneW, 0.72),
+    new THREE.PlaneGeometry(zoneW, 0.64),
     new THREE.MeshBasicMaterial({ color: '#f5c71a', transparent: true, opacity: 0.30, depthWrite: false }),
   );
   zonePlane.rotation.x = -Math.PI / 2;
-  zonePlane.position.set(zoneCenterX, BELT_Y + 0.012, BELT_Z);
+  zonePlane.position.set(zoneCenterX, BELT_Y + 0.013, BELT_Z);
   scene.add(zonePlane);
 
-  const railMat = new THREE.MeshStandardMaterial({ color: '#f2b705', emissive: '#b88600', emissiveIntensity: 0.25, roughness: 0.4 });
-  for (const dz of [-0.37, 0.37]) {
+  const railMat = new THREE.MeshStandardMaterial({ color: '#f2b705', emissive: '#b88600', emissiveIntensity: 0.25, roughness: 0.35 });
+  for (const dz of [-0.36, 0.36]) {
     const r = new THREE.Mesh(new THREE.BoxGeometry(zoneW, 0.03, 0.04), railMat);
-    r.position.set(zoneCenterX, BELT_Y + 0.02, BELT_Z + dz);
+    r.position.set(zoneCenterX, BELT_Y + 0.022, BELT_Z + dz);
     scene.add(r);
   }
   for (const dx of [-zoneW / 2, zoneW / 2]) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.025, 0.76), railMat);
-    bar.position.set(zoneCenterX + dx, BELT_Y + 0.018, BELT_Z);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.025, 0.74), railMat);
+    bar.position.set(zoneCenterX + dx, BELT_Y + 0.020, BELT_Z);
     scene.add(bar);
   }
 
-  // Pre-allocated pool of tray visuals (raw black tray + icon sprite -> finished bento_box)
-  const trayMat = new THREE.MeshStandardMaterial({ color: '#1f2126', roughness: 0.55 });
-  const rimMat = new THREE.MeshStandardMaterial({ color: '#2c2f36', roughness: 0.45 });
-  const riceMat = new THREE.MeshStandardMaterial({ color: '#fbfaf5', roughness: 0.85 });
+  // Pre-allocated pool of compartmentalized glossy black bento trays on the conveyor belt
+  const trayMat = new THREE.MeshStandardMaterial({ color: '#181a1f', roughness: 0.20, metalness: 0.16 });
+  const rimMat = new THREE.MeshStandardMaterial({ color: '#242830', roughness: 0.18, metalness: 0.18 });
+  const riceMat = new THREE.MeshStandardMaterial({ color: '#fbfaf5', roughness: 0.82 });
+  const umeboshiMat = new THREE.MeshStandardMaterial({ color: '#c0292b', roughness: 0.5 });
   const hairMat = new THREE.MeshStandardMaterial({ color: '#141210', roughness: 0.4 });
-  const sideMats = {
-    karaage: new THREE.MeshStandardMaterial({ color: '#d98a2e', roughness: 0.7 }),
-    sausage: new THREE.MeshStandardMaterial({ color: '#c8423a', roughness: 0.6 }),
-    veg:     new THREE.MeshStandardMaterial({ color: '#4c9a4a', roughness: 0.7 }),
-  };
 
   const pool = [];
   for (let i = 0; i < POOL_SIZE; i++) {
     const group = new THREE.Group();
-    const raw = makeRawTray(trayMat, rimMat, riceMat, sideMats, hairMat);
-    const doneBox = bentoBox.scene.clone(true);
-    doneBox.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    doneBox.visible = false;
+    const raw = makeRawTray(trayMat, rimMat, riceMat, umeboshiMat, sideMats, hairMat);
     const badge = makeOrderSprite();
     const sprite = new THREE.Sprite(badge.mat);
     sprite.scale.set(0.86, 0.38, 1);
     sprite.position.set(0, 0.45, 0);
     sprite.renderOrder = 10;
-    group.add(raw, doneBox, sprite);
+    group.add(raw, sprite);
     group.visible = false;
     scene.add(group);
-    pool.push({ group, raw, doneBox, sprite, badge, sig: '' });
+    pool.push({ group, raw, sprite, badge, sig: '' });
   }
+
+  // Spawn 8 uniformed NPC factory workers standing on both sides of the conveyor belt
+  const lineWorkers = await Promise.all(
+    WORKER_SPOTS.map(async (cfg, i) => {
+      const ch = await makeCharacter(cfg.kind, BENTO_UNIFORM);
+      const cap = makeSanitaryCap(ch);
+      wearHelmet(ch, cap.group);
+      ch.cap = cap.group;
+      ch.cap.visible = true; // enables hood, uHideHair = 1, face mask, light-blue gloves, and tongs
+      ch.holder.position.set(cfg.x, 0, cfg.z);
+      ch.yaw = cfg.yaw;
+      ch.reachTo = 0.32;
+      ch.reach = 0.32;
+      ch.play('idle');
+      scene.add(ch.holder);
+      return {
+        ch,
+        dish: cfg.dish,
+        timer: 0.35 + (i * 0.31) % 1.8,
+        period: 1.65 + (i % 4) * 0.28,
+      };
+    }),
+  );
 
   function syncTrays(trays) {
     const n = Math.min(pool.length, trays.length);
@@ -273,24 +545,30 @@ export async function buildBento() {
         continue;
       }
       slot.group.visible = true;
-      slot.group.position.set(BELT_X0 + t.x, BELT_Y + 0.008, BELT_Z);
-      slot.raw.visible = !t.done;
-      slot.doneBox.visible = !!t.done;
-      if (!t.done) {
-        const u = slot.raw.userData;
-        if (sideMats[t.other]) u.side.material = sideMats[t.other];
-        u.rice.visible = t.defect !== 'norice';
-        u.hair.visible = t.defect === 'hair';
-        u.rim.rotation.y = t.defect === 'lid' ? 0.26 : 0;
-        u.rim.position.x = t.defect === 'lid' ? 0.025 : 0;
-        const placed = t.placed || [];
-        for (let k = 0; k < u.placedSlots.length; k++) {
-          const m = u.placedSlots[k];
-          const itemKey = placed[k];
-          m.visible = !!itemKey;
-          if (itemKey && sideMats[itemKey]) m.material = sideMats[itemKey];
+      slot.group.position.set(BELT_X0 + t.x, BELT_Y + 0.011, BELT_Z);
+      slot.raw.visible = true;
+
+      const u = slot.raw.userData;
+      u.rice.visible = t.defect !== 'norice';
+      u.hair.visible = t.defect === 'hair';
+      u.rim.rotation.y = t.defect === 'lid' ? 0.24 : 0;
+      u.rim.position.x = t.defect === 'lid' ? 0.024 : 0;
+
+      // Map pre-filled dish (`t.other`) and player-placed dishes (`t.placed`) into the 3 compartments
+      const comps = u.compartments;
+      for (let c = 0; c < comps.length; c++) comps[c].visible = false;
+      const itemsToShow = [t.other, ...(t.placed || [])].filter(Boolean);
+      for (const itemKey of itemsToShow) {
+        const prefIdx = ITEM_KEYS.indexOf(itemKey);
+        let slotIdx = prefIdx >= 0 && !comps[prefIdx].visible
+          ? prefIdx
+          : comps.findIndex((c) => !c.visible);
+        if (slotIdx >= 0 && sideMats[itemKey]) {
+          comps[slotIdx].visible = true;
+          setDishClusterMaterial(comps[slotIdx], sideMats[itemKey]);
         }
       }
+
       const showIcon = !t.done && !t.missed && t.x >= BENTO.ZONE0 - BENTO.LOOKAHEAD - 3.5 && t.x <= BENTO.ZONE1;
       slot.sprite.visible = showIcon;
       if (showIcon) {
@@ -309,17 +587,31 @@ export async function buildBento() {
     for (const slot of pool) slot.group.visible = false;
   }
 
+  function update(dt) {
+    for (const w of lineWorkers) {
+      w.timer -= dt;
+      if (w.timer <= 0) {
+        w.timer = w.period;
+        w.ch.triggerPick(w.dish, 0.38);
+      }
+      w.ch.update(dt);
+    }
+  }
+
   const blocks = [
-    { x: 1.95, z: 0.9, r: 0.45 },
-    { x: 2.55, z: 0.9, r: 0.45 },
-    { x: 3.15, z: 0.9, r: 0.45 },
+    { x: -0.38, z: 0.58, r: 0.35 },
+    { x:  0.00, z: 0.58, r: 0.35 },
+    { x:  0.38, z: 0.58, r: 0.35 },
   ];
 
   return {
-    scene, sun, blocks,
+    scene,
+    sun,
+    blocks,
+    lineWorkers,
     showcase: { pos: new THREE.Vector3(...BENTO_ROOM.showcase.pos), look: new THREE.Vector3(...BENTO_ROOM.showcase.look) },
     syncTrays,
     clearTrays,
-    update() {},
+    update,
   };
 }

@@ -14,12 +14,15 @@ import { DORM } from '../gfx/dorm.js';
 import { ROUTE } from '../gfx/site.js';
 import { camera, isPortrait } from '../gfx/stage.js';
 import { $, show, card, esc, deltaText, toast } from '../ui/ui.js';
+import { CAREER, study, examReady, examQuestions, takeExam } from '../core/career.js';
+import { JOBS } from '../core/jobs.js';
 
 const BUTTONS = [
   { id: 'sleep',  icon: '🛏️', label: 'Đi ngủ',     jp: 'おやすみ', main: true },
   { id: 'cook',   icon: '🍳', label: 'Nấu cơm',    jp: '自炊' },
   { id: 'bath',   icon: '🛁', label: 'Tắm',        jp: 'お風呂' },
   { id: 'call',   icon: '📱', label: 'Gọi về nhà', jp: '電話' },
+  { id: 'study',  icon: '📚', label: 'Học chứng chỉ', jp: '勉強' },
   { id: 'market', icon: '🛒', label: 'Siêu thị',   jp: 'スーパー' },
   { id: 'run',    icon: '🏃', label: 'Chạy',       jp: '走る' },
 ];
@@ -27,7 +30,7 @@ const SHOW = {
   toSpot: ['market', 'run'],
   toDorm: ['market', 'run'],
   talk:   [],
-  room:   ['sleep', 'cook', 'bath', 'call'],
+  room:   ['sleep', 'cook', 'bath', 'call', 'study'],
   bed:    [],
 };
 const WALK = 3.0, RUN_MUL = 1.6;
@@ -173,6 +176,39 @@ export class EveningWalk {
     }
   }
 
+  /** one evening of study, or the 5-question exam once all lessons are done */
+  studyOrExam() {
+    const S = this.S, e = this.ev, P = this.who.player;
+    if (!S.career) return;
+    if (!examReady(S)) {
+      if (e.studied) return;
+      const r = study(S); if (!r) return;
+      e.studied = true; e.min += CAREER.LESSON_MIN; this.busy = 1.4;
+      this.overhead.say(P, '頑張ろう… — Cố lên nào…', 2.5);
+      toast(`📚 Học chứng chỉ ${r.lessons}/${CAREER.LESSONS}`, `🧠 ${CAREER.LESSON_MENTAL} · ${clock(e.min)}${r.ready ? ' · Đủ buổi, có thể thi!' : ''}`);
+      if (this.storage && !S.flags.demo) save(S, this.storage);
+      return;
+    }
+    const target = S.career.target, qs = examQuestions(target), answers = [];
+    this.paused = true;
+    const ask = (i) => {
+      if (i >= qs.length) {
+        const r = takeExam(S, qs, answers);
+        if (this.storage && !S.flags.demo) save(S, this.storage);
+        const J = JOBS[target];
+        card(r.pass
+          ? `<div class="big">🎓</div><h2>Đỗ chứng chỉ! ${r.score}/${qs.length}</h2><p>Từ ngày mai bạn làm ${J.icon} <b>${esc(J.name)}</b> ở ${esc(J.place.toLowerCase())}, ${esc(J.area)}. Kỹ năng làm lại từ bậc 1.</p>`
+          : `<div class="big">📕</div><h2>Chưa đỗ: ${r.score}/${qs.length}</h2><p>Cần đúng ${CAREER.PASS} câu. Học thêm 1 buổi tối rồi thi lại (đóng lại lệ phí ${yen(CAREER.FEE)}).</p>`,
+          [{ label: 'Tiếp →', on: () => { this.paused = false; } }]);
+        return;
+      }
+      const q = qs[i];
+      card(`<h2>📝 Câu ${i + 1}/${qs.length}</h2><p class="jpline" style="text-align:center;font-size:30px">${esc(q.jp)}</p><p style="text-align:center">nghĩa là gì?</p>`,
+        q.options.map((o) => ({ label: o, on: () => { answers.push(o); ask(i + 1); } })));
+    };
+    ask(0);
+  }
+
   tip(jp, vi, sec = 6) {
     const t = $('sh-tip'); t.querySelector('b').textContent = jp; t.querySelector('span').textContent = vi;
     t.hidden = false; clearTimeout(this.tipT); this.tipT = setTimeout(() => { t.hidden = true; }, sec * 1000);
@@ -208,6 +244,11 @@ export class EveningWalk {
       }
     }
     this.btn.bath.disabled = e.bath || !!this.cookState;
+    { // studying for another job's certificate (S13): visible only while a change of job is in progress
+      const c = this.S && this.S.career, b = this.btn.study;
+      b.hidden = e.phase !== 'room' || !c || !!this.cookState;
+      if (c) { const ready = examReady(this.S); b.querySelector('.i').textContent = ready ? '📝' : '📚'; b.querySelector('.l').textContent = ready ? 'Thi chứng chỉ' : `Học ${c.lessons}/${CAREER.LESSONS}`; b.disabled = !ready && !!e.studied; }
+    }
     this.btn.call.disabled = e.call || !!this.cookState;
     this.btn.sleep.disabled = !!this.cookState;
   }
@@ -237,6 +278,7 @@ export class EveningWalk {
       this.openCookMenu();
       return;
     }
+    if (id === 'study') { this.studyOrExam(); return; }
     if (id === 'bath' || id === 'call') {
       const r = act(this.S, e, id); if (!r.ok) return;
       this.busy = 1.4;

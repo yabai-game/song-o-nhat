@@ -44,7 +44,7 @@ export class BentoShift {
     Object.assign(this, { opts, who, meta, onEnd });
     this.st = createBento(opts);
     const P = who.player, F = who.foreman;
-    P.unpinAll(); P.holder.rotation.x = 0; P.bendTo = 0; P.reachTo = 0; P.reach = 0;
+    P.unpinAll(); P.holder.rotation.x = 0; P.bendTo = 0; P.reachTo = 0.28; P.reach = 0.28; P.pickT = -1;
     P.holder.position.set(BENTO_ROOM.player.x, 0, BENTO_ROOM.player.z);
     P.yaw = BENTO_ROOM.player.yaw; P.play('idle');
     if (F) {
@@ -88,7 +88,15 @@ export class BentoShift {
     this.stage.clearTrays();
     show('shifthud', false); show('sh-tip', false);
     clearTimeout(this.reachT);
-    if (this.who && this.who.player) { this.who.player.bendTo = 0; this.who.player.reachTo = 0; }
+    if (this.who && this.who.player) {
+      this.who.player.bendTo = 0;
+      this.who.player.reachTo = 0;
+      this.who.player.pickT = -1;
+      if (this.who.player.bentoGear) {
+        this.who.player.bentoGear.setPinch(0);
+        this.who.player.bentoGear.setFood(null);
+      }
+    }
   }
 
   tip(jp, vi, sec = 5.5) {
@@ -131,25 +139,27 @@ export class BentoShift {
     }
     if (r === 'step') {
       const it = ITEMS[id];
-      P.bendTo = 0.35; P.reachTo = 1;
+      P.triggerPick(id, 0.35);
+      P.bendTo = 0.22; P.reachTo = 0.45;
       clearTimeout(this.reachT);
-      this.reachT = setTimeout(() => { if (this.active) { P.bendTo = 0; P.reachTo = 0; } }, 250);
+      this.reachT = setTimeout(() => { if (this.active) { P.bendTo = 0; P.reachTo = 0.28; } }, 280);
       const nextIt = cur && cur.need ? ITEMS[cur.need] : null;
       this.tip(it.jp, nextIt ? `Đã đặt ${it.vi} → tiếp: ${nextIt.icon} ${nextIt.vi}` : `Đã đặt ${it.vi}`, 2.2);
       this.stage.syncTrays(s.trays);
     } else if (r === 'good') {
       const it = ITEMS[id];
-      P.bendTo = 0.35; P.reachTo = 1;
+      P.triggerPick(id, 0.35);
+      P.bendTo = 0.22; P.reachTo = 0.45;
       clearTimeout(this.reachT);
-      this.reachT = setTimeout(() => { if (this.active) { P.bendTo = 0; P.reachTo = 0; } }, 250);
+      this.reachT = setTimeout(() => { if (this.active) { P.bendTo = 0; P.reachTo = 0.28; } }, 280);
       this.tip(it.jp, `Đúng rồi! ${it.vi} (${s.count}/${s.goal})`, 2.2);
       this.stage.syncTrays(s.trays);
       if (s.result === 'win') this.endT = 0.5;
     } else if (r === 'rejected') {
       const df = DEFECTS[defectBefore] || DEFECTS.hair;
-      P.bendTo = 0.3; P.reachTo = 0.9;
+      P.bendTo = 0.25; P.reachTo = 0.65;
       clearTimeout(this.reachT);
-      this.reachT = setTimeout(() => { if (this.active) { P.bendTo = 0; P.reachTo = 0; } }, 250);
+      this.reachT = setTimeout(() => { if (this.active) { P.bendTo = 0; P.reachTo = 0.28; } }, 250);
       this.tip('不良品除去！', `Đã loại khay lỗi (${df.vi})!`, 2.5);
       if (F) this.overhead.say(F, 'よく気づいたね！ — Tinh mắt đấy!', 2);
       this.stage.syncTrays(s.trays);
@@ -234,20 +244,21 @@ export class BentoShift {
     }
     if (this.endT >= 0 && !this.paused) { this.endT -= dt; if (this.endT < 0) this.win(); }
 
-    // Fixed camera 3.9 m behind the player looking at the conveyor belt (showcase during intro)
-    camera.fov = portrait ? 56 : 45; camera.updateProjectionMatrix();
+    // Low over-the-shoulder / behind-the-back camera framing the 3 food pans in front of the player,
+    // the bento trays entering the yellow work zone, and the line of factory workers beyond.
+    camera.fov = portrait ? 54 : 44; camera.updateProjectionMatrix();
     if (this.intro > 0) {
       this.tmp.set(...BENTO_ROOM.showcase.look);
       this.camPos.set(...BENTO_ROOM.showcase.pos);
       this.camRig.to(this.camPos, this.tmp, dt, 3);
     } else {
-      const dist = CAM_DIST * (portrait ? 1.12 : 1), cp = Math.cos(CAM_PITCH);
-      this.camPos.set(
-        pos.x - Math.sin(CAM_YAW) * dist * cp,
-        1.15 + Math.sin(CAM_PITCH) * dist,
-        pos.z + Math.cos(CAM_YAW) * dist * cp,
-      );
-      this.camLook.set(pos.x - 0.35, 0.96, -0.05);
+      if (portrait) {
+        this.camPos.set(pos.x + 0.48, 1.88, pos.z + 2.42);
+        this.camLook.set(pos.x - 0.36, 0.96, -0.35);
+      } else {
+        this.camPos.set(pos.x + 0.45, 1.80, pos.z + 2.12);
+        this.camLook.set(pos.x - 0.34, 0.98, -0.35);
+      }
       this.camRig.to(this.camPos, this.camLook, dt, 5);
     }
     this.hud();

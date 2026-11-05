@@ -27,6 +27,8 @@ import { dayOffSummary } from './core/dayoff_rules.js';
 import { $, show, card, toast, deltaChips, esc, Overhead } from './ui/ui.js';
 import { newState, save, load, clearSave, yen, jpLevel, applyFx } from './core/state.js';
 import { JOBS, NPCS, INTRO, rankOf, rankPay, daysOf, ranksOf } from './core/jobs.js';
+import { WELL, checkCollapse, lowBars, sickLeave, skillInfo } from './core/wellbeing.js';
+import { CAREER, targets, cannotStudy, startStudy, quitStudy } from './core/career.js';
 import { daySteps, shiftOpts, shiftEnd, chooseTalk, completeStep, weekEval, sleep, retryCost, DAYS } from './core/story.js';
 import { stars, formatStars, recordStars, getStars } from './core/stars.js';
 
@@ -210,6 +212,19 @@ function bindUi() {
   $('btn-new').addEventListener('click', () => creatorScreen());
   $('btn-continue').addEventListener('click', () => { const S = load(storage); if (S) { G.S = S; G.draft.colors = S.look.colors; G.draft.outfit = S.look.outfit; setPlayer().then(runStep); } });
   $('btn-demo').addEventListener('click', demoScreen);
+  $('btn-career').addEventListener('click', careerScreen);
+  $('stats').addEventListener('click', onStatsTap);
+  $('sh-bars').addEventListener('click', onStatsTap);
+  // compact bars on the walking / shift HUD, refreshed twice a second (S13)
+  setInterval(() => {
+    const box = $('sh-bars'), hud = $('shifthud');
+    if (!G.S || hud.hidden || G.S.flags.demo) { box.hidden = true; return; }
+    box.hidden = false;
+    const S = G.S, sk = skillInfo(S, jobOf()), lvl = (v) => (v < WELL.WARN ? 'bad' : v < 60 ? 'mid' : 'ok');
+    const m = (k, icon, v, cls) => `<button type="button" class="sbar mini ${cls}" data-k="${k}" aria-label="${k}"><span class="sb-i">${icon}</span><span class="sb-t"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></span></button>`;
+    const html = m('health', '❤️', S.health, lvl(S.health)) + m('mental', '🧠', S.mental, lvl(S.mental)) + m('skill', '🛠️', sk.pct, sk.maxed ? 'max' : 'skill');
+    if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
+  }, 500);
   $('btn-credits').addEventListener('click', creditsScreen);
   $('cr-back').addEventListener('click', titleScreen);
   $('cr-next').addEventListener('click', jobScreen);
@@ -241,8 +256,41 @@ function titleScreen() {
   const S = load(storage);
   const c = $('btn-continue');
   c.hidden = !S;
+  $('btn-career').hidden = !S;
   if (S) c.textContent = `⏯ Chơi tiếp với ${S.name || 'Bạn'} · ${S.week ? 'Tháng ' + S.week : 'Ngày ' + Math.min(DAYS, S.story + 1) + '/5'}`;
   show('title');
+}
+
+// ---------- changing job (player feedback S13) ----------
+function careerScreen() {
+  const S = load(storage); if (!S) return;
+  hideAll();
+  const back = { label: '← Quay lại', cls: 'ghost', on: titleScreen };
+  if (S.career && S.career.target) {
+    const J = JOBS[S.career.target];
+    return card(`<h2>📚 Đang học chuyển ngành</h2><p>Ngành mới: ${J.icon} <b>${esc(J.name)}</b>.</p><p>Đã học ${S.career.lessons}/${CAREER.LESSONS} buổi tối. Học ở phòng ký túc xá buổi tối (nút 📚). Học đủ thì thi 5 câu, đúng từ 4 câu là đỗ.</p>`, [
+      back, { label: 'Bỏ học (mất lệ phí)', cls: 'ghost', on: () => { quitStudy(S); save(S, storage); titleScreen(); } },
+    ]);
+  }
+  card(`<h2>🔄 Đổi nghề?</h2>
+    <p class="lesson">Ở Nhật, thực tập sinh <b>không được tự ý đổi sang ngành khác</b>. Muốn chuyển ngành phải <b>học và thi đỗ chứng chỉ kỹ năng của ngành mới</b> (<span class="jp">特定技能 技能試験</span>) và có tiếng Nhật <b>N4</b> trở lên.</p>
+    <p>Lệ phí thi ${yen(CAREER.FEE)} · học ${CAREER.LESSONS} buổi tối ở ký túc xá (mỗi buổi 🧠 ${CAREER.LESSON_MENTAL}) · thi 5 câu từ chuyên ngành. Đỗ thì làm nghề mới từ bậc 1.</p>
+    <h2 style="font-size:18px">Bạn có muốn học chuyển ngành không?</h2>`, [
+    { label: '📚 Có, học chuyển ngành', on: () => careerPick(S) },
+    { label: 'Không, ở lại nghề cũ', cls: 'ghost', on: titleScreen },
+  ]);
+}
+function careerPick(S) {
+  const why = cannotStudy(S);
+  if (why === 'jp') return card(`<h2>🗣️ Chưa đủ tiếng Nhật</h2><p>Cần N4 trở lên (hiện tại ${jpLevel(S.jp)}). Học tiếng Nhật buổi tối và nói chuyện nhiều hơn ở chỗ làm rồi quay lại nhé.</p>`, [{ label: '← Quay lại', on: titleScreen }]);
+  if (why === 'money') return card(`<h2>💴 Chưa đủ tiền</h2><p>Lệ phí thi ${yen(CAREER.FEE)}, bạn đang có ${yen(S.money)}.</p>`, [{ label: '← Quay lại', on: titleScreen }]);
+  card('<h2>Chọn ngành muốn chuyển sang</h2>', [
+    ...targets(S).map((j) => ({ label: `${JOBS[j].icon} ${JOBS[j].name} · ${JOBS[j].area}`, on: () => {
+      startStudy(S, j); save(S, storage);
+      card(`<h2>📚 Bắt đầu học!</h2><p>Đã đóng lệ phí ${yen(CAREER.FEE)}. Mỗi tối về phòng ký túc xá bấm <b>📚 Học chứng chỉ</b>. Học đủ ${CAREER.LESSONS} buổi thì nút đổi thành <b>📝 Thi</b>.</p><p>Trong lúc học bạn vẫn đi làm nghề cũ.</p>`, [{ label: 'Tiếp tục chơi →', on: () => { G.S = S; setPlayer().then(runStep); } }]);
+    } })),
+    { label: '← Quay lại', cls: 'ghost', on: titleScreen },
+  ]);
 }
 
 // ---------- creator ----------
@@ -312,20 +360,45 @@ function startGame(job) {
 }
 
 // ---------- story ----------
+/** Three bars (player feedback): health, mental, job skill — tap one for what it means. */
 function statsHtml() {
-  const S = G.S;
-  const st = (t, low) => `<span class="stat${low ? ' low' : ''}">${t}</span>`;
-  return st(`❤️ ${S.health}`, S.health < 30) + st(`🧠 ${S.mental}`, S.mental < 30) + st(`⭐ Lv ${S.lv}`) + st(`💴 ${yen(S.money)}`) + st(`🗣️ ${jpLevel(S.jp)}`);
+  const S = G.S, sk = skillInfo(S, jobOf());
+  const lvl = (v) => (v < WELL.WARN ? 'bad' : v < 60 ? 'mid' : 'ok');
+  const bar = (k, icon, name, v, cls, txt) => `<button type="button" class="sbar ${cls}" data-k="${k}"><span class="sb-h">${icon} ${name}<b>${txt}</b></span><span class="sb-t"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></span></button>`;
+  const st = (t) => `<span class="stat">${t}</span>`;
+  return `<div class="sbars">${bar('health', '❤️', 'Thể lực', S.health, lvl(S.health), `${Math.round(S.health)}/100`)}${bar('mental', '🧠', 'Tinh thần', S.mental, lvl(S.mental), `${Math.round(S.mental)}/100`)}`
+    + `${bar('skill', '🛠️', 'Kỹ năng', sk.pct, sk.maxed ? 'max' : 'skill', sk.maxed ? 'MAX' : `Bậc ${sk.rank + 1}/10 · ${sk.xp}/${sk.need}`)}</div>`
+    + `<div class="schips">${st(`💴 ${yen(S.money)}`)}${st(`🗣️ ${jpLevel(S.jp)}`)}${st(`⭐ Lv ${S.lv}`)}</div>`;
+}
+const BAR_HELP = {
+  health: () => `<h2>❤️ Thể lực</h2><p>Sức khỏe của bạn. <b>Giảm</b> sau mỗi ca làm (ca chiều mệt hơn), khi bị thương, khi thức khuya. <b>Tăng</b> khi ngủ, tắm, tự nấu ăn, ngày nghỉ.</p>
+    <p class="lesson">Dưới ${WELL.WARN}: thanh đỏ, sắp kiệt sức.<br>Tụt xuống ${WELL.COLLAPSE}: <b>phải nghỉ làm, đi viện</b>. Mất 1 ngày lương (${yen(WELL.DAY_PAY)}) + viện phí ${yen(WELL.HOSPITAL)}, bảo hiểm y tế 国民健康保険 trả 70 % nên bạn trả 30 % (${yen(WELL.HOSPITAL * WELL.COPAY)}).</p>`,
+  mental: () => `<h2>🧠 Tinh thần</h2><p>Tâm trạng, độ vững vàng. <b>Giảm</b> khi làm sai, bị mắng, thua ca, học khuya. <b>Tăng</b> khi gọi về nhà, ngủ đủ, được khen, đi chơi ngày nghỉ.</p>
+    <p class="lesson">Dưới ${WELL.WARN}: thanh đỏ.<br>Tụt xuống ${WELL.COLLAPSE}: <b>phải nghỉ làm ở nhà</b> và gọi tư vấn. Mất 1 ngày lương (${yen(WELL.DAY_PAY)}).</p>`,
+  skill: () => { const sk = skillInfo(G.S, jobOf()); return `<h2>🛠️ Kỹ năng nghề</h2><p>Tay nghề ở ${esc(JOBS[jobOf()].place.toLowerCase())}. Tăng sau mỗi ca (ca chiều thắng được nhiều hơn).</p>
+    <p class="lesson">Đầy thanh: <b>lên bậc, lên chức, tăng lương</b> (+${yen(4000)}/tháng mỗi bậc).<br>Hiện tại: Bậc ${sk.rank + 1}/10 · ${esc(sk.title)} · phụ cấp ${yen(sk.pay)}/tháng.${sk.maxed ? '<br>🏆 Đã MAX: bạn là trụ cột của tổ!' : ''}</p>`; },
+};
+function onStatsTap(e) {
+  const b = e.target.closest('.sbar'); if (!b || !G.S) return;
+  const back = G.mode; const html = BAR_HELP[b.dataset.k](); card(html, [{ label: 'Đã hiểu', on: () => { G.mode = back; } }]);
 }
 function dayHud(label) {
   $('day-label').textContent = `Ngày ${G.S.story + 1}/5 · ${label}`;
   $('stats').innerHTML = statsHtml();
   show('dayhud');
+  const S = G.S;
+  if (lowBars(S).length && S.flags.warnDay !== S.story && !S.flags.demo) {
+    S.flags.warnDay = S.story;
+    setTimeout(() => toast('⚠️ Sắp kiệt sức!', 'Ngủ sớm, ăn uống đủ, đừng cố quá. Tụt xuống 15 là phải nghỉ làm.', 5), 600);
+  }
 }
 
 async function runStep() {
   const S = G.S; hideAll();
   if (S.story >= DAYS) return S.flags.dayOff?.done ? weekEnd() : dayOffStep();
+  // a bar ran out: no work today (player feedback S13)
+  const out = S.sStep < 5 ? checkCollapse(S) : null;
+  if (out) return sickDay(out);
   const st = daySteps(S.story, jobOf())[S.sStep];
   // each day starts in the dorm: wake up and walk to the site before the morning meeting
   if (S.sStep === 0 && S.flags.morningDay !== S.story) return morningStep(st);
@@ -334,6 +407,21 @@ async function runStep() {
   if (st.t === 'talk') return talkStep(st);
   if (st.t === 'shift') return shiftStep(st);
   return sleepStep(st);
+}
+
+/** Too tired / too low to work: day off sick, money lost, the day ends as if slept. */
+function sickDay(kind) {
+  const S = G.S, r = sickLeave(S, kind);
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('🏥 Nghỉ ốm');
+  const P = G.player; P.holder.rotation.x = -Math.PI / 2; P.holder.position.set(-0.5, 0.3, -0.1); P.yaw = 0; P.play('idle');
+  card(`<div class="big">${r.hospital ? '🏥' : '🛌'}</div><h2>Bạn phải nghỉ làm hôm nay</h2>
+    <p>${kind === 'mental' ? '🧠 Tinh thần cạn kiệt, không thể tập trung làm việc.' : kind === 'both' ? '❤️ 🧠 Kiệt sức cả thân lẫn tâm.' : '❤️ Cơ thể kiệt sức, sáng nay bạn không đứng dậy nổi.'}${r.hospital ? ' Bạn được đưa tới <span class="jp">病院</span> (bệnh viện).' : ''}</p>
+    <ul>${r.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+    <p class="lesson">Ở Nhật, nghỉ ốm phải báo quản lý trước giờ làm 「体調が悪いので休みます」. Đừng cố quá sức!</p>`, [
+    { label: 'Nghỉ ngơi →', on: () => { P.holder.rotation.x = 0; S.sStep = 5; S.flags.morningDay = S.story; finishStep(); } },
+  ]);
 }
 
 function finishStep(extraHtml = '') {
@@ -747,6 +835,8 @@ const CREDITS = [
   ['Đèn đá', 'Japanese Stone Lantern', 'Sahir Virmani', 'e0417d1e05984727a50f9ab1451d162d', 'CC BY 4.0'],
   ['Đền', 'Japanese shrine', 'GreenG', '56baeb7b13ba4238a2f54c363e7a3e0b', 'CC BY 4.0'],
   ['Futon', 'Japanese futon/bed', 'nicolas_solo', '0d5590d1d2184aa98797c3d6382afd7e', 'CC BY 4.0'],
+  ['Bồn rửa inox', 'Low poly commercial sink', 'christian', '2d0cade455614fd989b2e81878fd7764', 'CC BY 4.0'],
+  ['Khay inox đựng món', 'Gastronorm_Basic_1_2', 'MPS Porcellane di Saronno', '9fec684962424c8186b075dd99f9bef6', 'CC BY 4.0'],
 ];
 function creditsScreen() {
   hideAll();

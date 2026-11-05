@@ -47,6 +47,7 @@ function makeTint(baseMat, ref) {
     rTop: { value: v3(ref.top) }, rBottom: { value: v3(ref.bottom) }, rSkin: { value: v3(ref.skin) }, rA: { value: v3(ref.a) }, rB: { value: v3(ref.b) },
     rSkinLin: { value: srgb(ref.skin) },
     uOn: { value: new THREE.Vector4(0, 0, 0, 0) }, // hair, top, bottom, skin: 1 = a colour was picked
+    uHideHair: { value: 0 }, // 1 = discard hair fragments (vMask.r > 0.5) under the sanitary hood
   };
   m.userData.u = u;
   m.onBeforeCompile = (sh) => {
@@ -54,9 +55,10 @@ function makeTint(baseMat, ref) {
     // COLOR_0 from Blender: r = hair, g = top, b = bottom, a = skin (faces where recolouring is allowed)
     sh.vertexShader = 'attribute vec4 color;\nvarying vec4 vMask;\n' +
       sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vMask = color;');
-    sh.fragmentShader = 'uniform vec3 uTop, uBottom, uSkin, uHair, rTop, rBottom, rSkin, rA, rB, rSkinLin;\nuniform vec4 uOn;\nvarying vec4 vMask;\n' +
+    sh.fragmentShader = 'uniform vec3 uTop, uBottom, uSkin, uHair, rTop, rBottom, rSkin, rA, rB, rSkinLin;\nuniform vec4 uOn;\nuniform float uHideHair;\nvarying vec4 vMask;\n' +
       sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
   {
+    if (uHideHair > 0.5 && vMask.r > 0.5) discard;
     vec3 lin = sampledDiffuseColor.rgb;
     vec3 t = pow(max(lin, vec3(0.0)), vec3(1.0 / 2.2));
     const vec3 W = vec3(0.2126, 0.7152, 0.0722);
@@ -74,7 +76,7 @@ function makeTint(baseMat, ref) {
     diffuseColor.rgb = c;
   }`);
   };
-  m.customProgramCacheKey = () => 'tint-v3';
+  m.customProgramCacheKey = () => 'tint-v4';
   return m;
 }
 
@@ -102,7 +104,8 @@ export class Character {
     this.kind = kind;
     this.root = SkeletonUtils.clone(src.scene);
     this.root.traverse((o) => {
-      if (o.isSkinnedMesh) { o.castShadow = true; o.frustumCulled = false; this.tint = o.material = makeTint(o.material, OUTFITS[kind].ref); }
+      if (o.isSkinnedMesh) { o.castShadow = true; o.frustumCulled = false; this.skinGeo = o.geometry; this.tint = o.material = makeTint(o.material, OUTFITS[kind].ref); }
+      if (/^headfront$/i.test(o.name)) this.headFront = o;
       if (o.isBone) {
         const n = o.name.replace(/^mixamorig:?/, '');
         if (n === 'HeadTop_End') this.headTop = o;
@@ -147,6 +150,7 @@ export class Character {
     this.reach = 0; this.reachTo = 0; // 0..1 both arms reaching forward (~55°) with forearms bent (~35°)
     this.wristSway = 0; this.swayT = 0; // 2 Hz left-right wrist sway during water-jet washing
     this.shoulder = 0; this.shoulderTo = 0; // 0..1 right hand up on the shoulder (shoulder carry)
+    this.pickT = -1; this.pickDur = 0.35; this.pickItem = null; // 0..1 right-arm tong pick-and-place
     // bones posed procedurally on top of the clip. three.js's PropertyMixer only writes a bone when the
     // blended value differs from the value IT wrote last frame, so it does not rewrite a bone whose
     // clip value did not change (a loop wrap holds the first key for a frame, constant stretches).
@@ -186,6 +190,19 @@ export class Character {
     u.uOn.value[{ hair: 'x', top: 'y', bottom: 'z', skin: 'w' }[slot]] = hex ? 1 : 0;
   }
   look(colors) { for (const s of ['top', 'bottom', 'hair', 'skin']) this.setColor(s, colors[s] || null); }
+  setHideHair(on) {
+    if (this.tint?.userData?.u?.uHideHair) this.tint.userData.u.uHideHair.value = on ? 1 : 0;
+  }
+  /** Triggers a ~0.35 s right-hand tong reach into the food pan and transfer to the conveyor tray. */
+  triggerPick(itemKey = 'karaage', dur = 0.35) {
+    this.pickT = 0;
+    this.pickDur = Math.max(0.15, dur);
+    this.pickItem = itemKey;
+    if (this.bentoGear) {
+      this.bentoGear.setFood(itemKey);
+      this.bentoGear.setPinch(1);
+    }
+  }
   /** Keeps an object at a bone, offset in the character's facing frame (no bone-scale issues). */
   pin(obj, bone, up = 0, side = 0, fwd = 0, bone2 = null) { this.holder.parent?.add(obj); this.attach.push({ obj, bone, bone2, up, side, fwd }); return obj; }
   unpinAll() { for (const a of this.attach) a.obj.parent?.remove(a.obj); this.attach.length = 0; }
@@ -249,6 +266,43 @@ export class Character {
     if (this.shoulder > 0.01 && this.armR && this.foreR) {
       _q.setFromAxisAngle(_x, this.shoulder * 1.1); this.armR.quaternion.multiply(_q);
       _q.setFromAxisAngle(_x, this.shoulder * 1.2); this.foreR.quaternion.multiply(_q);
+    }
+    // ~0.35 s right-hand tong reach into food pan and transfer to the conveyor tray
+    if (this.pickT >= 0) {
+      this.pickT += dt / (this.pickDur || 0.35);
+      if (this.pickT >= 1) {
+        this.pickT = -1;
+        if (this.bentoGear) {
+          this.bentoGear.setPinch(0);
+          this.bentoGear.setFood(null);
+        }
+      } else {
+        const p = this.pickT;
+        const arc = Math.sin(p * Math.PI); // 0 -> 1 -> 0 over 0.35 s
+        const panYaw = this.pickItem === 'karaage' ? 0.22 : this.pickItem === 'veg' ? -0.22 : 0;
+        const swingSide = p < 0.48
+          ? panYaw * Math.sin((p / 0.48) * Math.PI * 0.5)
+          : panYaw * Math.cos(((p - 0.48) / 0.52) * Math.PI * 0.5);
+        const reachExtra = p < 0.48
+          ? 0.55 * Math.sin((p / 0.48) * Math.PI * 0.5)
+          : 0.55 + 0.28 * Math.sin(((p - 0.48) / 0.52) * Math.PI);
+        _side.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+        this.holder.updateMatrixWorld(true);
+        if (this.spine) tilt(this.spine, _side, arc * 0.14);
+        if (this.armR) {
+          tilt(this.armR, _side, -reachExtra * 0.95);
+          tilt(this.armR, _up, swingSide);
+        }
+        if (this.foreR) {
+          tilt(this.foreR, _side, -reachExtra * 0.55);
+          tilt(this.foreR, _up, swingSide * 0.6);
+        }
+        if (this.bentoGear) {
+          const pinch = p < 0.25 ? p / 0.25 : p > 0.85 ? (1 - p) / 0.15 : 1;
+          this.bentoGear.setPinch(pinch);
+          if (p > 0.88) this.bentoGear.setFood(null);
+        }
+      }
     }
     if (this.attach.length) {
       this.holder.updateMatrixWorld(true);
@@ -404,52 +458,293 @@ export function wearHelmet(ch, helmet) {
 }
 
 /**
- * Sanitary food-factory headgear (衛生帽 + マスク): a soft white bouffant hair cap with a short brim,
- * back hairnet snood, and a pleated white face mask over the nose and mouth, parented to the head bone
- * via wearHelmet(ch, cap.group).
+ * Sanitary food-factory full hood + face mask (フルフード衛生帽 + マスク):
+ * - Rounded white cloth hood completely enclosing the crown, forehead down to the brow, both ears,
+ *   cheeks, and nape/neck (with subtle fabric folds and a collar cape), leaving only the eye zone open.
+ * - Curved pleated white face mask with 2 thin ear loops attached to `headfront` (or `Head` bone).
+ * - Toggling `cap.group.visible` automatically toggles `uHideHair` (1/0), the face mask, and
+ *   `ch.bentoGear` (light-blue sanitary gloves + stainless-steel tongs).
  */
-export function makeSanitaryCap(ch, color = '#f6f6f2') {
+export function makeSanitaryCap(ch, color = '#f4f6f3') {
   ch.holder.updateMatrixWorld(true);
-  const a = new THREE.Vector3(), b = new THREE.Vector3();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), hf = new THREE.Vector3();
   ch.head.getWorldPosition(a); ch.headTop.getWorldPosition(b);
-  const h = a.distanceTo(b) || 0.55;
+  if (ch.headFront) ch.headFront.getWorldPosition(hf); else hf.set(a.x, a.y, a.z + 0.19);
+  const h = a.distanceTo(b) || 0.52;
   const R = h * 0.5;
-  const cloth = new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.02 });
-  const netMat = new THREE.MeshStandardMaterial({ color: '#e8e8e2', roughness: 0.85 });
-  const maskMat = new THREE.MeshStandardMaterial({ color: '#fafafa', roughness: 0.75, side: THREE.DoubleSide });
+  const capOrigin = a.clone().lerp(b, 0.64);
+
+  // Measure actual head skin envelope on this model so the hood & mask never clip or leave gaps
+  let maxFrontZ = Math.max(hf.z + R * 0.18, a.z + R * 0.96);
+  let maxEarX = R * 1.12;
+  const posAttr = ch.skinGeo?.attributes?.position;
+  if (posAttr) {
+    for (let i = 0; i < posAttr.count; i++) {
+      const py = posAttr.getY(i), px = posAttr.getX(i), pz = posAttr.getZ(i);
+      if (py > a.y - 0.03 && py < b.y + 0.05 && Math.abs(px - a.x) < 0.35) {
+        if (pz > maxFrontZ) maxFrontZ = pz;
+        const ax = Math.abs(px - a.x);
+        if (ax > maxEarX) maxEarX = ax;
+      }
+    }
+  }
+  const frontRelZ = (maxFrontZ - capOrigin.z) / R;
+  const earRelX = maxEarX / R;
+
+  const cloth = new THREE.MeshStandardMaterial({ color, roughness: 0.74, metalness: 0.02, side: THREE.DoubleSide });
+  const seamMat = new THREE.MeshStandardMaterial({ color: '#e3e7e3', roughness: 0.80, side: THREE.DoubleSide });
+  const maskMat = new THREE.MeshStandardMaterial({ color: '#fbfcfa', roughness: 0.70, side: THREE.DoubleSide });
   const g = new THREE.Group();
 
-  // soft puffed cap dome covering the crown and sides of the hair
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(R * 1.04, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.58), cloth);
-  dome.scale.set(0.98, 0.94, 1.08);
-  dome.position.set(0, R * 0.02, -R * 0.03);
-  // elastic headband rim
-  const band = new THREE.Mesh(new THREE.TorusGeometry(R * 0.98, R * 0.045, 8, 32), netMat);
-  band.rotation.x = Math.PI / 2; band.scale.set(0.97, 1.07, 1); band.position.y = R * 0.02;
-  // short soft front visor
-  const brimShape = new THREE.Shape();
-  brimShape.absarc(0, 0, R * 1.01, Math.PI * 0.16, Math.PI * 0.84, false);
-  brimShape.absarc(0, 0, R * 0.82, Math.PI * 0.84, Math.PI * 0.16, true);
-  const brim = new THREE.Mesh(new THREE.ExtrudeGeometry(brimShape, { depth: R * 0.035, bevelEnabled: false, curveSegments: 16 }), cloth);
-  brim.rotation.x = -Math.PI / 2 + 0.22; brim.position.set(0, R * 0.04, R * 0.28);
-  // back hairnet snood tucking the hair at the nape
-  const snood = new THREE.Mesh(new THREE.SphereGeometry(R * 0.58, 16, 12), netMat);
-  snood.scale.set(1.05, 0.82, 0.72); snood.position.set(0, -R * 0.34, -R * 0.56);
+  const cy = -0.46 * R, cz = -0.02 * R;
+  const rx = Math.max(1.22, earRelX + 0.07) * R;
+  const ry = 1.12 * R;
+  const rz = Math.max(1.14, frontRelZ + 0.05) * R;
 
-  // curved pleated face mask covering the lower face (+z)
-  const mask = new THREE.Mesh(
-    new THREE.CylinderGeometry(R * 0.84, R * 0.76, R * 0.46, 20, 1, true, -Math.PI * 0.27, Math.PI * 0.54),
+  // 1. Upper rounded hood dome covering the crown and forehead down to the brow line (y ≈ -0.39 R)
+  const crown = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.48),
+    cloth,
+  );
+  crown.scale.set(rx, ry, rz);
+  crown.position.set(0, cy, cz);
+
+  // 2. Side & back hood enclosure covering both ears, temples, cheeks, and back of head down to neck
+  // In SphereGeometry, +Z (front) is at phi = 0.5*PI; leave [-36°..+36°] around +Z open for the eyes
+  const hoodSides = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 28, 16, Math.PI * 0.70, Math.PI * 1.60, Math.PI * 0.40, Math.PI * 0.48),
+    cloth,
+  );
+  hoodSides.scale.set(rx * 1.01, ry, rz * 1.01);
+  hoodSides.position.set(0, cy, cz);
+
+  // 3. Cheek & temple side flaps framing the eye opening and meeting the face mask on both sides
+  const cheekGeo = new THREE.CylinderGeometry(R * 0.22, R * 0.26, R * 0.72, 12);
+  const cheekL = new THREE.Mesh(cheekGeo, cloth);
+  cheekL.scale.set(0.65, 1, 1.35);
+  cheekL.position.set(rx * 0.68, -0.82 * R, (frontRelZ - 0.22) * R);
+  cheekL.rotation.z = 0.12;
+  const cheekR = cheekL.clone();
+  cheekR.position.x = -rx * 0.68;
+  cheekR.rotation.z = -0.12;
+
+  // 4. Forehead brow band and soft fabric visor (つば)
+  const foreBand = new THREE.Mesh(
+    new THREE.CylinderGeometry(1, 1, R * 0.13, 24, 1, true, -Math.PI * 0.34, Math.PI * 0.68),
+    seamMat,
+  );
+  foreBand.scale.set(rx * 0.99, 1, rz * 1.01);
+  foreBand.position.set(0, -0.36 * R, cz);
+
+  const brimShape = new THREE.Shape();
+  brimShape.absarc(0, 0, R * 1.06, Math.PI * 0.18, Math.PI * 0.82, false);
+  brimShape.absarc(0, 0, R * 0.84, Math.PI * 0.82, Math.PI * 0.18, true);
+  const brim = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(brimShape, { depth: R * 0.032, bevelEnabled: false, curveSegments: 16 }),
+    cloth,
+  );
+  brim.rotation.x = -Math.PI / 2 + 0.22;
+  brim.position.set(0, -0.33 * R, (frontRelZ - 0.74) * R);
+
+  // 5. Flared 360° neck cape sealing the bottom of the hood into the white uniform collar
+  const neckCape = new THREE.Mesh(
+    new THREE.CylinderGeometry(rx * 0.74, rx * 0.90, R * 0.38, 24, 1, false),
+    cloth,
+  );
+  neckCape.position.set(0, -1.44 * R, -0.06 * R);
+
+  // 6. Subtle procedural fabric folds/seams across the hood crown and sides
+  const fold1 = new THREE.Mesh(new THREE.TorusGeometry(1, 0.018, 6, 24, Math.PI), seamMat);
+  fold1.rotation.y = Math.PI / 2;
+  fold1.scale.set(rz * 1.005, ry * 1.005, rx);
+  fold1.position.set(0, cy, cz);
+
+  const fold2 = new THREE.Mesh(new THREE.TorusGeometry(1, 0.016, 6, 28), seamMat);
+  fold2.rotation.x = Math.PI / 2 + 0.12;
+  fold2.scale.set(rx * 0.96, rz * 0.96, R);
+  fold2.position.set(0, -0.08 * R, cz);
+
+  const fold3 = new THREE.Mesh(new THREE.TorusGeometry(1, 0.016, 6, 28), seamMat);
+  fold3.rotation.x = Math.PI / 2 - 0.18;
+  fold3.scale.set(rx * 0.98, rz * 0.94, R);
+  fold3.position.set(0, -0.68 * R, cz - 0.04 * R);
+
+  g.add(crown, hoodSides, cheekL, cheekR, foreBand, brim, neckCape, fold1, fold2, fold3);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+
+  // White curved pleated face mask with 2 thin ear loops attached to `headfront` (or `Head` bone)
+  const maskGroup = new THREE.Group();
+  const maskPanel = new THREE.Mesh(
+    new THREE.CylinderGeometry(R * 0.90, R * 0.76, R * 0.62, 24, 1, true, -Math.PI * 0.30, Math.PI * 0.60),
     maskMat,
   );
-  mask.position.set(0, -R * 0.56, R * 0.10);
-  // two soft pleat ridges across the mask
-  const p1 = new THREE.Mesh(new THREE.TorusGeometry(R * 0.81, R * 0.016, 6, 20, Math.PI * 0.48), netMat);
-  p1.rotation.set(Math.PI / 2, 0, Math.PI * 0.26); p1.position.set(0, -R * 0.48, R * 0.10);
-  const p2 = p1.clone(); p2.position.y = -R * 0.63;
+  maskPanel.position.set(0, 0, -R * 0.85);
 
-  g.add(dome, band, brim, snood, mask, p1, p2);
-  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  return { group: g, h };
+  // Top nose-wire bridge and 3 surgical pleats across the front of the mask
+  const noseWire = new THREE.Mesh(
+    new THREE.CylinderGeometry(R * 0.908, R * 0.908, R * 0.045, 20, 1, true, -Math.PI * 0.26, Math.PI * 0.52),
+    seamMat,
+  );
+  noseWire.position.set(0, R * 0.28, -R * 0.85);
+
+  for (const py of [0.12, -0.02, -0.16]) {
+    const pleat = new THREE.Mesh(
+      new THREE.CylinderGeometry(R * 0.89, R * 0.87, R * 0.032, 20, 1, true, -Math.PI * 0.27, Math.PI * 0.54),
+      seamMat,
+    );
+    pleat.position.set(0, R * py, -R * 0.842);
+    maskGroup.add(pleat);
+  }
+
+  // 2 thin ear-loop straps curving from the mask corners back to the ears
+  const strapGeo = new THREE.CylinderGeometry(R * 0.016, R * 0.016, R * 0.54, 6);
+  for (const sx of [-1, 1]) {
+    for (const [sy, rotX] of [[0.18, 0.24], [-0.16, -0.22]]) {
+      const loop = new THREE.Mesh(strapGeo, maskMat);
+      loop.rotation.x = Math.PI / 2 + rotX;
+      loop.rotation.z = sx * -0.35;
+      loop.position.set(sx * R * 0.78, R * sy, -R * 0.52);
+      maskGroup.add(loop);
+    }
+  }
+  maskGroup.add(maskPanel, noseWire);
+  maskGroup.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+
+  const maskParent = ch.headFront || ch.head;
+  if (maskParent) {
+    const maskWorldPos = new THREE.Vector3(a.x, a.y + R * 0.22, maxFrontZ + R * 0.03);
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ch.holder.rotation.y);
+    const maskWorld = new THREE.Matrix4().compose(maskWorldPos, q, new THREE.Vector3(1, 1, 1));
+    const maskLocal = maskParent.matrixWorld.clone().invert().multiply(maskWorld);
+    maskGroup.matrixAutoUpdate = true;
+    maskLocal.decompose(maskGroup.position, maskGroup.quaternion, maskGroup.scale);
+    maskParent.add(maskGroup);
+  }
+  ch.faceMask = maskGroup;
+  if (!ch.bentoGear) ch.bentoGear = wearBentoGear(ch);
+
+  // Sync hood visibility with uHideHair (1/0), faceMask on headfront, and bentoGear (gloves + tongs)
+  let _vis = true;
+  Object.defineProperty(g, 'visible', {
+    configurable: true,
+    enumerable: true,
+    get() { return _vis; },
+    set(v) {
+      _vis = !!v;
+      maskGroup.visible = _vis;
+      ch.setHideHair(_vis);
+      if (ch.bentoGear) ch.bentoGear.setVisible(_vis);
+    },
+  });
+
+  return { group: g, mask: maskGroup, h };
+}
+
+/**
+ * Bento-factory hand gear: light-blue sanitary nitrile gloves on both hands (`handL`, `handR`) and
+ * stainless-steel tongs (`kẹp gắp inox`, 2 blades 0.22 m long) on the right hand (`handR`) with a
+ * pinchable food piece (`karaage`, `sausage`, `veg`) between the tips.
+ */
+export function wearBentoGear(ch) {
+  ch.holder.updateMatrixWorld(true);
+  const gloveMat = new THREE.MeshStandardMaterial({ color: '#7cc8f5', roughness: 0.42, metalness: 0.04 });
+  const cuffMat = new THREE.MeshStandardMaterial({ color: '#64b5e8', roughness: 0.48 });
+  const steelMat = new THREE.MeshStandardMaterial({ color: '#dce3e8', metalness: 0.85, roughness: 0.18 });
+  const parts = [];
+
+  for (const [hand, isRight] of [[ch.handL, false], [ch.handR, true]]) {
+    if (!hand) continue;
+    const g = new THREE.Group();
+    // In Mixamo/Meshy hand bones, local +Y runs from the wrist (0) through the palm (+0.08) to the fingers (+0.13)
+    const wristCuff = new THREE.Mesh(new THREE.CylinderGeometry(0.056, 0.060, 0.065, 12), cuffMat);
+    wristCuff.position.set(0, 0.015, 0);
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 10), gloveMat);
+    palm.scale.set(0.88, 1.32, 0.78);
+    palm.position.set(0, 0.085, 0);
+    const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, 0.045, 4, 8), gloveMat);
+    thumb.position.set(isRight ? 0.045 : -0.045, 0.068, 0.025);
+    thumb.rotation.z = isRight ? -0.55 : 0.55;
+    g.add(wristCuff, palm, thumb);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    hand.add(g);
+    parts.push(g);
+  }
+
+  let bladeA = null, bladeB = null;
+  const foods = {};
+  if (ch.handR) {
+    const tongs = new THREE.Group();
+    // Placed in the right palm, pointing forward along the fingers (+Y/+Z)
+    tongs.position.set(0, 0.095, 0.02);
+    tongs.rotation.x = 0.35;
+
+    const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.026, 10), steelMat);
+    hinge.rotation.z = Math.PI / 2;
+    tongs.add(hinge);
+
+    // Two 0.22 m stainless-steel blades pivoting at the hinge
+    const makeBlade = (sign) => {
+      const piv = new THREE.Group();
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.22, 0.018), steelMat);
+      arm.position.set(sign * 0.012, 0.11, 0);
+      const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.012, 0.036, 8), steelMat);
+      tip.scale.set(0.35, 1, 1.15);
+      tip.position.set(sign * 0.010, 0.215, 0);
+      piv.add(arm, tip);
+      piv.rotation.z = sign * -0.11;
+      return piv;
+    };
+    bladeA = makeBlade(1);
+    bladeB = makeBlade(-1);
+    tongs.add(bladeA, bladeB);
+
+    // Pre-built food pieces held between the tong tips at y = 0.21 m
+    const foodHolder = new THREE.Group();
+    foodHolder.position.set(0, 0.21, 0);
+    const karaageMesh = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.026, 0),
+      new THREE.MeshStandardMaterial({ color: '#d98a2e', roughness: 0.65 }),
+    );
+    const sausageMesh = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.013, 0.032, 4, 8),
+      new THREE.MeshStandardMaterial({ color: '#c8423a', roughness: 0.55 }),
+    );
+    sausageMesh.rotation.z = Math.PI / 2;
+    const vegMesh = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.025, 1),
+      new THREE.MeshStandardMaterial({ color: '#4c9a4a', roughness: 0.65 }),
+    );
+    foods.karaage = karaageMesh;
+    foods.sausage = sausageMesh;
+    foods.veg = vegMesh;
+    for (const m of Object.values(foods)) {
+      m.visible = false;
+      m.castShadow = true;
+      foodHolder.add(m);
+    }
+    tongs.add(foodHolder);
+    tongs.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    ch.handR.add(tongs);
+    parts.push(tongs);
+  }
+
+  return {
+    parts,
+    setVisible(v) {
+      const on = !!v;
+      for (const p of parts) p.visible = on;
+      if (!on) for (const m of Object.values(foods)) m.visible = false;
+    },
+    setPinch(k) {
+      const p = Math.max(0, Math.min(1, k));
+      const ang = 0.12 - p * 0.095; // open 0.12 rad -> pinched 0.025 rad
+      if (bladeA) bladeA.rotation.z = -ang;
+      if (bladeB) bladeB.rotation.z = ang;
+    },
+    setFood(key) {
+      for (const [k, m] of Object.entries(foods)) m.visible = k === key;
+    },
+  };
 }
 
 /**
