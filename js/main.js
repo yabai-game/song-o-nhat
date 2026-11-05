@@ -44,7 +44,7 @@ import {
 } from './core/home_life.js';
 import {
   HOLI, ensureHolidayState, holidayActs, openFukubukuro,
-  buyBox, openBox, marketPrice, sellOnApp, buyFromStranger,
+  buyBox, openBox, sellToShop, marketPrice, sellOnApp, buyFromStranger,
   sideJobOffer, takeSideJob, refuseSideJob, checkCaught,
 } from './core/holiday.js';
 
@@ -450,6 +450,46 @@ function renderHomeChips(S = G.S, cal = ensureCal(S)) {
   }
 }
 
+/**
+ * Opening a モンスターカード box (player feedback): five cards flip one by one, the best last; a rare hit gets its own
+ * glowing dialog with the price under it; then sell to the card shop (買取 60 %, at once), list on 📱 Chợ Cũ, or keep.
+ */
+function revealBox(S, box, after) {
+  const r = openBox(S, box);
+  if (!S.flags?.demo) save(S, storage);
+  const price = box.price || HOLI.BOX_PRICE;
+  let t = 0.35;
+  const flips = r.cards.map((c) => {
+    const d = t; t += c.best ? 0 : 0.45; if (c.best) t += 0.3;
+    return `<div class="tcard t-${c.tier}${c.best ? ' best' : ''}" style="animation-delay:${(c.best ? d + 0.5 : d).toFixed(2)}s">
+      <div class="tc-in"><div class="tc-back">モンスター<br>カード</div><div class="tc-face"><span class="tc-ic">${c.icon}</span><b>${esc(c.jp)}</b><small>${esc(c.vi)}</small><i>${c.tier}</i></div></div></div>`;
+  }).join('');
+  const shop = Math.round(r.value * HOLI.SHOP_BUY_RATE), pf = (n) => (n >= 0 ? `lãi +${yen(n)}` : `lỗ −${yen(-n)}`);
+  const result = () => {
+    const b = box.best || r.cards[4];
+    const app = Math.max(0, r.value - Math.round(r.value * HOLI.APP_FEE_RATE) - HOLI.APP_SHIP_FEE);
+    const head = r.rare
+      ? `<div class="rare-hit t-${r.tier}"><div class="rh-glow"></div><div class="rh-card"><span class="tc-ic">${b.icon}</span><b>${esc(b.jp)}</b><small>${esc(b.vi)}</small><i>${r.tier}</i></div></div>
+         <h2 class="rh-title">${r.tier === 'UR' ? '🎉 TRÚNG THẺ SIÊU HIẾM!!' : '✨ Trúng thẻ hiếm!'}</h2>`
+      : `<div class="big">😮‍💨</div><h2>Toàn thẻ thường…</h2><p>5 lá chỉ có <b>${esc(b.jp)}</b> là đáng chút tiền. Ngoài đời bóc thẻ cũng vậy: đa số hộp lỗ.</p>`;
+    card(`${head}
+      <div class="rh-price">Định giá cả hộp: <b>${yen(r.value)}</b><small>Giá mua ${yen(price)} → ${pf(r.value - price)}</small></div>
+      <p class="lesson">💴 Tiệm thẻ カードショップ 買取 trả ngay <b>${yen(shop)}</b> (${pf(shop - price)}). 📱 Chợ Cũ được khoảng ${yen(app)} sau phí 10 % + ship, nhưng phải chờ người mua.</p>`, [
+      { label: `💴 Bán ngay cho tiệm thẻ (${yen(shop)})`, on: () => {
+        const sres = sellToShop(S, box); if (!S.flags?.demo) save(S, storage);
+        toast(`💴 Tiệm thẻ trả ${yen(sres.net)}`, sres.profit >= 0 ? `Lãi +${yen(sres.profit)} 🎉` : `Lỗ −${yen(-sres.profit)} so với giá hộp`, 4.5);
+        if (after) after();
+      } },
+      { label: '📱 Giữ lại, đăng Chợ Cũ sau', cls: 'ghost', on: () => { toast('📱 Đã cất thẻ', 'Mở 📱 → tab Chợ Cũ để đăng bán khi muốn'); if (after) after(); } },
+      { label: '🗂 Giữ sưu tầm (🧠 +2)', cls: 'ghost', on: () => { if (after) after(); } },
+    ]);
+    $('card').classList.toggle('rare-card', !!r.rare);
+  };
+  card(`<h2>🃏 Bóc hộp モンスターカード 限定BOX</h2><div class="tflip">${flips}</div>
+    <p class="hint" style="text-align:center">Lá cuối là lá quyết định…</p>`, [{ label: 'Xem kết quả →', on: result }]);
+  $('card').classList.remove('rare-card');
+}
+
 function phoneModal(startTab = 'lime') {
   // the phone also opens over a choice card (day-off hub, morning…); closing it brings that card back
   const overCard = !$('modal').hidden && G.mode === 'talk' && !!G.S?.life;
@@ -508,8 +548,9 @@ function phoneModal(startTab = 'lime') {
           const item = S.cards[idx];
           if (!item) return;
           if (b.dataset.cact === 'open') {
-            const r = openBox(S, item);
-            toast(`✨ Mở ra thẻ ${r.rarity}!`, `Định giá ${yen(r.value)} · Giữ sưu tầm 🧠 +2`, 4.5);
+            if (mod) mod.paused = was;
+            revealBox(S, item, () => phoneModal('chocu'));
+            return;
           } else if (b.dataset.cact === 'sell') {
             const r = sellOnApp(S, item);
             const pf = r.profit >= 0 ? `Lãi +${yen(r.profit)}` : `Lỗ −${yen(-r.profit)}`;
@@ -1265,10 +1306,7 @@ function runHolidayAct(hAct) {
       <p>Sau 1 tiếng rưỡi xếp hàng từ sớm, bạn đã mua được 1 hộp <b>Thẻ Quái Thú 限定BOX</b> nguyên seal với giá gốc <b>${yen(HOLI.BOX_PRICE)}</b>!</p>
       <p class="lesson">Bạn muốn giữ nguyên seal chờ đăng bán trên <b>📱 Chợ Cũ (フリマ)</b> hay bóc ngay thử vận may?</p>`, [
       { label: '✨ Bóc hộp ngay xem thẻ bên trong! (giữ sưu tầm 🧠 +2)', on: () => {
-        const ob = openBox(S, r.box);
-        save(S, storage);
-        toast(`✨ Mở trúng thẻ ${ob.rarity}!`, `Định giá ${yen(ob.value)} · 🧠 +2 (có thể bán trên 📱 Chợ Cũ)`, 5);
-        runStep();
+        revealBox(S, r.box, () => runStep());
       } },
       { label: '📦 Giữ nguyên seal (cất vào 📱 Chợ Cũ chờ được giá)', cls: 'ghost', on: () => {
         toast('📦 Đã cất hộp nguyên seal', 'Mở nút 📱 trên góc trái → tab Chợ Cũ để theo dõi giá và đăng bán!');

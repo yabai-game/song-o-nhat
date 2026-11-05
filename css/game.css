@@ -284,3 +284,40 @@ button.small { font-size: 13px; padding: 8px 12px; }
 /* the goal pill stays on one line next to the ☰ button (shrinks on narrow phones) */
 #shifthud .top .goal { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: clamp(11px, 3.3vw, 14px); }
 .tag[hidden], .bubble[hidden] { display: none; }
+
+/* モンスターカード box opening: five cards flip in turn, the best one last; rare hits glow (player feedback) */
+.tflip { display: flex; gap: 6px; justify-content: center; margin: 10px 0 4px; perspective: 600px; }
+.tcard { width: 58px; height: 84px; flex: none; opacity: 0.001; animation: tc-deal 0.25s ease-out forwards; }
+.tcard .tc-in { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transform: rotateY(180deg); animation: tc-flip 0.5s ease-in-out forwards; animation-delay: inherit; }
+.tcard .tc-back, .tcard .tc-face { position: absolute; inset: 0; border-radius: 7px; backface-visibility: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.tcard .tc-back { transform: rotateY(180deg); background: repeating-linear-gradient(45deg, #263a6b 0 6px, #1d2d55 6px 12px); color: #f5e2c0; font-size: 9px; font-weight: 800; border: 2px solid #f5e2c0; }
+.tcard .tc-face { background: #f7f3ea; color: #2a211b; border: 2px solid #b9b2a4; font-size: 9px; line-height: 1.15; padding: 2px; }
+.tcard .tc-face b { font-size: 9px; }
+.tcard .tc-face small { font-size: 8px; opacity: 0.75; }
+.tcard .tc-face i { font-style: normal; font-weight: 800; font-size: 9px; margin-top: 2px; }
+.tc-ic { font-size: 22px; line-height: 1.1; }
+.tcard.t-R .tc-face { border-color: #4a90d9; }
+.tcard.t-SR .tc-face { border-color: #e0a526; background: #fff6dc; }
+.tcard.t-UR .tc-face { border-color: #d64fd0; background: linear-gradient(135deg, #fff1fb, #e8f4ff, #fff8dc); }
+.tcard.best.t-SR, .tcard.best.t-UR { animation: tc-deal 0.25s ease-out forwards, tc-pulse 1.2s ease-in-out 3s infinite; }
+@keyframes tc-deal { from { opacity: 0.001; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+@keyframes tc-flip { from { transform: rotateY(180deg); } to { transform: rotateY(0deg); } }
+@keyframes tc-pulse { 50% { filter: drop-shadow(0 0 10px #ffd84a); transform: scale(1.06); } }
+.rare-hit { position: relative; display: flex; justify-content: center; margin: 6px 0 2px; height: 170px; }
+.rare-hit .rh-glow { position: absolute; width: 190px; height: 190px; top: -10px; border-radius: 50%; background: conic-gradient(from 0deg, #ffd84a, #ff7ad9, #7ad1ff, #9dff8a, #ffd84a); filter: blur(18px); opacity: 0.75; animation: rh-spin 3s linear infinite; }
+.rare-hit .rh-card { position: relative; width: 112px; height: 160px; border-radius: 10px; background: linear-gradient(135deg, #fff8dc, #ffe7f6, #e3f3ff); border: 3px solid #e0a526; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #2a211b; animation: rh-pop 0.6s cubic-bezier(.2, 1.6, .4, 1) both; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); overflow: hidden; }
+.rare-hit.t-UR .rh-card { border-color: #d64fd0; }
+.rare-hit .rh-card::after { content: ''; position: absolute; inset: -40%; background: linear-gradient(110deg, transparent 40%, rgba(255, 255, 255, .85) 50%, transparent 60%); animation: rh-shine 1.8s ease-in-out 0.5s infinite; }
+.rare-hit .rh-card .tc-ic { font-size: 46px; }
+.rare-hit .rh-card b { font-size: 15px; }
+.rare-hit .rh-card small { font-size: 12px; opacity: .75; }
+.rare-hit .rh-card i { font-style: normal; font-weight: 900; font-size: 16px; color: #b8860b; }
+.rare-hit.t-UR .rh-card i { color: #c13ab9; }
+.rh-title { text-align: center; color: #ffd84a; text-shadow: 0 0 10px rgba(255, 216, 74, .6); }
+.rh-price { text-align: center; font-size: 15px; margin: 4px 0 6px; }
+.rh-price b { font-size: 20px; color: #ffd84a; }
+.rh-price small { display: block; opacity: .8; }
+@keyframes rh-spin { to { transform: rotate(360deg); } }
+@keyframes rh-pop { from { transform: scale(0.2) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes rh-shine { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
+

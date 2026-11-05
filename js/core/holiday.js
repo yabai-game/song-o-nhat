@@ -8,8 +8,22 @@ import { totalDays } from './home_life.js';
 export const HOLI = {
   BOX_PRICE: 5500,
   BOX_CUTOFF_MIN: 10 * 60, // 10:00
-  BOX_MIN_VAL: 1500,
-  BOX_MAX_VAL: 25000,
+  BOX_MIN_VAL: 300,
+  BOX_MAX_VAL: 40000,
+  // what is inside a box (player feedback 2026-11-05: in real life opening packs mostly loses money).
+  // Expected value ≈ 2.900 ¥ for a 5.500 ¥ box; only ~8 % of boxes are worth more than the price after selling.
+  BOX_TIERS: [
+    { p: 0.70, tier: 'N', vi: 'Thường', min: 300, max: 2500 },
+    { p: 0.22, tier: 'R', vi: 'Hiếm vừa', min: 2500, max: 6000 },
+    { p: 0.065, tier: 'SR', vi: 'Hiếm 🌟', min: 6000, max: 12000 },
+    { p: 0.015, tier: 'UR', vi: 'Siêu hiếm ✨', min: 15000, max: 40000 },
+  ],
+  SHOP_BUY_RATE: 0.6,        // カードショップ 買取: sells at once, for 60 % of the price
+  MONSTERS: [
+    ['ヒノトリ', 'Chim Lửa', '🔥'], ['カッパマル', 'Kappa Tròn', '🥒'], ['ユキウサギ', 'Thỏ Tuyết', '❄️'], ['タヌキング', 'Vua Lửng', '🍃'],
+    ['サクラギツネ', 'Cáo Anh Đào', '🌸'], ['オニカブト', 'Bọ Quỷ', '🪲'], ['ミズクラゲ', 'Sứa Nước', '💧'], ['コケダマ', 'Bóng Rêu', '🌱'],
+    ['カミナリダコ', 'Bạch Tuộc Sấm', '⚡'], ['ツキノワグマ', 'Gấu Trăng', '🌙'],
+  ],
   APP_FEE_RATE: 0.10,
   APP_SHIP_FEE: 700,
   STRANGER_FAKE_CHANCE: 0.25,
@@ -232,16 +246,37 @@ export function openBox(arg1, arg2 = Math.random, arg3 = Math.random) {
     S = card._S;
   }
   if (!card || typeof card !== 'object') return { ok: false, value: 0 };
-  const r = Math.max(0, Math.min(1, (typeof rng === 'function' ? rng() : 0.5)));
-  const value = Math.round(HOLI.BOX_MIN_VAL + r * (HOLI.BOX_MAX_VAL - HOLI.BOX_MIN_VAL));
-  const rarity = value >= 18000 ? 'UR (Siêu hiếm ✨)'
-    : value >= 9000 ? 'SR (Hiếm 🌟)'
-    : 'N/R (Thường)';
+  const R = () => Math.max(0, Math.min(0.999999, typeof rng === 'function' ? rng() : 0.5));
+  // tier of the best card decides the box value (most boxes: only commons)
+  const r = R();
+  let acc = 0, T = HOLI.BOX_TIERS[HOLI.BOX_TIERS.length - 1];
+  for (const t of HOLI.BOX_TIERS) { acc += t.p; if (r < acc) { T = t; break; } }
+  const value = Math.round(T.min + R() * (T.max - T.min));
+  const rarity = `${T.tier} (${T.vi})`;
+  // five cards to flip: four fillers, the best one last
+  const M = HOLI.MONSTERS, pick = () => M[Math.floor(R() * M.length)];
+  const cards = [];
+  for (let i = 0; i < 4; i++) { const [jp, vi, icon] = pick(); cards.push({ jp, vi, icon, tier: R() < 0.2 ? 'R' : 'N' }); }
+  const [jp, vi, icon] = pick(); cards.push({ jp, vi, icon, tier: T.tier, best: true });
   card.opened = true;
   card.value = value;
   card.rarity = rarity;
+  card.tier = T.tier;
+  card.best = { jp, vi, icon };
   const deltas = S ? applyFx(S, { mental: 2 }) : [['mental', 2]];
-  return { ok: true, opened: true, value, rarity, deltas };
+  return { ok: true, opened: true, value, rarity, tier: T.tier, rare: T.tier === 'SR' || T.tier === 'UR', cards, deltas };
+}
+
+/** Sell an opened card (or the box's commons) at once to a card shop (カードショップ 買取) for 60 % of its price. */
+export function sellToShop(S, card) {
+  ensureHolidayState(S);
+  if (!S || !card || !card.opened) return { ok: false, net: 0, profit: 0, deltas: [] };
+  const net = Math.round(card.value * HOLI.SHOP_BUY_RATE);
+  const profit = net - (typeof card.price === 'number' ? card.price : HOLI.BOX_PRICE);
+  const deltas = applyFx(S, { money: net, mental: profit >= 0 ? 3 : -2 });
+  card.sold = true;
+  const idx = S.cards.indexOf(card); if (idx >= 0) S.cards.splice(idx, 1);
+  return { ok: true, net, profit, deltas };
 }
 
 /**
@@ -253,14 +288,11 @@ export function marketPrice(card, daysSince = 0, rng = Math.random) {
     return card.value;
   }
   const r = Math.max(0, Math.min(1, typeof rng === 'function' ? rng() : 0.5));
-  // Bottom 20% of rng or oversupply dip drops below retail (4,200..5,400 ¥)
-  if (r < 0.2) {
-    return Math.round(4200 + (r / 0.2) * 1200);
-  }
-  // Normal hype range: 6,000..9,000 ¥ (slight decay if held very long)
-  const ratio = (r - 0.2) / 0.8;
-  const decay = Math.min(600, Math.max(0, daysSince - 14) * 20);
-  return Math.round(6000 + ratio * 3000 - decay);
+  const decay = Math.min(800, Math.max(0, daysSince - 14) * 25);
+  // resellers flood the app: most of the time a sealed box sells under or near the shop price
+  if (r < 0.55) return Math.round(4000 + (r / 0.55) * 1500 - decay);          // 4,000..5,500 ¥
+  if (r < 0.9) return Math.round(5500 + ((r - 0.55) / 0.35) * 1500 - decay);  // 5,500..7,000 ¥ (still a loss after fees)
+  return Math.round(7000 + ((r - 0.9) / 0.1) * 2000 - decay);                  // 7,000..9,000 ¥: the rare small win
 }
 
 /**
