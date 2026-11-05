@@ -98,6 +98,31 @@ const WORK_COLORS = { top: '#1f3148', bottom: '#1c2c42' };  // JOB_OUTFIT.site: 
 const BENTO_COLORS = { top: '#f2f2ee', bottom: '#f2f2ee' }; // JOB_OUTFIT.bento: white sanitary clothes
 const LOTUS_COLORS = { top: '#2b3a36', bottom: '#3f5a3c' }; // JOB_OUTFIT.lotus: dark jacket + moss-green waders (胴長)
 
+// ---------- full screen, portrait (owner: "mặc định vô là fullscreen chế độ dọc") ----------
+// Browsers allow full screen only after a tap, so phones enter it on the first tap (and again on Bắt đầu / Chơi tiếp
+// if the player left it), then lock portrait where supported (Android). iPhone has no fullscreen API for pages:
+// there the installed app (Add to Home Screen, manifest display fullscreen) is the way, and the title says so.
+{
+  const installed = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone === true;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios && !installed) {
+    if (/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent)) document.documentElement.classList.add('ios-tb');
+    const hint = document.getElementById('ios-home'); if (hint) hint.hidden = false;
+  }
+  const goFull = () => {
+    if (installed || !matchMedia('(pointer: coarse)').matches) return;
+    const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req || document.fullscreenElement || document.webkitFullscreenElement) return;
+    try {
+      const p = req.call(el, { navigationUI: 'hide' });
+      const lock = () => screen.orientation?.lock?.('portrait').catch(() => {});
+      if (p && p.then) p.then(lock, () => {}); else lock();
+    } catch { /* not allowed here */ }
+  };
+  addEventListener('pointerup', goFull, { once: true });
+  for (const id of ['btn-new', 'btn-continue']) document.getElementById(id)?.addEventListener('click', goFull);
+}
+
 // ---------- boot ----------
 async function boot() {
   pageview();

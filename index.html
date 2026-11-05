@@ -1,4 +1,4 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#1d2742"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Sống ở Nhật"><link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png"><style>:root{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
 <title>Sống ở Nhật 3D</title>
 <script>
 // always play the newest build: GitHub Pages lets browsers cache this page ~10 min, so compare this
@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&family=Zen+Maru+Gothic:wght@500;700&display=swap">
-<link rel="stylesheet" href="css/game.css?v=a67315551c">
+<link rel="stylesheet" href="css/game.css?v=de661fa306">
 <style id="s14-style">
 .menu-btn { width: 40px; height: 40px; font-size: 17px; left: max(12px, env(safe-area-inset-left, 0px)); }
 .cal-btn { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 44px); font-size: 15px; }
@@ -113,6 +113,7 @@
         <button class="ghost small" id="btn-credits">📜 Ghi công mô hình 3D</button>
         <button class="ghost small" id="btn-music">🎵 Nhạc nền: bật</button>
       </div>
+      <p class="fine ios-home" id="ios-home" hidden>📲 iPhone: bấm <b>Chia sẻ ⬆</b> → <b>Thêm vào MH chính</b> để chơi toàn màn hình, không bị thanh trình duyệt che.</p>
       <p class="fine">Sống quanh năm ở Nhật · 4 nghề: Xây dựng, Chăm sóc người già, Đào củ sen, Làm cơm hộp</p>
     </div>
   </section>
@@ -212,69 +213,69 @@
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/audio/music.js": "./js/audio/music.js?v=a67315551c",
-  "./js/core/bento_data.js": "./js/core/bento_data.js?v=a67315551c",
-  "./js/core/bento_rules.js": "./js/core/bento_rules.js?v=a67315551c",
-  "./js/core/bicycle.js": "./js/core/bicycle.js?v=a67315551c",
-  "./js/core/calendar.js": "./js/core/calendar.js?v=a67315551c",
-  "./js/core/care_data.js": "./js/core/care_data.js?v=a67315551c",
-  "./js/core/care_rules.js": "./js/core/care_rules.js?v=a67315551c",
-  "./js/core/career.js": "./js/core/career.js?v=a67315551c",
-  "./js/core/clinic.js": "./js/core/clinic.js?v=a67315551c",
-  "./js/core/crowd.js": "./js/core/crowd.js?v=a67315551c",
-  "./js/core/dayoff_rules.js": "./js/core/dayoff_rules.js?v=a67315551c",
-  "./js/core/disaster.js": "./js/core/disaster.js?v=a67315551c",
-  "./js/core/evening.js": "./js/core/evening.js?v=a67315551c",
-  "./js/core/festival.js": "./js/core/festival.js?v=a67315551c",
-  "./js/core/gait.js": "./js/core/gait.js?v=a67315551c",
-  "./js/core/holiday.js": "./js/core/holiday.js?v=a67315551c",
-  "./js/core/home_life.js": "./js/core/home_life.js?v=a67315551c",
-  "./js/core/jobs.js": "./js/core/jobs.js?v=a67315551c",
-  "./js/core/lotus_data.js": "./js/core/lotus_data.js?v=a67315551c",
-  "./js/core/lotus_rules.js": "./js/core/lotus_rules.js?v=a67315551c",
-  "./js/core/market_rules.js": "./js/core/market_rules.js?v=a67315551c",
-  "./js/core/morning.js": "./js/core/morning.js?v=a67315551c",
-  "./js/core/paperwork.js": "./js/core/paperwork.js?v=a67315551c",
-  "./js/core/site_rules.js": "./js/core/site_rules.js?v=a67315551c",
-  "./js/core/stars.js": "./js/core/stars.js?v=a67315551c",
-  "./js/core/state.js": "./js/core/state.js?v=a67315551c",
-  "./js/core/story.js": "./js/core/story.js?v=a67315551c",
-  "./js/core/train.js": "./js/core/train.js?v=a67315551c",
-  "./js/core/trash_rules.js": "./js/core/trash_rules.js?v=a67315551c",
-  "./js/core/wellbeing.js": "./js/core/wellbeing.js?v=a67315551c",
-  "./js/gfx/backdrop.js": "./js/gfx/backdrop.js?v=a67315551c",
-  "./js/gfx/bento.js": "./js/gfx/bento.js?v=a67315551c",
-  "./js/gfx/care.js": "./js/gfx/care.js?v=a67315551c",
-  "./js/gfx/chars.js": "./js/gfx/chars.js?v=a67315551c",
-  "./js/gfx/controls.js": "./js/gfx/controls.js?v=a67315551c",
-  "./js/gfx/crowd.js": "./js/gfx/crowd.js?v=a67315551c",
-  "./js/gfx/dorm.js": "./js/gfx/dorm.js?v=a67315551c",
-  "./js/gfx/festival.js": "./js/gfx/festival.js?v=a67315551c",
-  "./js/gfx/lotus.js": "./js/gfx/lotus.js?v=a67315551c",
-  "./js/gfx/market.js": "./js/gfx/market.js?v=a67315551c",
-  "./js/gfx/season.js": "./js/gfx/season.js?v=a67315551c",
-  "./js/gfx/services.js": "./js/gfx/services.js?v=a67315551c",
-  "./js/gfx/shrine.js": "./js/gfx/shrine.js?v=a67315551c",
-  "./js/gfx/site.js": "./js/gfx/site.js?v=a67315551c",
-  "./js/gfx/stage.js": "./js/gfx/stage.js?v=a67315551c",
-  "./js/gfx/station.js": "./js/gfx/station.js?v=a67315551c",
-  "./js/gfx/street.js": "./js/gfx/street.js?v=a67315551c",
-  "./js/gfx/town.js": "./js/gfx/town.js?v=a67315551c",
-  "./js/main.js": "./js/main.js?v=a67315551c",
-  "./js/net/firebase_config.js": "./js/net/firebase_config.js?v=a67315551c",
-  "./js/net/stats.js": "./js/net/stats.js?v=a67315551c",
-  "./js/ui/ui.js": "./js/ui/ui.js?v=a67315551c",
-  "./js/work/bento_shift.js": "./js/work/bento_shift.js?v=a67315551c",
-  "./js/work/care_shift.js": "./js/work/care_shift.js?v=a67315551c",
-  "./js/work/dayoff.js": "./js/work/dayoff.js?v=a67315551c",
-  "./js/work/evening_walk.js": "./js/work/evening_walk.js?v=a67315551c",
-  "./js/work/lotus_shift.js": "./js/work/lotus_shift.js?v=a67315551c",
-  "./js/work/market_shop.js": "./js/work/market_shop.js?v=a67315551c",
-  "./js/work/morning_walk.js": "./js/work/morning_walk.js?v=a67315551c",
-  "./js/work/site_shift.js": "./js/work/site_shift.js?v=a67315551c"
+  "./js/audio/music.js": "./js/audio/music.js?v=de661fa306",
+  "./js/core/bento_data.js": "./js/core/bento_data.js?v=de661fa306",
+  "./js/core/bento_rules.js": "./js/core/bento_rules.js?v=de661fa306",
+  "./js/core/bicycle.js": "./js/core/bicycle.js?v=de661fa306",
+  "./js/core/calendar.js": "./js/core/calendar.js?v=de661fa306",
+  "./js/core/care_data.js": "./js/core/care_data.js?v=de661fa306",
+  "./js/core/care_rules.js": "./js/core/care_rules.js?v=de661fa306",
+  "./js/core/career.js": "./js/core/career.js?v=de661fa306",
+  "./js/core/clinic.js": "./js/core/clinic.js?v=de661fa306",
+  "./js/core/crowd.js": "./js/core/crowd.js?v=de661fa306",
+  "./js/core/dayoff_rules.js": "./js/core/dayoff_rules.js?v=de661fa306",
+  "./js/core/disaster.js": "./js/core/disaster.js?v=de661fa306",
+  "./js/core/evening.js": "./js/core/evening.js?v=de661fa306",
+  "./js/core/festival.js": "./js/core/festival.js?v=de661fa306",
+  "./js/core/gait.js": "./js/core/gait.js?v=de661fa306",
+  "./js/core/holiday.js": "./js/core/holiday.js?v=de661fa306",
+  "./js/core/home_life.js": "./js/core/home_life.js?v=de661fa306",
+  "./js/core/jobs.js": "./js/core/jobs.js?v=de661fa306",
+  "./js/core/lotus_data.js": "./js/core/lotus_data.js?v=de661fa306",
+  "./js/core/lotus_rules.js": "./js/core/lotus_rules.js?v=de661fa306",
+  "./js/core/market_rules.js": "./js/core/market_rules.js?v=de661fa306",
+  "./js/core/morning.js": "./js/core/morning.js?v=de661fa306",
+  "./js/core/paperwork.js": "./js/core/paperwork.js?v=de661fa306",
+  "./js/core/site_rules.js": "./js/core/site_rules.js?v=de661fa306",
+  "./js/core/stars.js": "./js/core/stars.js?v=de661fa306",
+  "./js/core/state.js": "./js/core/state.js?v=de661fa306",
+  "./js/core/story.js": "./js/core/story.js?v=de661fa306",
+  "./js/core/train.js": "./js/core/train.js?v=de661fa306",
+  "./js/core/trash_rules.js": "./js/core/trash_rules.js?v=de661fa306",
+  "./js/core/wellbeing.js": "./js/core/wellbeing.js?v=de661fa306",
+  "./js/gfx/backdrop.js": "./js/gfx/backdrop.js?v=de661fa306",
+  "./js/gfx/bento.js": "./js/gfx/bento.js?v=de661fa306",
+  "./js/gfx/care.js": "./js/gfx/care.js?v=de661fa306",
+  "./js/gfx/chars.js": "./js/gfx/chars.js?v=de661fa306",
+  "./js/gfx/controls.js": "./js/gfx/controls.js?v=de661fa306",
+  "./js/gfx/crowd.js": "./js/gfx/crowd.js?v=de661fa306",
+  "./js/gfx/dorm.js": "./js/gfx/dorm.js?v=de661fa306",
+  "./js/gfx/festival.js": "./js/gfx/festival.js?v=de661fa306",
+  "./js/gfx/lotus.js": "./js/gfx/lotus.js?v=de661fa306",
+  "./js/gfx/market.js": "./js/gfx/market.js?v=de661fa306",
+  "./js/gfx/season.js": "./js/gfx/season.js?v=de661fa306",
+  "./js/gfx/services.js": "./js/gfx/services.js?v=de661fa306",
+  "./js/gfx/shrine.js": "./js/gfx/shrine.js?v=de661fa306",
+  "./js/gfx/site.js": "./js/gfx/site.js?v=de661fa306",
+  "./js/gfx/stage.js": "./js/gfx/stage.js?v=de661fa306",
+  "./js/gfx/station.js": "./js/gfx/station.js?v=de661fa306",
+  "./js/gfx/street.js": "./js/gfx/street.js?v=de661fa306",
+  "./js/gfx/town.js": "./js/gfx/town.js?v=de661fa306",
+  "./js/main.js": "./js/main.js?v=de661fa306",
+  "./js/net/firebase_config.js": "./js/net/firebase_config.js?v=de661fa306",
+  "./js/net/stats.js": "./js/net/stats.js?v=de661fa306",
+  "./js/ui/ui.js": "./js/ui/ui.js?v=de661fa306",
+  "./js/work/bento_shift.js": "./js/work/bento_shift.js?v=de661fa306",
+  "./js/work/care_shift.js": "./js/work/care_shift.js?v=de661fa306",
+  "./js/work/dayoff.js": "./js/work/dayoff.js?v=de661fa306",
+  "./js/work/evening_walk.js": "./js/work/evening_walk.js?v=de661fa306",
+  "./js/work/lotus_shift.js": "./js/work/lotus_shift.js?v=de661fa306",
+  "./js/work/market_shop.js": "./js/work/market_shop.js?v=de661fa306",
+  "./js/work/morning_walk.js": "./js/work/morning_walk.js?v=de661fa306",
+  "./js/work/site_shift.js": "./js/work/site_shift.js?v=de661fa306"
  }
 }
 </script>
-<script type="module" src="js/main.js?v=a67315551c"></script>
+<script type="module" src="js/main.js?v=de661fa306"></script>
 
 </body></html>

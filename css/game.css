@@ -346,6 +346,11 @@ button.small { font-size: 13px; padding: 8px 12px; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #shifthud .place { top: 30% !important; }
 #shifthud .tip { width: min(380px, calc(100% - 32px)); }
+/* full screen (owner): Chrome / Firefox / Edge on iPhone draw their address bar over the top of the page and iOS
+   has no fullscreen API, so the game frame starts below that bar there; the title shows how to install the app */
+html.ios-tb #app { top: 44px; }
+html.ios-tb body { background: #1d2742; }
+.ios-home { color: var(--gold); line-height: 1.4; }
 
 /* S21 UI fixes: prevent #toast and #ach-toast from overlapping #modal .card or #dayhud .top, and compact cards on 812x375 landscape */
 #toast { box-sizing: border-box; z-index: 26; }
