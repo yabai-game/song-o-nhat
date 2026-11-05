@@ -128,7 +128,12 @@ export class Character {
     this.acts = {};
     // clips this model lacks (e.g. "carry") are borrowed from another model: every Meshy rig uses
     // the same Mixamo bone names and A-pose rest, so the tracks bind by name.
-    for (const c of [...src.clips, ...shared.filter((s) => !src.clips.some((c) => c.name === s.name))]) this.acts[c.name] = this.mixer.clipAction(c);
+    const clips = [...src.clips, ...shared.filter((s) => !src.clips.some((c) => c.name === s.name))];
+    // standing still: a pose built from the model's own walk cycle (see standClip), not Meshy's
+    // Idle_02, which held the arms bent out in front of the body
+    const walk = clips.find((c) => c.name === 'walk');
+    for (const c of clips) this.acts[c.name] = this.mixer.clipAction(c.name === 'idle' && walk ? standClip(walk) : c);
+    if (!this.acts.idle && walk) this.acts.idle = this.mixer.clipAction(standClip(walk));
     // every action keeps playing; update() moves their weights towards the current clip and keeps
     // the sum at exactly 1. three.js crossFadeTo chains left the sum below 1 when clips changed
     // quickly (bumping into a wall flips idle/run every frame), and the missing weight blended in
@@ -260,6 +265,40 @@ export class Character {
 }
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _x = new THREE.Vector3(1, 0, 0);
 const _side = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _a = new THREE.Vector3(), _qp = new THREE.Quaternion();
+/**
+ * A natural standing pose from a walk clip: every track averaged over one cycle (sign-aligned,
+ * normalised quaternions), so the legs sit straight and together and the arms hang at the sides,
+ * plus a slow breath (the upper chest tips 1.5° and back every 3 s). Cached per walk clip.
+ */
+const _stand = new WeakMap();
+function standClip(walk) {
+  if (_stand.has(walk)) return _stand.get(walk);
+  const N = 48, tracks = [];
+  for (const tr of walk.tracks) {
+    const it = tr.createInterpolant(), s = tr.getValueSize(), acc = new Array(s).fill(0);
+    let ref = null;
+    for (let i = 0; i < N; i++) {
+      const v = it.evaluate(walk.duration * i / N);
+      if (s === 4) {
+        if (!ref) ref = Array.from(v);
+        const sg = v[0] * ref[0] + v[1] * ref[1] + v[2] * ref[2] + v[3] * ref[3] < 0 ? -1 : 1;
+        for (let k = 0; k < 4; k++) acc[k] += sg * v[k];
+      } else for (let k = 0; k < s; k++) acc[k] += v[k];
+    }
+    let m = acc.map((x) => x / N);
+    if (s === 4) { const l = Math.hypot(...m) || 1; m = m.map((x) => x / l); }
+    let times = [0, 3], values = [...m, ...m];
+    if (s === 4 && /Spine2$/.test(tr.name.split('.')[0])) {
+      const q = new THREE.Quaternion(m[0], m[1], m[2], m[3]).multiply(_q.setFromAxisAngle(_x, 0.026));
+      times = [0, 1.5, 3]; values = [...m, q.x, q.y, q.z, q.w, ...m];
+    }
+    tracks.push(new tr.constructor(tr.name, times, values));
+  }
+  const clip = new THREE.AnimationClip('idle', 3, tracks);
+  _stand.set(walk, clip);
+  return clip;
+}
+
 /** rotate a bone by `angle` about a WORLD axis: local' = (parentWorld⁻¹ · axis rotation) · local */
 function tilt(bone, axisW, angle) {
   bone.parent.getWorldQuaternion(_qp);
