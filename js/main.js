@@ -264,6 +264,34 @@ function bindUi() {
   $('btn-note')?.addEventListener('click', notebookModal);
   $('btn-phone')?.addEventListener('click', phoneModal);
   $('day-label').parentElement?.addEventListener('click', calendarModal);
+  // HUD tidy-up: the day pill on the walking / shift HUD opens the calendar too; the place pill only flashes when the
+  // place changes; the tip shrinks to its title after 6 s (tap to open it again) and sits below whatever is above it
+  $('sh-rank').style.pointerEvents = 'auto';
+  $('sh-rank').addEventListener('click', () => { if (G.S) calendarModal(); });
+  {
+    const place = $('sh-place'), tip = $('sh-tip');
+    let placeT = 0, tipT = 0, lastPlace = '', lastTip = '';
+    const flash = () => { place.classList.add('flash'); clearTimeout(placeT); placeT = setTimeout(() => place.classList.remove('flash'), 3200); };
+    const fresh = () => { tip.classList.remove('mini'); clearTimeout(tipT); tipT = setTimeout(() => tip.classList.add('mini'), 6000); };
+    tip.style.pointerEvents = 'auto';
+    tip.addEventListener('click', fresh);
+    setInterval(() => {
+      const p = place.textContent.trim();
+      if (p !== lastPlace) { lastPlace = p; if (p) flash(); }
+      const t = tip.hidden ? '' : tip.textContent.trim();
+      if (t !== lastTip) { lastTip = t; if (t) fresh(); }
+      if (!tip.hidden && !$('shifthud').hidden) {
+        const hud = $('shifthud').getBoundingClientRect();
+        let bottom = 0;
+        for (const id of ['sh-rank', 'sh-bars', 'sh-chips', 'sh-ticket']) {
+          const el = $(id); if (!el || el.hidden) continue;
+          const r = el.getBoundingClientRect(); if (r.height) bottom = Math.max(bottom, r.bottom);
+        }
+        const top = Math.round(Math.max(bottom - hud.top + 6, 90)) + 'px';
+        if (tip.style.top !== top) tip.style.top = top;
+      }
+    }, 200);
+  }
   // the ☰ menu button, 📅 calendar button, 📒 notebook button, and 📱 LIME phone button show whenever a game screen is up
   setInterval(() => {
     const on = !['title', 'creator', 'jobs'].includes(G.mode) && $('title').hidden && $('creator').hidden;
@@ -279,7 +307,7 @@ function bindUi() {
       $('sh-rank')?.classList.toggle('red-day', red);
       const u = unreadCount(G.S, cal);
       const bd = $('phone-badge');
-      if (bd) { bd.hidden = u <= 0; bd.textContent = String(u); }
+      if (bd) { bd.hidden = u <= 0; bd.textContent = u > 9 ? '9+' : String(u); }
       renderHomeChips(G.S, cal);
       notifyAchievements(G.S);
     }
@@ -297,7 +325,7 @@ function bindUi() {
     if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
     // sit just below whatever is on the left under the top bar (the day / rank pill can wrap to two lines)
     let bottom = 0;
-    for (const id of ['sh-rank', 'sh-chips', 'sh-place', 'sh-tip', 'sh-ticket']) {
+    for (const id of ['sh-rank']) {
       const el = $(id); if (!el || el.hidden) continue;
       const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
       if (r.height && r.left < b.right && r.right > b.left) bottom = Math.max(bottom, r.bottom);
@@ -335,6 +363,10 @@ function pauseMenu() {
   const demo = !G.S || G.S.flags.demo || G.demoJob;
   card(`<h2>⏸ Tạm dừng</h2><p>${demo ? 'Đang ở chế độ thử, không lưu.' : 'Tiến độ đã lưu tới bước gần nhất. Về màn hình chính thì phần đang làm dở (ca làm, đường đi) sẽ làm lại từ đầu bước này.'}</p>`, [
     { label: '▶ Tiếp tục', on: () => { if (mod) mod.paused = was; } },
+    ...(G.S ? [
+      { label: '📅 Lịch 4 mùa', cls: 'ghost', on: () => { if (mod) mod.paused = was; calendarModal(); } },
+      { label: '📒 Sổ tay thành tựu', cls: 'ghost', on: () => { if (mod) mod.paused = was; notebookModal(); } },
+    ] : []),
     { label: music.muted ? '🔈 Bật nhạc nền' : '🔇 Tắt nhạc nền', cls: 'ghost', on: () => { music.toggle(); if (mod) mod.paused = was; toast(music.muted ? '🔇 Đã tắt nhạc nền' : '🎵 Đã bật nhạc nền'); } },
     { label: '🏠 Về màn hình chính', cls: 'ghost', on: () => {
       try { if (mod && mod.stop) mod.stop(); } catch (e) { console.warn(e); }

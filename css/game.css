@@ -321,3 +321,25 @@ button.small { font-size: 13px; padding: 8px 12px; }
 @keyframes rh-pop { from { transform: scale(0.2) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes rh-shine { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
 
+
+/* ---- HUD tidy-up (2026-11-05, owner: "màn hình đang rối") ----
+   row 1: ☰ 📱 · goal pill · ✕      row 2: day pill (left) · stat bars in one capsule (right)
+   the place pill only flashes for a few seconds when the place changes; the tip shrinks to its title after a while.
+   📅 and 📒 live in the ☰ menu (the day pill also opens the calendar). */
+#btn-cal, #btn-note { display: none !important; }
+.phone-btn { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 46px) !important; }
+#app.has-menu .top { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 92px); }
+#shifthud .rank { top: calc(56px + env(safe-area-inset-top, 0px)) !important; max-width: calc(100% - 190px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; }
+#shifthud .mini-bars { top: calc(56px + env(safe-area-inset-top, 0px)) !important; left: auto !important; right: max(12px, env(safe-area-inset-right, 0px)); width: auto; display: flex; gap: 4px; }
+#shifthud .mini-bars .sbar.mini { padding: 3px 6px; gap: 3px; }
+#shifthud .mini-bars .sbar.mini .sb-t { width: 26px; flex: none; height: 5px; }
+#shifthud .home-chips { top: calc(90px + env(safe-area-inset-top, 0px)) !important; max-width: calc(100% - 24px); }
+#shifthud .place { top: calc(90px + env(safe-area-inset-top, 0px)) !important; opacity: 0; transition: opacity .4s; pointer-events: none; }
+#shifthud .place.flash { opacity: 1; }
+#shifthud .tip { transition: top .2s; pointer-events: auto; cursor: pointer; }
+#shifthud .tip.mini { width: auto; max-width: calc(100% - 32px); padding: 4px 12px; border-radius: 99px; opacity: .9; }
+#shifthud .tip.mini span { display: none; }
+#shifthud .tip.mini b::after { content: ' ▾'; opacity: .6; font-weight: 400; }
+@media (orientation: landscape) {
+  #shifthud .rank, #shifthud .mini-bars { top: calc(56px + env(safe-area-inset-top, 0px)) !important; }
+}
