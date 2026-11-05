@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { MORNING, createMorning, clock, wake, tick, act, leaveRoom, arrive, toPlatform, board, alight } from '../core/morning.js';
 import { applyFx, save } from '../core/state.js';
 import { KINDS, DAY_JP, TRASH_MIN, createSort, answer, result, rng } from '../core/trash_rules.js';
+import { SEASONS, weekday, weatherOf, weatherFx } from '../core/calendar.js';
 import { DORM } from '../gfx/dorm.js';
 import { ROUTE } from '../gfx/site.js';
 import { STATION } from '../gfx/station.js';
@@ -140,10 +141,16 @@ export class MorningWalk {
     this.btn.run.classList.remove('on');
   }
 
+  trashKey() {
+    const S = this.S;
+    if (!S) return 0;
+    return S.life && S.cal ? `${S.cal.year}-${S.cal.season}-${S.cal.day}` : S.story;
+  }
+
   trashDone() {
     if (this.sorted) return true;
     if (this.demoTrash) return false;
-    return !!(this.S && this.S.flags && this.S.flags.trashDay === this.S.story);
+    return !!(this.S && this.S.flags && this.S.flags.trashDay === this.trashKey());
   }
 
   tip(jp, vi, sec = 6) {
@@ -215,7 +222,11 @@ export class MorningWalk {
   enterStreet() {
     const P = this.who.player, site = this.stages.site;
     this.setStage('site');
-    site.setWeather({}); site.setTime('day'); site.ring.visible = false;
+    const cal = this.S?.cal;
+    const fx = cal ? weatherFx(weatherOf(cal, this.S?.seed || 1)) : {};
+    site.setWeather({ rain: !!fx.rain, snow: !!fx.snow, wind: !!fx.wind });
+    site.setSeason?.(SEASONS[cal?.season ?? 0]?.id || 'spring');
+    site.setTime('day'); site.ring.visible = false;
     P.unpinAll();
     if (this.carryingBag && site.handBag) {
       site.handBag.visible = true;
@@ -335,7 +346,7 @@ export class MorningWalk {
     this.sorted = true;
     this.carryingBag = true;
     if (this.S && this.S.flags && !this.demoTrash) {
-      this.S.flags.trashDay = this.S.story;
+      this.S.flags.trashDay = this.trashKey();
       if (this.storage) save(this.S, this.storage);
     }
     const P = this.who.player, site = this.stages.site;
@@ -387,7 +398,10 @@ export class MorningWalk {
     } else if (w.stage === 'lotus') {
       P.look({ ...this.S.look.colors, top: '#2b3a36', bottom: '#3f5a3c' });
       if (P.waders) P.waders.setVisible(true);
-      this.stages.lotus.setWeather({});
+      const cal = this.S?.cal;
+      const fx = cal ? weatherFx(weatherOf(cal, this.S?.seed || 1)) : {};
+      this.stages.lotus.setWeather({ rain: !!fx.rain, snow: !!fx.snow, wind: !!fx.wind, cold: !!(fx.snow || cal?.season === 3) });
+      this.stages.lotus.setSeason?.(SEASONS[cal?.season ?? 0]?.id || 'spring');
       this.stages.lotus.setCollected(0);
       this.stages.lotus.setSpray(false);
     }
@@ -439,8 +453,8 @@ export class MorningWalk {
       toast('🍙 Ăn sáng', `${deltaText(r.deltas)} · ⏰ ${clock(s.min)}`);
     } else if (id === 'trash') {
       if (s.phase !== 'room' || this.trashDone()) return;
-      const day = (S && S.story) || 0;
-      const seed = (day + 1) * 709 + ((S && S.week) || 0) * 37;
+      const day = S && S.life && S.cal ? weekday(S.cal) % 5 : ((S && S.story) || 0);
+      const seed = (day + 1) * 709 + ((S && S.cal && S.cal.day) || 0) * 37 + ((S && S.seed) || 0);
       this.trashSt = createSort(day, rng(seed));
       this.openSortCard();
     } else if (id === 'out') {

@@ -1,6 +1,7 @@
-// First-week story runner logic — pure module (spec §4.4, original 5771–5855).
+// First-week and endless life-loop runner logic — pure module (spec §4.4, original 5771–5855).
 import { daysOf, EVENINGS, rankOf } from './jobs.js';
 import { applyFx, lessTired, gainXp } from './state.js';
+import { advance, weatherOf, weatherFx, scaleLifeShift, pickLifeTalk, pickEveningTalk } from './calendar.js';
 
 export const DAYS = 5;
 
@@ -17,6 +18,39 @@ export function daySteps(i, job = 'site') {
   ];
 }
 
+/** The six steps of a workday in the endless calendar life loop (`S.life === true`). */
+export function lifeDaySteps(S, job = S?.job || 'site') {
+  S.lDay = S.lDay || {};
+  if (!S.lDay.morningTalk) S.lDay.morningTalk = pickLifeTalk(S, job).data;
+  if (!S.lDay.middayTalk) S.lDay.middayTalk = pickLifeTalk(S, job).data;
+  if (!S.lDay.eveningTalk) S.lDay.eveningTalk = pickEveningTalk(S);
+  const dayIdx = (((S.cal?.day || 1) - 1) % 5 + 5) % 5;
+  const W = daysOf(job)[dayIdx];
+  const w = weatherOf(S.cal, S.seed || 1), fx = weatherFx(w);
+  const a = {
+    ...W.a,
+    rain: !!(W.a.rain || fx.rain),
+    wind: !!(W.a.wind || fx.wind),
+    walk: fx.walk < 1 ? fx.walk : (W.a.walk || 1),
+    heat: !!fx.heat,
+    snow: !!fx.snow,
+    cold: !!(W.a.cold || fx.snow),
+  };
+  let b = scaleLifeShift(W.b, rankOf(S.jobXp || 0) + 1, w);
+  if (S.lDay.kind === 'overtime') {
+    b = { ...b, label: 'Tăng ca thứ Bảy: ' + b.label.replace(/^Ca chiều: |^Thử thách cuối tuần: /, '') };
+  }
+  const E = S.lDay.eveningTalk;
+  return [
+    { t: 'talk', label: `Sáng: ${S.lDay.morningTalk.title}`, xp: 5, data: S.lDay.morningTalk, at: 'work' },
+    { t: 'shift', label: a.label, xp: 15, data: a, hard: false },
+    { t: 'talk', label: `⚠️ Giữa ca: ${S.lDay.middayTalk.title}`, xp: 10, data: S.lDay.middayTalk, at: 'work' },
+    { t: 'shift', label: `🔥 ${b.label}`, xp: 25, data: b, hard: true },
+    { t: 'talk', label: `Tối: ${E.title}`, xp: 10, data: E, at: E.place },
+    { t: 'sleep', label: 'Về giường đi ngủ', xp: 5, data: S.lDay.morningTalk },
+  ];
+}
+
 /**
  * Shift options adjusted by helpers (ally) and being watched (watch) — rankOpts in the original.
  * Morning shifts at rank 1 have no limit and no miss cap, so they cannot be lost.
@@ -25,6 +59,7 @@ export function shiftOpts(W, hard, S) {
   const o = {
     goal: W.goal, limit: 0, maxMiss: 0,
     rain: !!W.rain, wind: !!W.wind, walk: W.walk || 1,
+    heat: !!W.heat, snow: !!W.snow, cold: !!W.cold,
     drift: W.drift, pipeKinds: W.pipeKinds,
     hintDelay: W.hintDelay, decay: W.decay, urgent: W.urgent, waitMin: W.waitMin, waitRand: W.waitRand,
     multi: W.multi, defect: W.defect, speed: W.speed,
@@ -72,13 +107,39 @@ export function retryCost(S) { return applyFx(S, { mental: -4 }); }
 
 export function sleep(S) { return applyFx(S, { health: 9, mental: 7 }); }
 
-/** Marks the current step done and advances; returns { levels, dayEnd, weekEnd }. */
+/** Marks the current step done and advances; returns { levels, dayEnd, weekEnd, xp }. */
 export function completeStep(S) {
+  if (S.life) {
+    const steps = lifeDaySteps(S, S.job || 'site');
+    const st = steps[S.sStep] || steps[0];
+    const levels = gainXp(S, st.xp);
+    if (S.lDay?.kind === 'overtime') {
+      if (S.sStep === 0) S.sStep = 3;
+      else if (S.sStep === 3) S.sStep = 4;
+      else S.sStep++;
+    } else {
+      S.sStep++;
+    }
+    let dayEnd = false;
+    if (S.sStep >= 6) {
+      S.sStep = 0;
+      dayEnd = true;
+      S.lDay = {};
+      if (S.cal) advance(S.cal);
+    }
+    return { levels, dayEnd, weekEnd: false, xp: st.xp };
+  }
   const st = daySteps(S.story, S.job || 'site')[S.sStep];
   const levels = gainXp(S, st.xp);
   S.sStep++;
   let dayEnd = false, weekEnd = false;
-  if (S.sStep >= 6) { S.sStep = 0; S.story++; dayEnd = true; if (S.story >= DAYS) weekEnd = true; }
+  if (S.sStep >= 6) {
+    S.sStep = 0;
+    S.story++;
+    dayEnd = true;
+    if (S.story >= DAYS) weekEnd = true;
+    if (S.cal) S.cal.day = S.story < DAYS ? S.story + 1 : 7;
+  }
   return { levels, dayEnd, weekEnd, xp: st.xp };
 }
 

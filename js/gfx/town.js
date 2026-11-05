@@ -1,5 +1,6 @@
 // The town corner (title screen, character creator, evening scenes).
 import * as THREE from 'three';
+import { SEASON_IDS, SEASON_LOOK, makeSeasonFx } from './season.js';
 import { loadModel, shadowAll, canvasTexture, signTexture, makeSun, skyDome } from './stage.js';
 
 export async function buildTown() {
@@ -83,10 +84,14 @@ export async function buildTown() {
     for (const g of lanternLights) g.intensity = L.lamps;
   }
 
+  // seasons (S15): winter covers the plaza with snow
+  const season = seasonal(scene, petals, grass.material, [{ x: 0, z: 1.5, w: 22, d: 20, y: 0.04, opacity: 0.85 }], new THREE.Vector3(0, 0, 3));
   return {
     scene, sun, obstacles, setTime,
+    setSeason: season,
     bounds: { x0: -10.2, x1: 10.2, z0: -3.7, z1: 10.8 },
     update(dt, t) {
+      season.update(dt);
       for (let i = 0; i < N; i++) {
         const k = i * 5;
         ps[k + 1] -= ps[k + 4] * dt;
@@ -98,4 +103,25 @@ export async function buildTown() {
       petals.instanceMatrix.needsUpdate = true;
     },
   };
+}
+
+/** S15: the cherry trees and the falling petals follow the season (pink, green, red leaves); winter = snow cover + snowfall */
+function seasonal(scene, petals, ground = null, snowAreas = [], centre = new THREE.Vector3()) {
+  const mats = [];
+  scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (/sakura/i.test(m.name || '') && !mats.includes(m)) mats.push(m); });
+  const base = mats.map((m) => m.color.clone()), gBase = ground ? ground.color.clone() : null;
+  const GROUND = { spring: '#ffffff', summer: '#e6f2d4', autumn: '#e8c890', winter: '#ffffff' };
+  const fx = makeSeasonFx(scene, { snowAreas, fall: false });
+  const set = (s) => {
+    const id = (typeof s === 'number' ? SEASON_IDS[s] : s) || 'spring', L = SEASON_LOOK[id] || SEASON_LOOK.spring, c = new THREE.Color(L.sakura);
+    mats.forEach((m, i) => { m.color.copy(base[i]).multiply(c); if (m.emissive) m.emissive.set(id === 'winter' ? '#6a6e74' : '#000000'); }); // snow on the bare branches
+    if (ground) { ground.color.copy(gBase).multiply(new THREE.Color(GROUND[id])); if (id === 'winter') ground.color.set('#eef2f5'); }
+    petals.visible = id === 'spring' || id === 'autumn';
+    petals.material.color.set(id === 'autumn' ? '#d9762e' : '#f6c3d0');
+    fx.setSeason(id);
+    return id;
+  };
+  set.setSnow = (on) => fx.setSnow(on);
+  set.update = (dt) => fx.update(dt, centre);
+  return set;
 }

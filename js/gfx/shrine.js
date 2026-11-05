@@ -4,6 +4,7 @@
 // canvas 奉納 sign + wooden おみくじ掛け rack with white paper slips + grassy sakura grove (5 trees)
 // with a blue picnic tarp (ブルーシート) and falling pink cherry blossom petals (<= 150 instances).
 import * as THREE from 'three';
+import { SEASON_IDS, SEASON_LOOK, makeSeasonFx } from './season.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, signTexture, makeSun, skyDome, loadModel, shadowAll } from './stage.js';
 import { buildBackdrop } from './backdrop.js';
@@ -290,10 +291,13 @@ export async function buildShrine() {
   scene.add(petals);
   const pm4 = new THREE.Matrix4(), pq = new THREE.Quaternion(), pe = new THREE.Euler(), pp = new THREE.Vector3(), pone = new THREE.Vector3(1, 1, 1);
 
+  // seasons (S15); the snow sheets leave the stone approach swept
+  const season = seasonal(scene, petals, grass.material, [{ x: -6.8, z: -5.5, w: 10.4, d: 16, y: 0.03 }, { x: 5.8, z: -5.5, w: 8.4, d: 16, y: 0.03 }, { x: 0, z: -8.25, w: 3.2, d: 10.5, y: 0.03 }], new THREE.Vector3(0, 0, 0));
   return {
     scene,
     sun,
     rings,
+    setSeason: season,
     setKyoTied(on) {
       kyoSlip.visible = !!on;
     },
@@ -304,6 +308,7 @@ export async function buildShrine() {
       rings.hanami.visible = !st.hanami;
     },
     update(dt, t) {
+      season.update(dt);
       for (const r of Object.values(rings)) {
         if (r.visible) r.scale.setScalar(1 + Math.sin(t * 5) * 0.05);
       }
@@ -324,4 +329,25 @@ export async function buildShrine() {
       petals.instanceMatrix.needsUpdate = true;
     },
   };
+}
+
+/** S15: the cherry trees and the falling petals follow the season (pink, green, red leaves); winter = snow cover + snowfall */
+function seasonal(scene, petals, ground = null, snowAreas = [], centre = new THREE.Vector3()) {
+  const mats = [];
+  scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (/sakura/i.test(m.name || '') && !mats.includes(m)) mats.push(m); });
+  const base = mats.map((m) => m.color.clone()), gBase = ground ? ground.color.clone() : null;
+  const GROUND = { spring: '#ffffff', summer: '#e6f2d4', autumn: '#e8c890', winter: '#ffffff' };
+  const fx = makeSeasonFx(scene, { snowAreas, fall: false });
+  const set = (s) => {
+    const id = (typeof s === 'number' ? SEASON_IDS[s] : s) || 'spring', L = SEASON_LOOK[id] || SEASON_LOOK.spring, c = new THREE.Color(L.sakura);
+    mats.forEach((m, i) => { m.color.copy(base[i]).multiply(c); if (m.emissive) m.emissive.set(id === 'winter' ? '#6a6e74' : '#000000'); }); // snow on the bare branches
+    if (ground) { ground.color.copy(gBase).multiply(new THREE.Color(GROUND[id])); if (id === 'winter') ground.color.set('#eef2f5'); }
+    petals.visible = id === 'spring' || id === 'autumn';
+    petals.material.color.set(id === 'autumn' ? '#d9762e' : '#f6c3d0');
+    fx.setSeason(id);
+    return id;
+  };
+  set.setSnow = (on) => fx.setSnow(on);
+  set.update = (dt) => fx.update(dt, centre);
+  return set;
 }

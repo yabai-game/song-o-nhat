@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, signTexture, makeSun, skyDome, loadModel, loadBrand, BRAND_ASPECT } from './stage.js';
 import { STREET, asphaltTexture, lotTexture, buildStreetDetails } from './street.js';
+import { makeSeasonFx } from './season.js';
 import { SITE, PIPE_KINDS, PIPE_ORDER } from '../core/site_rules.js';
 import { buildBackdrop } from './backdrop.js';
 
@@ -654,6 +655,7 @@ export async function buildSite() {
   }
   for (let x = -54; x <= 54; x += 13) tree(x + 6.5, -38, 0.9);
   for (const z of [-16, 11]) { tree(39, z, 0.85); tree(-39, z + 2, 0.85); }
+  mats['#6f9e55'].name = 'tree_crown'; // seasons recolour the street tree crowns (season.js)
   // town beyond the suburb: street grid, houses, apartments, skyline, mountains, clouds
   const APTS = [[-30, -62], [16, -64], [63, 34], [-63, 32], [60, -30]];
   const backdrop = buildBackdrop(scene, {
@@ -801,15 +803,31 @@ export async function buildSite() {
   const rm = new THREE.Matrix4(), rq = new THREE.Quaternion(), rv = new THREE.Vector3();
 
   const look = { sky: SKY.clone(), sun: 2.4, hemi: 0.95 };
-  function setWeather({ rain: isRain = false, pm = false } = {}) {
-    rain.visible = isRain;
+  // seasons (S15): foliage tint, sky, falling petals / leaves, snow cover and snowfall
+  const foliage = [];
+  scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (/shrub|bush|hedge|leaf|leaves|tree|grass/i.test(m.name || '') && !foliage.includes(m)) foliage.push(m); });
+  const crowns = foliage.filter((m) => m.name === 'tree_crown');
+  const seasonFx = makeSeasonFx(scene, { foliage: foliage.filter((m) => !crowns.includes(m)), crowns, ground: [lots.material], sky, sun, groundY: -0.004, snowArea: { x: 0, z: -5, w: 116, d: 106 } });
+  let lastWeather = {}, rainSpeed = 14;
+  /** weather: rain, heavy (heavy rain), typhoon (storm: heavy rain + wind), snow, heat; pm = warm afternoon */
+  function setWeather({ rain: isRain = false, pm = false, heavy = false, typhoon = false, snow = false, heat = false, wind = false } = {}) {
+    if (isRain && wind && !typhoon) heavy = true; // calendar weather: heavyRain / typhoon come as rain + wind
+    lastWeather = { rain: isRain, pm, heavy, typhoon, snow, heat };
+    const wet = isRain || heavy || typhoon, storm = heavy || typhoon;
+    rain.visible = wet; rain.material.opacity = storm ? 0.75 : 0.55; rainSpeed = typhoon ? 22 : storm ? 18 : 14;
+    seasonFx.setSnow(snow);
     // afternoon is only a warm tint: the art reference keeps a clear blue sky
-    scene.background.copy(isRain ? new THREE.Color('#8e9aa3') : pm ? new THREE.Color('#b9cfda') : look.sky);
-    scene.fog.color.set(isRain ? '#9aa4ab' : pm ? '#e3dccf' : '#d3dde0');
-    scene.fog.density = isRain ? 0.011 : 0.0068;
-    isRain ? sky.setColors('#8796a0', '#a7b0b5') : pm ? sky.setColors('#86b4d6', '#ebdfcb') : sky.setColors('#74aedb', '#dbe5e8');
-    sun.intensity = look.sun * (isRain ? 0.45 : pm ? 0.85 : 1);
-    sun.color.set(pm ? 0xffc48a : 0xfff0dc);
+    if (wet || snow) {
+      scene.background.set(typhoon ? '#6f7a82' : snow ? '#c9d0d6' : '#8e9aa3');
+      scene.fog.color.set(typhoon ? '#7d868c' : snow ? '#dde3e7' : '#9aa4ab');
+      typhoon ? sky.setColors('#5e6a73', '#848d93') : snow ? sky.setColors('#b4bfc8', '#e2e7ea') : sky.setColors('#8796a0', '#a7b0b5');
+    } else if (pm) {
+      scene.background.set('#b9cfda'); scene.fog.color.set('#e3dccf'); sky.setColors('#86b4d6', '#ebdfcb');
+    } else seasonFx.applySky(scene.background, scene.fog);
+    scene.fog.density = typhoon ? 0.016 : wet ? 0.011 : snow ? 0.012 : 0.0068;
+    const L = seasonFx.look();
+    sun.intensity = look.sun * L.sun * (typhoon ? 0.3 : wet ? 0.45 : snow ? 0.6 : pm ? 0.85 : heat ? 1.15 : 1);
+    sun.color.set(pm ? 0xffc48a : heat ? 0xfff2c8 : L.warm);
     hemi.intensity = look.hemi; fill.intensity = isRain ? 0.45 : 0.75; fill.color.set(0xe6eeff);
     backdrop.setWeather(isRain);
     setLamps(0);
@@ -822,7 +840,7 @@ export async function buildSite() {
   }
   /** Dusk after the afternoon shift, night on the way home (call after setWeather). */
   function setTime(which) {
-    if (which === 'day') return setWeather({});
+    if (which === 'day') return setWeather(lastWeather.pm ? { ...lastWeather, pm: false } : lastWeather);
     const dusk = which === 'dusk';
     scene.background.set(dusk ? '#e9a77f' : '#27324f');
     scene.fog.color.set(dusk ? '#d9a98a' : '#2c3552');
@@ -837,14 +855,18 @@ export async function buildSite() {
 
   return {
     scene, sun, bundle, ring, trashRing, handBag, setTrashDropped, setFloors, setPlaced, setBundleKind, setActiveKinds, setWeather, setTime, dropAt, stack,
+    /** season: 0..3 or 'spring' | 'summer' | 'autumn' | 'winter' (S15); keeps the current weather */
+    setSeason(season) { seasonFx.setSeason(season); setWeather(lastWeather); },
+    get season() { return seasonFx.season; },
     showcase: { pos: new THREE.Vector3(9, Y + 4.5, 12), look: new THREE.Vector3(-2, Y - 2, -3) },
     update(dt, t, focus) {
       jib.rotation.y = Math.sin(t * 0.12) * 0.55 + 0.35;
       if (trashRing.visible) trashRing.scale.setScalar(1 + Math.sin(t * 6) * 0.05);
       if (fallT > 0) { fallT -= dt; fallen.position.y = Math.max(Y + 0.1, fallen.position.y - dt * 9); if (fallT <= 0) fallen.visible = false; }
+      seasonFx.update(dt, focus);
       if (rain.visible) {
         for (let i = 0; i < RN; i++) {
-          const k = i * 3; rs[k + 1] -= dt * 14; if (rs[k + 1] < 0) rs[k + 1] += 16;
+          const k = i * 3; rs[k + 1] -= dt * rainSpeed; if (rs[k + 1] < 0) rs[k + 1] += 16;
           rv.set(focus.x + rs[k], focus.y - 4 + rs[k + 1], focus.z + rs[k + 2]); rm.compose(rv, rq, one); rain.setMatrixAt(i, rm);
         }
         rain.instanceMatrix.needsUpdate = true;

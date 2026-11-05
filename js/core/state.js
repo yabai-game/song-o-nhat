@@ -40,6 +40,8 @@ export function newState(draft, rng = Math.random) {
     route: 'tts', job: draft.job || null, name: (draft.name || '').trim(), look: { ...draft.look },
     nation: draft.nation || 'vn', city: 'saitama',
     week: 0, story: 0, sStep: 0, ally: 0, watch: 0, wins: 0, fails: 0,
+    cal: { year: 1, season: 0, day: 1 }, life: false, seed: draft.seed || 331, overtime: 0,
+    recentTalks: [], recentEvenings: [], lDay: {},
     flags: {}, certs: [jpLevel(START_TTS.jp)], log: [], pantry: [],
   };
 }
@@ -93,6 +95,19 @@ export function save(S, storage) {
   try { storage.setItem(SAVE_KEY, JSON.stringify(S)); return true; } catch { return false; }
 }
 export function load(storage) {
-  try { const t = storage.getItem(SAVE_KEY); if (!t) return null; const S = JSON.parse(t); return S && S.v === 1 ? S : null; } catch { return null; }
+  try {
+    const t = storage.getItem(SAVE_KEY);
+    if (!t) return null;
+    const S = JSON.parse(t);
+    if (!S || S.v !== 1) return null;
+    if (!S.cal) S.cal = { year: 1, season: 0, day: S.story >= 5 ? (S.flags?.dayOff?.done ? 8 : 7) : Math.max(1, (S.story || 0) + 1) };
+    if (S.life === undefined) S.life = false;
+    if (!S.seed) S.seed = 331;
+    if (S.overtime === undefined) S.overtime = 0;
+    if (!Array.isArray(S.recentTalks)) S.recentTalks = [];
+    if (!Array.isArray(S.recentEvenings)) S.recentEvenings = [];
+    if (!S.lDay) S.lDay = {};
+    return S;
+  } catch { return null; }
 }
 export function clearSave(storage) { try { storage.removeItem(SAVE_KEY); } catch { /* storage blocked */ } }

@@ -7,6 +7,7 @@ import {
   PRAY_SEQ, PRAY_STEPS, createDayOff, tickDayOff, prayStep, drawOmikuji, tieOmikujiKyo, doHanami,
 } from '../core/dayoff_rules.js';
 import { clock } from '../core/morning.js';
+import { SEASONS, weatherOf, weatherFx } from '../core/calendar.js';
 import { save } from '../core/state.js';
 import { DORM } from '../gfx/dorm.js';
 import { ROUTE } from '../gfx/site.js';
@@ -119,9 +120,10 @@ export class DayOff {
     });
   }
 
-  start({ S, stages, who, setStage, storage = null, demo = false, onEnd }) {
-    Object.assign(this, { S, stages, who, setStage, storage, demo: !!demo, onEnd });
+  start({ S, stages, who, setStage, storage = null, demo = false, hubReturn = false, min = null, dayLabel = null, onEnd }) {
+    Object.assign(this, { S, stages, who, setStage, storage, demo: !!demo, hubReturn: !!hubReturn, onEnd });
     this.st = createDayOff(S);
+    if (typeof min === 'number') this.st.min = min;
     this.S.flags = this.S.flags || {};
     this.S.flags.dayOff = { ...(this.S.flags.dayOff || {}), started: true };
     if (this.storage) save(this.S, this.storage);
@@ -132,7 +134,7 @@ export class DayOff {
     show('dayhud', false);
     show('shifthud');
     show('sh-gust', false);
-    $('sh-rank').textContent = demo ? '🎮 Thử nhanh · 🎌 Ngày nghỉ ở đền' : '🎌 Chủ nhật · 日曜日 (Ngày nghỉ)';
+    $('sh-rank').textContent = dayLabel || (demo ? '🎮 Thử nhanh · 🎌 Ngày nghỉ ở đền' : '🎌 Chủ nhật · 日曜日 (Ngày nghỉ)');
 
     this.active = true;
     this.paused = false;
@@ -146,6 +148,8 @@ export class DayOff {
 
     if (demo) {
       this.enterShrine();
+    } else if (hubReturn) {
+      this.enterStreetDay();
     } else {
       this.enterRoomDay();
     }
@@ -208,7 +212,10 @@ export class DayOff {
     this.st.phase = 'streetDay';
     const P = this.who.player, site = this.stages.site;
     this.setStage('site');
-    site.setWeather({});
+    const cal = this.S?.cal;
+    const fx = cal && !this.demo ? weatherFx(weatherOf(cal, this.S?.seed || 1)) : {};
+    site.setWeather({ rain: !!fx.rain, snow: !!fx.snow, wind: !!fx.wind });
+    site.setSeason?.(SEASONS[cal?.season ?? 0]?.id || 'spring');
     site.setTime('day');
     site.ring.visible = false;
     standUp(P);
@@ -229,6 +236,10 @@ export class DayOff {
     this.st.phase = 'shrine';
     const P = this.who.player, shrine = this.stages.shrine;
     this.setStage('shrine');
+    const cal = this.S?.cal;
+    const fx = cal && !this.demo ? weatherFx(weatherOf(cal, this.S?.seed || 1)) : {};
+    shrine.setWeather?.({ rain: !!fx.rain, snow: !!fx.snow, wind: !!fx.wind });
+    shrine.setSeason?.(SEASONS[cal?.season ?? 0]?.id || 'spring');
     standUp(P);
     P.look(this.S.look.colors);
     P.holder.position.set(SHRINE.start.x, 0, SHRINE.start.z);
@@ -397,7 +408,16 @@ export class DayOff {
       return;
     }
     if (id === 'home' && st.phase === 'shrine') {
-      this.fadeTo(() => this.enterStreetNight());
+      if (this.hubReturn) {
+        this.fadeTo(() => {
+          const endSt = this.st;
+          this._hide();
+          this.st = null;
+          if (this.onEnd) this.onEnd(endSt);
+        });
+      } else {
+        this.fadeTo(() => this.enterStreetNight());
+      }
       return;
     }
     if (id === 'sleep' && st.phase === 'roomNight') {

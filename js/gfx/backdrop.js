@@ -143,7 +143,7 @@ export function buildBackdrop(scene, { houseLight, isFree, ground = true }) {
     [houseGeo, new THREE.MeshLambertMaterial({ map: houseTex, ...vc })],
     [aptGeo, new THREE.MeshLambertMaterial({ map: aptTex, ...vc })],
     [towerGeo, new THREE.MeshLambertMaterial({ map: aptTex, ...vc })],
-    [treeGeo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })],
+    [treeGeo, Object.assign(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), { name: 'tree_far' })],
   ];
   for (const [list, mat] of meshes) if (list.length) scene.add(new THREE.Mesh(mergeGeometries(list.map(keep), false), mat));
 

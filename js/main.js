@@ -29,8 +29,15 @@ import { newState, save, load, clearSave, yen, jpLevel, applyFx } from './core/s
 import { JOBS, NPCS, INTRO, rankOf, rankPay, daysOf, ranksOf } from './core/jobs.js';
 import { WELL, checkCollapse, lowBars, sickLeave, skillInfo } from './core/wellbeing.js';
 import { CAREER, targets, cannotStudy, startStudy, quitStudy } from './core/career.js';
-import { daySteps, shiftOpts, shiftEnd, chooseTalk, completeStep, weekEval, sleep, retryCost, DAYS } from './core/story.js';
+import { daySteps, lifeDaySteps, shiftOpts, shiftEnd, chooseTalk, completeStep, weekEval, sleep, retryCost, DAYS } from './core/story.js';
 import { stars, formatStars, recordStars, getStars } from './core/stars.js';
+import { clock as fmtClock } from './core/morning.js';
+import {
+  SEASONS, DAYS_PER_SEASON, WEEKDAYS, WEEKDAYS_VI, PAY,
+  newCalendar, advance, nextDay, weekday, seasonOf, label as calLabel,
+  eventsOn, isRedDay, isOffDay, isMandatoryOff, isSaturdayWorkable,
+  weatherOf, weatherFx, paydayOn, payslip, applyPay,
+} from './core/calendar.js';
 
 const storage = (() => { try { return window.localStorage; } catch { return { getItem: () => null, setItem() {}, removeItem() {} }; } })();
 const G = {
@@ -96,6 +103,9 @@ async function boot() {
 
 function setStage(id) {
   const st = G.stages[id];
+  if (!st) return;
+  const cal = G.S?.cal;
+  if (cal) st.setSeason?.(seasonOf(cal).id);
   if (G.stage === st) return;
   G.overhead.clear();
   G.player && st.scene.add(G.player.holder);
@@ -214,10 +224,19 @@ function bindUi() {
   $('btn-demo').addEventListener('click', demoScreen);
   $('btn-career').addEventListener('click', careerScreen);
   $('btn-menu').addEventListener('click', pauseMenu);
-  // the ☰ menu button shows whenever a game screen (not the title / creator) is up
+  $('btn-cal').addEventListener('click', calendarModal);
+  $('day-label').parentElement?.addEventListener('click', calendarModal);
+  // the ☰ menu button and 📅 calendar button show whenever a game screen (not the title / creator) is up
   setInterval(() => {
     const on = !['title', 'creator', 'jobs'].includes(G.mode) && $('title').hidden && $('creator').hidden;
-    $('btn-menu').hidden = !on; $('app').classList.toggle('has-menu', on);
+    $('btn-menu').hidden = !on;
+    $('btn-cal').hidden = !on || !G.S;
+    $('app').classList.toggle('has-menu', on);
+    if (G.S) {
+      const red = isRedPill(ensureCal(G.S));
+      $('day-label').parentElement?.classList.toggle('red-day', red);
+      $('sh-rank')?.classList.toggle('red-day', red);
+    }
   }, 300);
   $('stats').addEventListener('click', onStatsTap);
   $('sh-bars').addEventListener('click', onStatsTap);
@@ -291,8 +310,109 @@ function titleScreen() {
   const c = $('btn-continue');
   c.hidden = !S;
   $('btn-career').hidden = !S;
-  if (S) c.textContent = `⏯ Chơi tiếp với ${S.name || 'Bạn'} · ${S.week ? 'Tháng ' + S.week : 'Ngày ' + Math.min(DAYS, S.story + 1) + '/5'}`;
+  if (S) c.textContent = `⏯ Chơi tiếp với ${S.name || 'Bạn'} · ${S.life && S.cal ? calLabel(S.cal) : S.week ? 'Tháng ' + S.week : 'Ngày ' + Math.min(DAYS, S.story + 1) + '/5'}`;
+  // the lobby shows the saved season (snow in winter, red leaves in autumn…), spring for a new game
+  G.stages.town.setSeason?.(S && S.life && S.cal ? seasonOf(S.cal).id : 'spring');
   show('title');
+}
+
+function ensureCal(S = G.S) {
+  if (!S) return newCalendar();
+  if (!S.cal) S.cal = newCalendar();
+  if (!S.life) S.cal.day = S.story < DAYS ? (S.story || 0) + 1 : 7;
+  return S.cal;
+}
+const curDayKey = (S = G.S) => (S?.life && S?.cal ? `${S.cal.year}-${S.cal.season}-${S.cal.day}` : (S?.story || 0));
+const curWeather = (S = G.S) => weatherOf(ensureCal(S), S?.seed || 1);
+const curWeatherFx = (S = G.S) => weatherFx(curWeather(S));
+const isRedPill = (cal) => weekday(cal) === 6 || isRedDay(cal) || eventsOn(cal).some((e) => e.kind === 'off');
+function hudCalText(S = G.S, sub = '') {
+  const cal = ensureCal(S);
+  const base = calLabel(cal, curWeather(S));
+  return sub ? `${base} · ${sub}` : base;
+}
+
+function calendarModal() {
+  if (!$('modal').hidden || !G.S) return;
+  const mod = activeModule(), was = mod ? mod.paused : false;
+  if (mod) mod.paused = true;
+  const cur = ensureCal(G.S);
+  let vYear = cur.year, vSeason = cur.season, selDay = cur.day;
+  const tom = nextDay(cur);
+
+  const renderCal = () => {
+    const sInfo = SEASONS[vSeason] || SEASONS[0];
+    const cells = [];
+    for (let d = 1; d <= DAYS_PER_SEASON; d++) {
+      const c = { year: vYear, season: vSeason, day: d };
+      const wd = weekday(c);
+      const isToday = vYear === cur.year && vSeason === cur.season && d === cur.day;
+      const isTom = vYear === tom.year && vSeason === tom.season && d === tom.day;
+      const isPast = vYear < cur.year || (vYear === cur.year && vSeason < cur.season) || (vYear === cur.year && vSeason === cur.season && d < cur.day);
+      const evs = eventsOn(c);
+      const pay = paydayOn(c);
+      const wIcon = (isPast || isToday || isTom) ? weatherFx(weatherOf(c, G.S.seed || 1)).icon : '';
+      const badge = (evs[0]?.icon || '') + (pay ? '💴' : '') || wIcon;
+      const cls = [
+        'cal-cell',
+        wd === 5 ? 'sat' : '',
+        isRedPill(c) ? 'red' : '',
+        isToday ? 'today' : '',
+        d === selDay ? 'sel' : '',
+      ].filter(Boolean).join(' ');
+      cells.push(`<button type="button" class="${cls}" data-d="${d}"><span class="d">${d}</span><span class="ic">${badge}</span></button>`);
+    }
+    const selCal = { year: vYear, season: vSeason, day: selDay };
+    const selEvs = eventsOn(selCal);
+    const selPay = paydayOn(selCal);
+    const isNear = (vYear === cur.year && vSeason === cur.season && selDay <= cur.day + 1)
+      || (vYear === tom.year && vSeason === tom.season && selDay === tom.day)
+      || vYear < cur.year || (vYear === cur.year && vSeason < cur.season);
+    const selW = isNear ? weatherFx(weatherOf(selCal, G.S.seed || 1)) : null;
+    const statusTxt = isRedDay(selCal) ? '🎌 Ngày lễ quốc gia (nghỉ làm)'
+      : isMandatoryOff(selCal) ? '🎌 Ngày nghỉ'
+      : isSaturdayWorkable(selCal) ? '👷 Thứ Bảy (nghỉ hoặc đăng ký tăng ca +12.000 ¥)'
+      : '🧰 Ngày đi làm (T2–T6)';
+
+    card(`<h2>📅 Lịch 4 mùa · カレンダー</h2>
+      <div class="cal-nav">
+        <button type="button" id="cal-prev" aria-label="Mùa trước">◀</button>
+        <b>${sInfo.icon} Mùa ${sInfo.vi} (${sInfo.jp} · tháng ${sInfo.months}) · Năm ${vYear}</b>
+        <button type="button" id="cal-next" aria-label="Mùa sau">▶</button>
+      </div>
+      <div class="cal-wk">
+        <span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="sat">土</span><span class="sun">日</span>
+      </div>
+      <div class="cal-grid" id="cal-grid">${cells.join('')}</div>
+      <div class="cal-info">
+        <div><b>${sInfo.icon} ${sInfo.vi} · Ngày ${selDay} (${WEEKDAYS[weekday(selCal)]} · ${WEEKDAYS_VI[weekday(selCal)]}) · Năm ${vYear}</b></div>
+        <div>${statusTxt}${selW ? ` · Thời tiết: <b>${selW.icon} ${esc(selW.jp)} (${esc(selW.vi)})</b>` : ' · 📺 Xem dự báo trên TV tối hôm trước'}</div>
+        ${selPay ? '<div>💴 <b>Ngày nhận lương định kỳ (給与明細):</b> nhận lương kỳ + phụ cấp bậc nghề + tăng ca, trừ tiền nhà 15.000 ¥, thuế 12% và trả nợ 25.000 ¥.</div>' : ''}
+        ${selEvs.map((ev) => `<div>${ev.icon} <b>${esc(ev.jp)} — ${esc(ev.vi)}:</b> ${esc(ev.desc)}</div>`).join('')}
+      </div>`, [
+      { label: 'Đóng lịch', on: () => { if (mod) mod.paused = was; } },
+    ]);
+
+    $('cal-prev')?.addEventListener('click', () => {
+      if (vSeason > 0) vSeason--;
+      else if (vYear > 1) { vYear--; vSeason = 3; }
+      selDay = 1;
+      renderCal();
+    });
+    $('cal-next')?.addEventListener('click', () => {
+      if (vSeason < 3) vSeason++;
+      else { vYear++; vSeason = 0; }
+      selDay = 1;
+      renderCal();
+    });
+    for (const b of document.querySelectorAll('#cal-grid .cal-cell')) {
+      b.addEventListener('click', () => {
+        selDay = Number(b.dataset.d) || 1;
+        renderCal();
+      });
+    }
+  };
+  renderCal();
 }
 
 // ---------- changing job (player feedback S13) ----------
@@ -417,30 +537,294 @@ function onStatsTap(e) {
   const back = G.mode; const html = BAR_HELP[b.dataset.k](); card(html, [{ label: 'Đã hiểu', on: () => { G.mode = back; } }]);
 }
 function dayHud(label) {
-  $('day-label').textContent = `Ngày ${G.S.story + 1}/5 · ${label}`;
+  const S = G.S;
+  const cal = ensureCal(S);
+  $('day-label').textContent = hudCalText(S, label);
+  $('day-label').parentElement?.classList.toggle('red-day', isRedPill(cal));
   $('stats').innerHTML = statsHtml();
   show('dayhud');
-  const S = G.S;
-  if (lowBars(S).length && S.flags.warnDay !== S.story && !S.flags.demo) {
-    S.flags.warnDay = S.story;
+  const wk = curDayKey(S);
+  if (lowBars(S).length && S.flags.warnDay !== wk && !S.flags.demo) {
+    S.flags.warnDay = wk;
     setTimeout(() => toast('⚠️ Sắp kiệt sức!', 'Ngủ sớm, ăn uống đủ, đừng cố quá. Tụt xuống 15 là phải nghỉ làm.', 5), 600);
   }
 }
 
 async function runStep() {
   const S = G.S; hideAll();
-  if (S.story >= DAYS) return S.flags.dayOff?.done ? weekEnd() : dayOffStep();
-  // a bar ran out: no work today (player feedback S13)
+  ensureCal(S);
+  if (!S.life) {
+    if (S.story >= DAYS) return S.flags.dayOff?.done ? weekEnd() : dayOffStep();
+    const out = S.sStep < 5 ? checkCollapse(S) : null;
+    if (out) return sickDay(out);
+    const st = daySteps(S.story, jobOf())[S.sStep];
+    if (S.sStep === 0 && S.flags.morningDay !== curDayKey(S)) return morningStep(st);
+    if (S.sStep === 4) return S.flags.eveningDay === curDayKey(S) ? talkStep(st, eveningPlace(st)) : eveningStep(st);
+    if (st.t === 'talk') return talkStep(st);
+    if (st.t === 'shift') return shiftStep(st);
+    return sleepStep(st);
+  }
+
+  // Endless 4-season calendar life loop (S.life === true)
+  S.lDay = S.lDay || {};
+  if (S.sStep === 0 && paydayOn(S.cal) && !S.lDay.paid) return paydayCard();
   const out = S.sStep < 5 ? checkCollapse(S) : null;
   if (out) return sickDay(out);
-  const st = daySteps(S.story, jobOf())[S.sStep];
-  // each day starts in the dorm: wake up and walk to the site before the morning meeting
-  if (S.sStep === 0 && S.flags.morningDay !== S.story) return morningStep(st);
-  // the evening story happens on the way home (konbini, dorm front or the room)
-  if (S.sStep === 4) return S.flags.eveningDay === S.story ? talkStep(st, eveningPlace(st)) : eveningStep(st);
+
+  if (!S.lDay.kind) {
+    const fx = curWeatherFx(S);
+    if (fx.dayOff) return typhoonCard();
+    if (isMandatoryOff(S.cal)) {
+      S.lDay.kind = 'dayoff';
+      S.lDay.min = 9 * 60;
+      save(S, storage);
+    } else if (isSaturdayWorkable(S.cal)) {
+      return saturdayPrompt();
+    } else {
+      S.lDay.kind = 'work';
+      save(S, storage);
+    }
+  }
+
+  if (S.lDay.kind === 'dayoff' || S.lDay.kind === 'typhoonOff') {
+    if (S.sStep >= 5 || (S.lDay.min || 540) >= 21 * 60) {
+      S.sStep = 5;
+      return sleepStep({ label: 'Đêm · Ký túc xá', xp: 5, data: {} });
+    }
+    return lifeDayOffHub();
+  }
+
+  // Workday or Saturday overtime
+  const evs = eventsOn(S.cal).filter((e) => e.kind === 'event');
+  if (S.sStep === 4 && evs.length && !S.lDay.eventDone) return seasonalWorkEventCard(evs[0]);
+  const st = lifeDaySteps(S, jobOf())[S.sStep];
+  if (S.sStep === 0 && S.flags.morningDay !== curDayKey(S)) return morningStep(st);
+  if (S.sStep === 4) return S.flags.eveningDay === curDayKey(S) ? talkStep(st, eveningPlace(st)) : eveningStep(st);
   if (st.t === 'talk') return talkStep(st);
   if (st.t === 'shift') return shiftStep(st);
   return sleepStep(st);
+}
+
+function paydayCard() {
+  const S = G.S, p = payslip(S);
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('💴 Ngày lương · 給与明細');
+  const P = G.player; P.holder.rotation.x = 0; P.holder.position.set(0.2, 0, 0.8); P.yaw = 0; P.play('idle');
+  const remDebt = Math.max(0, (S.debt || 0) - p.debt);
+  const avail = (S.money || 0) + p.net;
+  const pickRemit = (remit, mental) => {
+    applyPay(S, remit);
+    S.lDay.paid = true;
+    save(S, storage);
+    if (remit > 0) toast(`💸 Đã gửi ${yen(remit)} về nhà`, `Gia đình nhắn cảm ơn · 🧠 +${mental}`, 4.5);
+    else toast(`💴 Nhận lương thực lĩnh +${yen(p.net)}`, remDebt > 0 ? `Còn nợ ${yen(remDebt)}` : '🎉 Đã trả hết nợ môi giới!', 4);
+    runStep();
+  };
+  const btns = [
+    { label: 'Không gửi (giữ lại tiêu dùng)', cls: 'ghost', on: () => pickRemit(0, 0) },
+  ];
+  if (avail >= 10000) btns.unshift({ label: '💸 Gửi 10.000 ¥ về nhà (🧠 +5)', on: () => pickRemit(10000, 5) });
+  if (avail >= 30000) btns.unshift({ label: '💸 Gửi 30.000 ¥ về nhà (🧠 +8)', on: () => pickRemit(30000, 8) });
+
+  card(`<h2>💴 Phiếu lương · 給与明細</h2>
+    <div class="payslip">
+      <div class="prow"><span>Lương cơ bản kỳ (基本給)</span><b class="pos">+${yen(p.base)}</b></div>
+      <div class="prow"><span>Phụ cấp bậc nghề (Bậc ${p.rank}/10)</span><b class="pos">+${yen(p.skill)}</b></div>
+      <div class="prow"><span>Tăng ca thứ Bảy (${S.overtime || 0} ca × ${yen(PAY.OVERTIME)})</span><b class="pos">+${yen(p.overtime)}</b></div>
+      <div class="prow sub"><span>Tổng thu nhập (総支給額)</span><b>${yen(p.gross)}</b></div>
+      <div class="prow"><span>Tiền nhà ký túc xá (寮費)</span><span class="neg">−${yen(p.rent)}</span></div>
+      <div class="prow"><span>Thuế & bảo hiểm (12%)</span><span class="neg">−${yen(p.tax)}</span></div>
+      <div class="prow"><span>Trả nợ môi giới (返済)</span><span class="neg">−${yen(p.debt)}</span></div>
+      <div class="prow net"><span>Thực lĩnh (手取り)</span><span>+${yen(p.net)}</span></div>
+    </div>
+    <p class="lesson">💳 Dư nợ còn lại: <b>${yen(remDebt)}</b> · Tiền mặt sau lương: <b>${yen(avail)}</b>.<br>Bạn có muốn gửi tiền về cho gia đình (海外送金) kỳ này không?</p>`, btns);
+}
+
+function typhoonCard() {
+  const S = G.S;
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('🌀 Nghỉ bão');
+  const P = G.player; P.holder.rotation.x = 0; P.holder.position.set(0.2, 0, 0.8); P.yaw = 0; P.play('idle');
+  card(`<div class="big">🌀</div><h2>台風で会社は休みです — Bão, công ty cho nghỉ</h2>
+    <p>Ngoài trời mưa to gió giật mạnh. Quản lý nhắn tin cho cả tổ ở yên trong ký túc xá, hôm nay được nghỉ ở nhà.</p>
+    <p class="lesson">🌀 Khi bão lớn (台風) đổ bộ, tàu điện ngừng chạy và công ty cho nghỉ để đảm bảo an toàn.</p>`, [
+    { label: 'Ở trong phòng nghỉ ngơi →', on: () => {
+      S.lDay.kind = 'typhoonOff';
+      S.lDay.min = 9 * 60;
+      save(S, storage);
+      runStep();
+    } },
+  ]);
+}
+
+function saturdayPrompt() {
+  const S = G.S;
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('👷 Thứ Bảy · 土曜日');
+  const P = G.player; P.holder.rotation.x = 0; P.holder.position.set(0.2, 0, 0.8); P.yaw = 0; P.play('idle');
+  card(`<div class="big">👷</div><h2>休日出勤 — Tăng ca thứ Bảy?</h2>
+    <p>Hôm nay là thứ Bảy. Quản lý hỏi bạn có muốn đăng ký làm 1 ca tăng ca cuối tuần không:</p>
+    <ul>
+      <li>💰 Phụ cấp tăng ca: <b>+${yen(PAY.OVERTIME)}</b> (cộng vào phiếu lương kỳ tới)</li>
+      <li>❤️ Thể lực <b>−8</b> · 🧠 Tinh thần <b>−4</b></li>
+    </ul>`, [
+    { label: `💪 Đi tăng ca (+${yen(PAY.OVERTIME)}, ❤️ −8, 🧠 −4)`, on: () => {
+      applyFx(S, { health: -8, mental: -4 });
+      S.overtime = (S.overtime || 0) + 1;
+      S.lDay.kind = 'overtime';
+      save(S, storage);
+      toast('💪 Đăng ký tăng ca thứ Bảy', `+${yen(PAY.OVERTIME)} vào kỳ lương tới · ❤️ −8, 🧠 −4`);
+      runStep();
+    } },
+    { label: '🎌 Nghỉ thứ Bảy', cls: 'ghost', on: () => {
+      S.lDay.kind = 'dayoff';
+      S.lDay.min = 9 * 60;
+      save(S, storage);
+      runStep();
+    } },
+  ]);
+}
+
+function seasonalWorkEventCard(ev) {
+  const S = G.S;
+  setStage('town'); G.stages.town.setTime(ev.time === 'evening' ? 'night' : 'day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud(`${ev.icon} ${ev.vi}`);
+  const deltas = applyFx(S, ev.fx || { mental: 5, culture: 3 });
+  S.lDay.eventDone = true;
+  save(S, storage);
+  card(`<div class="big">${ev.icon}</div><h2>🎉 ${esc(ev.jp)} — ${esc(ev.vi)}</h2>
+    <p>${esc(ev.desc)}</p>
+    <div class="deltas">${deltaChips(deltas)}</div>`, [
+    { label: 'Tiếp tục →', on: () => runStep() },
+  ]);
+}
+
+async function lifeDayOffHub() {
+  const S = G.S, d = S.lDay, isTyphoon = d.kind === 'typhoonOff';
+  d.min = d.min || 9 * 60;
+  await dress(false);
+  setStage('dorm'); G.stages.dorm.setTime(d.min >= 18 * 60 ? 'night' : 'day'); hideNpcs();
+  G.mode = 'talk';
+  const P = G.player; P.holder.rotation.x = 0; P.holder.position.set(0.2, 0, 0.8); P.yaw = 0; P.play('idle');
+  const evs = eventsOn(S.cal);
+  const ev = evs[0] || null;
+  dayHud(isTyphoon ? '🌀 Nghỉ bão ở nhà' : ev ? `${ev.icon} ${ev.vi}` : '🎌 Ngày nghỉ');
+
+  const btns = [];
+  if (ev && !d.eventDone) {
+    btns.push({
+      label: `🎉 ${ev.jp} — ${ev.vi} (+1h)`,
+      on: () => {
+        const deltas = applyFx(S, ev.fx || { mental: 5, culture: 3 });
+        d.eventDone = true;
+        d.min += 60;
+        save(S, storage);
+        card(`<div class="big">${ev.icon}</div><h2>🎉 ${esc(ev.jp)} — ${esc(ev.vi)}</h2>
+          <p>${esc(ev.desc)}</p>
+          <div class="deltas">${deltaChips(deltas)}</div>`, [
+          { label: 'Tiếp tục ngày nghỉ →', on: () => runStep() },
+        ]);
+      },
+    });
+  }
+  if (!isTyphoon) {
+    btns.push({
+      label: '⛩ Đền さくら神社 (dạo phố, đi lễ, rút quẻ, ngắm hoa)',
+      on: () => lifeShrineVisit(),
+    });
+    btns.push({
+      label: '🛒 Siêu thị スーパー さくら (mua đồ nấu ăn · 15:00)',
+      on: () => {
+        const mEv = createEvening('room');
+        mEv.min = Math.min(18 * 60, Math.max(15 * 60, d.min));
+        openMarket(mEv, () => {
+          d.min = Math.max(d.min + 90, mEv.min);
+          save(S, storage);
+          runStep();
+        });
+      },
+    });
+  }
+  btns.push({
+    label: '📚 Học tiếng Nhật ở nhà (+2h · 🗣️ +2, 🧠 −2)',
+    on: () => {
+      applyFx(S, { jp: 3, mental: -2 });
+      d.min += 120;
+      save(S, storage);
+      toast('📚 Tự học tiếng Nhật ở nhà', `🗣️ +2 · 🧠 −2 · ⏰ ${fmtClock(d.min)}`);
+      runStep();
+    },
+  });
+  if (!d.napped) {
+    btns.push({
+      label: '🛌 Ngủ bù (+3h · ❤️ +12, 🧠 +6)',
+      on: () => {
+        applyFx(S, { health: 12, mental: 6 });
+        d.napped = true;
+        d.min += 180;
+        save(S, storage);
+        toast('🛌 Ngủ bù khỏe người', `❤️ +12 · 🧠 +6 · ⏰ ${fmtClock(d.min)}`);
+        runStep();
+      },
+    });
+  }
+  if (!d.called) {
+    btns.push({
+      label: '📱 Gọi về nhà (+1h · 🧠 +6)',
+      on: () => {
+        applyFx(S, { mental: 6 });
+        d.called = true;
+        d.min += 60;
+        save(S, storage);
+        toast('📱 Gọi điện về nhà', `Gia đình động viên · 🧠 +6 · ⏰ ${fmtClock(d.min)}`);
+        runStep();
+      },
+    });
+  }
+  btns.push({
+    label: '🌙 Kết thúc ban ngày → Nghỉ tối tại phòng',
+    cls: 'ghost',
+    on: () => {
+      d.min = 21 * 60;
+      S.sStep = 5;
+      save(S, storage);
+      runStep();
+    },
+  });
+
+  const fx = curWeatherFx(S);
+  card(`<h2>${isTyphoon ? '🌀 Nghỉ bão tại phòng' : '🎌 Hôm nay đi đâu?'}</h2>
+    <p>⏰ Bây giờ là <b>${fmtClock(d.min)}</b> (tới 21:00 về phòng) · Thời tiết: <b>${fx.icon} ${esc(fx.vi)}</b></p>
+    ${ev ? `<p class="lesson">🎉 <b>${esc(ev.jp)} — ${esc(ev.vi)}:</b> ${esc(ev.desc)}</p>` : ''}`, btns);
+}
+
+async function lifeShrineVisit() {
+  const S = G.S, d = S.lDay;
+  if (!G.stages.shrine) { toast('⛩️ Đang vào đền さくら神社…', '休日 · Ngày nghỉ'); await ensureShrine(); }
+  hideNpcs();
+  await dress(false);
+  const [hung, hoa] = [await npc('hung', 'shrine'), await npc('hoa', 'shrine')];
+  await spawnWorkers();
+  G.mode = 'dayoff';
+  G.dayoff.start({
+    S,
+    stages: G.stages,
+    who: { player: G.player, hung, hoa },
+    setStage,
+    storage,
+    hubReturn: true,
+    min: d.min || 10 * 60,
+    dayLabel: hudCalText(S, 'Đền さくら神社'),
+    onEnd: (endSt) => {
+      d.min = Math.max((d.min || 540) + 180, endSt?.min || 720);
+      save(S, storage);
+      runStep();
+    },
+  });
 }
 
 /** Too tired / too low to work: day off sick, money lost, the day ends as if slept. */
@@ -454,7 +838,7 @@ function sickDay(kind) {
     <p>${kind === 'mental' ? '🧠 Tinh thần cạn kiệt, không thể tập trung làm việc.' : kind === 'both' ? '❤️ 🧠 Kiệt sức cả thân lẫn tâm.' : '❤️ Cơ thể kiệt sức, sáng nay bạn không đứng dậy nổi.'}${r.hospital ? ' Bạn được đưa tới <span class="jp">病院</span> (bệnh viện).' : ''}</p>
     <ul>${r.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
     <p class="lesson">Ở Nhật, nghỉ ốm phải báo quản lý trước giờ làm 「体調が悪いので休みます」. Đừng cố quá sức!</p>`, [
-    { label: 'Nghỉ ngơi →', on: () => { P.holder.rotation.x = 0; S.sStep = 5; S.flags.morningDay = S.story; finishStep(); } },
+    { label: 'Nghỉ ngơi →', on: () => { P.holder.rotation.x = 0; S.sStep = 5; S.flags.morningDay = curDayKey(S); finishStep(); } },
   ]);
 }
 
@@ -468,7 +852,7 @@ function finishStep(extraHtml = '') {
     const spoilNote = spoiled.length
       ? ` · 🥀 Hỏng: ${spoiled.map((id) => `${goodOf(id)?.icon || ''} ${goodOf(id)?.vi || id}`).join(', ')}`
       : '';
-    toast('🌅 Sáng hôm sau · おはようございます！', `Ngày ${G.S.story + 1}/5${spoilNote}`);
+    toast('🌅 Sáng hôm sau · おはようございます！', `${hudCalText(G.S)}${spoilNote}`);
   }
   runStep();
 }
@@ -511,7 +895,7 @@ async function openMarket(ev, onExit) {
     who: { player: G.player, clerk },
     setStage,
     storage,
-    dayLabel: `📅 Ngày ${(G.S.story || 0) + 1}/5 · Siêu thị`,
+    dayLabel: hudCalText(G.S, 'Siêu thị'),
     onExit,
   });
 }
@@ -532,8 +916,8 @@ async function morningStep(st) {
     S, stages: G.stages, who: { player: G.player, suzuki, hung, nurse, foreman },
     commute: train ? 'train' : 'walk',
     storage,
-    setStage, dayLabel: `📅 Ngày ${S.story + 1}/5 · Buổi sáng`,
-    onEnd: () => { S.flags.morningDay = S.story; save(S, storage); hideAll(); talkStep(st); },
+    setStage, dayLabel: hudCalText(S, 'Buổi sáng'),
+    onEnd: () => { S.flags.morningDay = curDayKey(S); save(S, storage); hideAll(); talkStep(st); },
   });
 }
 
@@ -554,9 +938,9 @@ async function eveningStep(st) {
     S, spot: spotFor(st.data), stages: G.stages, who: { player: G.player }, setStage,
     storage,
     from: job === 'care' || job === 'bento' || job === 'lotus' ? 'station' : 'gate',
-    dayLabel: `📅 Ngày ${S.story + 1}/5 · Buổi tối`,
+    dayLabel: hudCalText(S, 'Buổi tối'),
     onMarket: (ev) => openMarket(ev, () => { hideNpcs(); G.mode = 'evening'; G.evening.resumeFromMarket(); }),
-    onArrive: () => { S.flags.eveningDay = S.story; save(S, storage); talkStep(st, eveningPlace(st)); },
+    onArrive: () => { S.flags.eveningDay = curDayKey(S); save(S, storage); talkStep(st, eveningPlace(st)); },
   });
 }
 
@@ -569,6 +953,7 @@ async function talkStep(st, where = null) {
   G.mode = 'talk';
   G.talkCam = where ? where.cam : atCare ? 'care' : atBento ? 'bento' : atLotus ? 'lotus' : atWork ? 'deck' : 'town';
   const P = G.player; P.play('idle');
+  const fx = curWeatherFx(G.S);
   if (atCare) {
     P.unpinAll(); P.holder.rotation.x = 0;
     await spawnFolk();
@@ -579,17 +964,17 @@ async function talkStep(st, where = null) {
     P.holder.position.set(BENTO_ROOM.talkPlayer.x, 0, BENTO_ROOM.talkPlayer.z);
   } else if (atLotus) {
     P.unpinAll(); P.holder.rotation.x = 0;
-    G.stages.lotus.setWeather({ cold: (d.title || '').includes('lạnh') });
+    G.stages.lotus.setWeather({ rain: !!fx.rain, snow: !!fx.snow, wind: !!fx.wind, cold: !!((d.title || '').includes('lạnh') || fx.snow) });
     G.stages.lotus.setSpray(false);
     P.holder.position.set(LOTUS_FIELD.talkPlayer.x, 0, LOTUS_FIELD.talkPlayer.z);
   } else if (atWork) {
     P.look({ ...G.S.look.colors, ...WORK_COLORS }); P.unpinAll(); P.helmet.visible = true;
-    G.stages.site.setWeather({}); G.stages.site.setTime('day'); G.stages.site.ring.visible = false;
+    G.stages.site.setWeather({ rain: !!fx.rain, snow: !!fx.snow, wind: !!fx.wind }); G.stages.site.setTime('day'); G.stages.site.ring.visible = false;
     await spawnWorkers();
     P.holder.position.set(-1.2, DECK_Y, 1.9);
   } else if (where) {
     P.look(G.S.look.colors); P.unpinAll(); if (P.helmet) P.helmet.visible = false; if (P.cap) P.cap.visible = false; if (P.waders) P.waders.setVisible(false); P.holder.rotation.x = 0;
-    if (where.stage === 'site') { G.stages.site.setWeather({}); G.stages.site.setTime('dusk'); G.stages.site.ring.visible = false; }
+    if (where.stage === 'site') { G.stages.site.setWeather({ rain: !!fx.rain, snow: !!fx.snow, wind: !!fx.wind }); G.stages.site.setTime('dusk'); G.stages.site.ring.visible = false; }
     else G.stages.dorm.setTime('night');
     P.holder.position.set(where.pos.x, 0, where.pos.z);
   } else {
@@ -648,15 +1033,17 @@ async function shiftStep(st) {
   G.stages.site.ring.visible = true;
   G.stages.site.setFloors(1 + Math.floor((S.jobXp || 0) / 16));
   const opts = shiftOpts(st.data, st.hard, S);
+  G.stages.site.setWeather({ rain: !!opts.rain, snow: !!opts.snow, wind: !!opts.wind });
+  G.stages.site.setSeason?.(seasonOf(ensureCal(S)).id);
   const rk = rankOf(S.jobXp || 0);
   card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
     ${opts.jp ? `<p class="jpline">${esc(opts.jp)}</p>` : ''}
     <p>${esc(opts.vi || 'Đi tới đống ống thép bên trái, nhấc lên, rồi vác sang giá bên phải.')}</p>
-    <ul><li>🎯 Vác ${opts.goal} bó ống thép</li>${opts.limit ? `<li>⏱ ${opts.limit} giây</li>` : '<li>⏱ Không giới hạn giờ</li>'}${opts.maxMiss ? `<li>❌ Sai tối đa ${opts.maxMiss} lần</li>` : ''}${opts.wind ? '<li>💨 Có gió giật: kim thăng bằng trôi nhanh hơn</li>' : ''}${opts.rain ? '<li>🌧️ Mưa, sàn trơn: đi chậm hơn</li>' : ''}</ul>
+    <ul><li>🎯 Vác ${opts.goal} bó ống thép</li>${opts.limit ? `<li>⏱ ${opts.limit} giây</li>` : '<li>⏱ Không giới hạn giờ</li>'}${opts.maxMiss ? `<li>❌ Sai tối đa ${opts.maxMiss} lần</li>` : ''}${opts.wind ? '<li>💨 Có gió giật: kim thăng bằng trôi nhanh hơn</li>' : ''}${opts.rain ? '<li>🌧️ Mưa, sàn trơn: đi chậm hơn</li>' : ''}${opts.snow ? '<li>🌨️ Tuyết rơi: đường trơn (đi chậm ×0.85)</li>' : ''}${opts.heat ? '<li>🥵 Nắng gắt (猛暑): mỗi ca mất thêm ❤️ −3</li>' : ''}</ul>
     <p class="lesson">⚖️ Giữ thanh thăng bằng bằng 2 nút ◀ ▶ (hoặc phím A / D) khi đang vác ống · Xem 📋 Phiếu giao việc để lấy đúng loại ống và đặt đúng ô A / B / C.</p>`, [
     { label: 'Bắt đầu ca →', on: () => {
       G.shift.start(opts, { player: P, foreman }, {
-        unit: JOBS.site.unit, rankLabel: `🎖️ ${rk + 1}/10 ${ranksOf('site')[rk]}`,
+        unit: JOBS.site.unit, rankLabel: `${hudCalText(S)} · 🎖️ ${rk + 1}/10 ${ranksOf('site')[rk]}`,
         onRetry: () => { retryCost(G.S); save(G.S, storage); },
       }, (r) => shiftDone(st, r));
     } },
@@ -686,7 +1073,7 @@ async function careShiftStep(st, demo = false, demoDay = 0) {
   const nurse = await npc('yamada', 'care');
   const opts = shiftOpts(st.data, st.hard, S);
   const rk = rankOf(S.jobXp || 0);
-  const meta = { unit: JOBS.care.unit, rankLabel: demo ? '🎮 Chế độ thử' : `🎖️ ${rk + 1}/10 ${ranksOf('care')[rk]}`,
+  const meta = { unit: JOBS.care.unit, rankLabel: demo ? '🎮 Chế độ thử' : `${hudCalText(S)} · 🎖️ ${rk + 1}/10 ${ranksOf('care')[rk]}`,
     onRetry: () => { if (!demo) { retryCost(G.S); save(G.S, storage); } } };
   const begin = () => G.care.start(opts, { player: P, nurse, folk: G.folk }, meta, (r) => (demo ? finishDemoShift('care', demoDay, r) : shiftDone(st, r)));
   if (demo) { begin(); return; }
@@ -711,7 +1098,7 @@ async function bentoShiftStep(st, demo = false, demoDay = 0) {
   const foreman = await npc('tanaka', 'bento');
   const opts = { ...shiftOpts(st.data, st.hard, S), speed: st.data.speed };
   const rk = rankOf(S.jobXp || 0);
-  const meta = { unit: JOBS.bento.unit, rankLabel: demo ? '🎮 Chế độ thử' : `🎖️ ${rk + 1}/10 ${ranksOf('bento')[rk]}`,
+  const meta = { unit: JOBS.bento.unit, rankLabel: demo ? '🎮 Chế độ thử' : `${hudCalText(S)} · 🎖️ ${rk + 1}/10 ${ranksOf('bento')[rk]}`,
     onRetry: () => { if (!demo) { retryCost(G.S); save(G.S, storage); } } };
   const begin = () => G.bento.start(opts, { player: P, foreman }, meta, (r) => (demo ? finishDemoShift('bento', demoDay, r) : shiftDone(st, r)));
   if (demo) { begin(); return; }
@@ -735,8 +1122,10 @@ async function lotusShiftStep(st, demo = false, demoDay = 0) {
   const P = G.player;
   const foreman = await npc('tanaka', 'lotus');
   const opts = shiftOpts(st.data, st.hard, S);
+  G.stages.lotus.setWeather({ rain: !!opts.rain, snow: !!opts.snow, wind: !!opts.wind, cold: !!(opts.cold || opts.snow) });
+  G.stages.lotus.setSeason?.(seasonOf(ensureCal(S)).id);
   const rk = rankOf(S.jobXp || 0);
-  const meta = { unit: JOBS.lotus.unit, rankLabel: demo ? '🎮 Chế độ thử' : `🎖️ ${rk + 1}/10 ${ranksOf('lotus')[rk]}`,
+  const meta = { unit: JOBS.lotus.unit, rankLabel: demo ? '🎮 Chế độ thử' : `${hudCalText(S)} · 🎖️ ${rk + 1}/10 ${ranksOf('lotus')[rk]}`,
     onRetry: () => { if (!demo) { retryCost(G.S); save(G.S, storage); } } };
   const begin = () => G.lotus.start(opts, { player: P, foreman }, meta, (r) => (demo ? finishDemoShift('lotus', demoDay, r) : shiftDone(st, r)));
   if (demo) { begin(); return; }
@@ -754,8 +1143,15 @@ async function lotusShiftStep(st, demo = false, demoDay = 0) {
 function shiftDone(st, r) {
   const S = G.S, job = jobOf();
   const starCount = typeof r.stars === 'number' ? r.stars : stars({ won: !r.fail && r.f >= 1, miss: 0, maxMiss: st.data.maxMiss || 0, timeLeft: 0, limit: 0, extra: false });
-  recordStars(S, job, S.story, st.hard ? 'b' : 'a', starCount);
+  const starDay = S.life ? (((S.cal?.day || 1) - 1) % 5 + 5) % 5 : S.story;
+  recordStars(S, job, starDay, st.hard ? 'b' : 'a', starCount);
   const res = shiftEnd(S, r, st.hard);
+  const isHeat = !!(st.data?.heat || curWeather(S) === 'heat');
+  if (isHeat) {
+    applyFx(S, { health: -3 });
+    res.deltas.push(['health', -3]);
+    setTimeout(() => toast('🥵 水分補給！', 'Uống nước kẻo say nắng (❤️ −3)', 4.5), 350);
+  }
   save(S, storage);
   G.mode = 'talk';
   const P = G.player; P.play('idle');
@@ -767,6 +1163,7 @@ function shiftDone(st, r) {
     <p>Xong ${r.done}/${st.data.goal} ${esc(JOBS[job].unit)}.</p>
     ${starsBox}
     <div class="deltas">${deltaChips(res.deltas)}<span class="delta">🛠️ Tay nghề +${res.jobXp}</span></div>
+    ${isHeat ? '<p class="lesson">🥵 <b>水分補給！</b> Uống nước kẻo say nắng (trời nắng gắt làm mất thêm ❤️ −3).</p>' : ''}
     ${res.rankUp ? `<p class="lesson">🎖️ Lên mốc ${res.rankUp + 1}/10: ${esc(ranksOf(job)[res.rankUp])}<br>Quản lý: 「任せるよ！」 “Từ giờ việc này giao cho em.” · 💰 Phụ cấp tay nghề: +${yen(rankPay(res.rankUp + 1))}/tháng</p>` : ''}
     <p style="color:var(--ink-dim);font-size:12.5px">Tay nghề ${S.jobXp} · Mốc ${rk + 1}/10</p>`, [
     { label: 'Tiếp →', on: () => finishStep() },
@@ -775,14 +1172,15 @@ function shiftDone(st, r) {
 }
 
 async function sleepStep(st) {
-  // walk home at night (or stay in the room), bath / call home, then lie down on the futon
+  // walk home at night (or stay in the room), bath / call home / TV forecast, then lie down on the futon
   G.mode = 'evening';
   await dress(false);
-  const after = daysOf(jobOf())[G.S.story].story.after;
+  const dayIdx = G.S.life ? (((G.S.cal?.day || 1) - 1) % 5 + 5) % 5 : G.S.story;
+  const after = st?.data?.after || daysOf(jobOf())[dayIdx]?.story?.after;
   G.evening.home({
     S: G.S, stages: G.stages, who: { player: G.player }, setStage,
     storage,
-    dayLabel: `📅 Ngày ${G.S.story + 1}/5 · ${st.label}`,
+    dayLabel: hudCalText(G.S, st.label),
     onMarket: (ev) => openMarket(ev, () => { hideNpcs(); G.mode = 'evening'; G.evening.resumeFromMarket(); }),
     onSleep: () => {
       const d = sleep(G.S);
@@ -833,13 +1231,25 @@ function weekEnd() {
   $('day-label').textContent = `📋 Tuần đầu ở ${JOBS[S.job].place.toLowerCase()}`;
   const btns = S.flags.demo
     ? [{ label: '← Về chế độ thử', on: demoScreen }, { label: 'Về màn hình chính', cls: 'ghost', on: titleScreen }]
-    : [{ label: 'Về màn hình chính', on: titleScreen }, { label: 'Chơi lại từ đầu', cls: 'ghost', on: () => { clearSave(storage); creatorScreen(); } }];
+    : [
+      { label: '▶ Tiếp tục cuộc sống ở Nhật', on: () => {
+        S.life = true;
+        S.cal = { year: 1, season: 0, day: 8 };
+        S.sStep = 0;
+        S.lDay = {};
+        save(S, storage);
+        toast('🌸 Bước sang tuần mới!', calLabel(S.cal, curWeather(S)));
+        runStep();
+      } },
+      { label: '🏠 Về màn hình chính', cls: 'ghost', on: titleScreen },
+      { label: 'Chơi lại từ đầu', cls: 'ghost', on: () => { clearSave(storage); creatorScreen(); } },
+    ];
   card(`<h2>📋 Tuần đầu ở ${esc(JOBS[S.job].place)}</h2>
     <div class="big">${e.grade.split(' ')[0]}</div>
     <h2 style="text-align:center">${esc(e.grade.split(' ').slice(1).join(' '))}</h2>
     <p class="jpline" style="text-align:center">「${esc(e.jp)}」</p>
     <ul><li>🏆 Thử thách vượt qua: ${e.win}/5</li><li>🤝 Người sẵn sàng giúp bạn: ${e.ally}</li><li>👀 Lần bị để ý: ${e.watch}</li><li>${esc(dayOffSummary(S))}</li>${e.bonus ? `<li>💰 Thưởng: +${yen(e.bonus)}</li>` : ''}</ul>
-    <p class="lesson">Vòng tháng làm việc (lương, trả nợ, tăng ca, sự kiện tháng) sẽ có ở M3. Bạn có thể chơi lại tuần đầu hoặc thử các ca thử thách.</p>`, btns);
+    <p class="lesson">🌸 Bạn đã vượt qua tuần đầu tiên! Bấm <b>▶ Tiếp tục cuộc sống ở Nhật</b> để bước vào nhịp sống 4 mùa (Xuân · Hạ · Thu · Đông, nhận lương định kỳ ngày 10/19/28, trả nợ, tăng ca thứ Bảy và lễ hội quanh năm).</p>`, btns);
 }
 
 // ---------- demo: try any afternoon challenge, no scoring ----------

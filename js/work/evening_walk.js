@@ -16,12 +16,17 @@ import { camera, isPortrait } from '../gfx/stage.js';
 import { $, show, card, esc, deltaText, toast } from '../ui/ui.js';
 import { CAREER, study, examReady, examQuestions, takeExam } from '../core/career.js';
 import { JOBS } from '../core/jobs.js';
+import {
+  SEASONS, nextDay, weatherOf, weatherFx, label as calLabel,
+  eventsOn, isMandatoryOff, isSaturdayWorkable, paydayOn,
+} from '../core/calendar.js';
 
 const BUTTONS = [
   { id: 'sleep',  icon: '🛏️', label: 'Đi ngủ',     jp: 'おやすみ', main: true },
   { id: 'cook',   icon: '🍳', label: 'Nấu cơm',    jp: '自炊' },
   { id: 'bath',   icon: '🛁', label: 'Tắm',        jp: 'お風呂' },
   { id: 'call',   icon: '📱', label: 'Gọi về nhà', jp: '電話' },
+  { id: 'tv',     icon: '📺', label: 'Dự báo',     jp: '天気予報' },
   { id: 'study',  icon: '📚', label: 'Học chứng chỉ', jp: '勉強' },
   { id: 'market', icon: '🛒', label: 'Siêu thị',   jp: 'スーパー' },
   { id: 'run',    icon: '🏃', label: 'Chạy',       jp: '走る' },
@@ -30,7 +35,7 @@ const SHOW = {
   toSpot: ['market', 'run'],
   toDorm: ['market', 'run'],
   talk:   [],
-  room:   ['sleep', 'cook', 'bath', 'call', 'study'],
+  room:   ['sleep', 'cook', 'bath', 'call', 'tv', 'study'],
   bed:    [],
 };
 const WALK = 3.0, RUN_MUL = 1.6;
@@ -147,7 +152,11 @@ export class EveningWalk {
   street(time, x, z, yaw) {
     const P = this.who.player, site = this.stages.site;
     this.setStage('site');
-    site.setWeather({}); site.setTime(time); site.ring.visible = false;
+    const cal = this.S?.cal;
+    const fx = cal ? weatherFx(weatherOf(cal, this.S?.seed || 1)) : {};
+    site.setWeather({ rain: !!fx.rain, snow: !!fx.snow, wind: !!fx.wind });
+    site.setSeason?.(SEASONS[cal?.season ?? 0]?.id || 'spring');
+    site.setTime(time); site.ring.visible = false;
     P.holder.rotation.x = 0; P.holder.position.set(x, 0, z); P.yaw = yaw; P.play('idle'); P.unpinAll();
     if (P.helmet) P.helmet.visible = false;
     this.controls.reset({ yaw: yaw + Math.PI, pitch: 0.3, groundY: 0, yawLimit: [-Infinity, Infinity] });
@@ -237,6 +246,8 @@ export class EveningWalk {
     for (const a of BUTTONS) {
       if (a.id === 'cook') {
         this.btn.cook.hidden = e.phase !== 'room' || !canCookTonight(this.S) || !!this.cookState;
+      } else if (a.id === 'tv') {
+        this.btn.tv.hidden = e.phase !== 'room' || !!this.cookState;
       } else if (a.id === 'market') {
         this.btn.market.hidden = !SHOW[e.phase]?.includes('market') || !this.onMarket;
       } else {
@@ -251,6 +262,8 @@ export class EveningWalk {
     }
     this.btn.call.disabled = e.call || !!this.cookState;
     this.btn.sleep.disabled = !!this.cookState;
+    const visCount = this.mine.filter((b) => !b.hidden).length;
+    $('acts').classList.toggle('many', visCount >= 5);
   }
 
   fadeTo(fn) {
@@ -278,6 +291,7 @@ export class EveningWalk {
       this.openCookMenu();
       return;
     }
+    if (id === 'tv') { this.openTvForecast(); return; }
     if (id === 'study') { this.studyOrExam(); return; }
     if (id === 'bath' || id === 'call') {
       const r = act(this.S, e, id); if (!r.ok) return;
@@ -293,6 +307,34 @@ export class EveningWalk {
       this.controls.target = new THREE.Vector3(DORM.bed.x, 0, DORM.bed.z + 0.3);
       this.toFuton = true;
     }
+  }
+
+  openTvForecast() {
+    this.paused = true;
+    const cal = this.S?.cal || { year: 1, season: 0, day: 1 };
+    const tom = nextDay(cal);
+    const w = weatherOf(tom, this.S?.seed || 1);
+    const fx = weatherFx(w);
+    const evs = eventsOn(tom);
+    const notes = [];
+    if (paydayOn(tom)) notes.push('💴 Ngày nhận lương định kỳ (給与明細)');
+    for (const ev of evs) notes.push(`${ev.icon} ${ev.jp} — ${ev.vi}`);
+    if (fx.dayOff) notes.push('🌀 Dự báo bão lớn: công ty cho nghỉ ở nhà');
+    else if (isMandatoryOff(tom)) notes.push('🎌 Ngày mai được nghỉ');
+    else if (isSaturdayWorkable(tom)) notes.push('👷 Thứ Bảy: có thể đăng ký tăng ca (+12.000 ¥) hoặc nghỉ');
+    const advice = fx.dayOff ? 'Bão lớn mưa to gió giật, ngày mai ở yên trong ký túc xá nhé.'
+      : fx.heat ? 'Trời nắng gắt trên 35°C, đi làm nhớ uống nước tránh say nắng (熱中症).'
+      : fx.snow ? 'Trời có tuyết rơi đường trơn, nhớ mặc ấm và đi cẩn thận.'
+      : fx.rain ? 'Ngày mai có mưa, nhớ mang theo ô và chú ý sàn trơn.'
+      : 'Thời tiết thuận lợi cho công việc và đi lại ngày mai.';
+    card(`<h2>📺 Dự báo thời tiết · 明日の天気予報</h2>
+      <div class="big">${fx.icon}</div>
+      <p class="jpline" style="text-align:center">${esc(fx.jp)} — ${esc(fx.vi)}</p>
+      <p style="text-align:center"><b>Ngày mai:</b> ${esc(calLabel(tom, fx))}</p>
+      ${notes.length ? `<ul>${notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+      <p class="lesson">📡 ${esc(advice)}</p>`, [
+      { label: 'Đã xem →', on: () => { show('modal', false); this.paused = false; } },
+    ]);
   }
 
   enterMarket() {

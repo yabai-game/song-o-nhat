@@ -16,11 +16,37 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&family=Zen+Maru+Gothic:wght@500;700&display=swap">
-<link rel="stylesheet" href="css/game.css?v=f202db9103">
+<link rel="stylesheet" href="css/game.css?v=187f611a31">
+<style id="s14-style">
+.cal-btn { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 44px); font-size: 16px; }
+#app.has-menu .top { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 90px); }
+.pill.red-day, #sh-rank.red-day { border-color: #ff7a70 !important; color: #ff9e94 !important; }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+.cal-nav button { appearance: none; border: 1.5px solid var(--line); background: rgba(0,0,0,.25); color: var(--ink); border-radius: 10px; padding: 5px 11px; font-weight: 800; cursor: pointer; }
+.cal-nav b { font-size: 15px; text-align: center; }
+.cal-wk, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+.cal-wk span { font-size: 11.5px; font-weight: 700; color: var(--ink-dim); padding: 2px 0; }
+.cal-wk span.sat { color: #74c0fc; } .cal-wk span.sun { color: #ff8a7a; }
+.cal-cell { appearance: none; border: 1.5px solid var(--line); background: rgba(0,0,0,.2); color: var(--ink); border-radius: 9px; padding: 4px 2px; min-height: 42px; display: grid; align-content: space-between; justify-items: center; cursor: pointer; font: inherit; }
+.cal-cell .d { font-size: 12px; font-weight: 800; line-height: 1.1; }
+.cal-cell .ic { font-size: 12px; line-height: 1.1; min-height: 13px; }
+.cal-cell.sat .d { color: #74c0fc; }
+.cal-cell.red { background: rgba(226,87,76,.15); border-color: rgba(255,138,122,.45); }
+.cal-cell.red .d { color: #ff8a7a; }
+.cal-cell.today { border: 2px solid var(--gold) !important; box-shadow: 0 0 0 2px rgba(255,214,102,.32); }
+.cal-cell.sel { outline: 2px solid #fff; }
+.cal-info { background: rgba(0,0,0,.26); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13px; line-height: 1.45; display: grid; gap: 3px; }
+.payslip { background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 5px; font-size: 13.5px; }
+.payslip .prow { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+.payslip .prow.sub { border-top: 1px dashed var(--line); padding-top: 5px; font-weight: 700; }
+.payslip .prow.net { border-top: 1.5px solid var(--gold); padding-top: 6px; font-size: 15px; font-weight: 800; color: var(--gold); }
+.payslip .neg { color: var(--bad); } .payslip .pos { color: var(--good); }
+</style>
 
 <div id="app">
   <canvas id="c" aria-label="Thế giới 3D"></canvas>
   <button type="button" class="menu-btn" id="btn-menu" aria-label="Menu · tạm dừng" hidden>☰</button>
+  <button type="button" class="menu-btn cal-btn" id="btn-cal" aria-label="Lịch 4 mùa" hidden>📅</button>
 
   <div id="loading" role="status">
     <div class="box">
@@ -144,54 +170,56 @@
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/core/bento_data.js": "./js/core/bento_data.js?v=f202db9103",
-  "./js/core/bento_rules.js": "./js/core/bento_rules.js?v=f202db9103",
-  "./js/core/care_data.js": "./js/core/care_data.js?v=f202db9103",
-  "./js/core/care_rules.js": "./js/core/care_rules.js?v=f202db9103",
-  "./js/core/career.js": "./js/core/career.js?v=f202db9103",
-  "./js/core/crowd.js": "./js/core/crowd.js?v=f202db9103",
-  "./js/core/dayoff_rules.js": "./js/core/dayoff_rules.js?v=f202db9103",
-  "./js/core/evening.js": "./js/core/evening.js?v=f202db9103",
-  "./js/core/gait.js": "./js/core/gait.js?v=f202db9103",
-  "./js/core/jobs.js": "./js/core/jobs.js?v=f202db9103",
-  "./js/core/lotus_data.js": "./js/core/lotus_data.js?v=f202db9103",
-  "./js/core/lotus_rules.js": "./js/core/lotus_rules.js?v=f202db9103",
-  "./js/core/market_rules.js": "./js/core/market_rules.js?v=f202db9103",
-  "./js/core/morning.js": "./js/core/morning.js?v=f202db9103",
-  "./js/core/site_rules.js": "./js/core/site_rules.js?v=f202db9103",
-  "./js/core/stars.js": "./js/core/stars.js?v=f202db9103",
-  "./js/core/state.js": "./js/core/state.js?v=f202db9103",
-  "./js/core/story.js": "./js/core/story.js?v=f202db9103",
-  "./js/core/trash_rules.js": "./js/core/trash_rules.js?v=f202db9103",
-  "./js/core/wellbeing.js": "./js/core/wellbeing.js?v=f202db9103",
-  "./js/gfx/backdrop.js": "./js/gfx/backdrop.js?v=f202db9103",
-  "./js/gfx/bento.js": "./js/gfx/bento.js?v=f202db9103",
-  "./js/gfx/care.js": "./js/gfx/care.js?v=f202db9103",
-  "./js/gfx/chars.js": "./js/gfx/chars.js?v=f202db9103",
-  "./js/gfx/controls.js": "./js/gfx/controls.js?v=f202db9103",
-  "./js/gfx/crowd.js": "./js/gfx/crowd.js?v=f202db9103",
-  "./js/gfx/dorm.js": "./js/gfx/dorm.js?v=f202db9103",
-  "./js/gfx/lotus.js": "./js/gfx/lotus.js?v=f202db9103",
-  "./js/gfx/market.js": "./js/gfx/market.js?v=f202db9103",
-  "./js/gfx/shrine.js": "./js/gfx/shrine.js?v=f202db9103",
-  "./js/gfx/site.js": "./js/gfx/site.js?v=f202db9103",
-  "./js/gfx/stage.js": "./js/gfx/stage.js?v=f202db9103",
-  "./js/gfx/station.js": "./js/gfx/station.js?v=f202db9103",
-  "./js/gfx/street.js": "./js/gfx/street.js?v=f202db9103",
-  "./js/gfx/town.js": "./js/gfx/town.js?v=f202db9103",
-  "./js/main.js": "./js/main.js?v=f202db9103",
-  "./js/ui/ui.js": "./js/ui/ui.js?v=f202db9103",
-  "./js/work/bento_shift.js": "./js/work/bento_shift.js?v=f202db9103",
-  "./js/work/care_shift.js": "./js/work/care_shift.js?v=f202db9103",
-  "./js/work/dayoff.js": "./js/work/dayoff.js?v=f202db9103",
-  "./js/work/evening_walk.js": "./js/work/evening_walk.js?v=f202db9103",
-  "./js/work/lotus_shift.js": "./js/work/lotus_shift.js?v=f202db9103",
-  "./js/work/market_shop.js": "./js/work/market_shop.js?v=f202db9103",
-  "./js/work/morning_walk.js": "./js/work/morning_walk.js?v=f202db9103",
-  "./js/work/site_shift.js": "./js/work/site_shift.js?v=f202db9103"
+  "./js/core/bento_data.js": "./js/core/bento_data.js?v=187f611a31",
+  "./js/core/bento_rules.js": "./js/core/bento_rules.js?v=187f611a31",
+  "./js/core/calendar.js": "./js/core/calendar.js?v=187f611a31",
+  "./js/core/care_data.js": "./js/core/care_data.js?v=187f611a31",
+  "./js/core/care_rules.js": "./js/core/care_rules.js?v=187f611a31",
+  "./js/core/career.js": "./js/core/career.js?v=187f611a31",
+  "./js/core/crowd.js": "./js/core/crowd.js?v=187f611a31",
+  "./js/core/dayoff_rules.js": "./js/core/dayoff_rules.js?v=187f611a31",
+  "./js/core/evening.js": "./js/core/evening.js?v=187f611a31",
+  "./js/core/gait.js": "./js/core/gait.js?v=187f611a31",
+  "./js/core/jobs.js": "./js/core/jobs.js?v=187f611a31",
+  "./js/core/lotus_data.js": "./js/core/lotus_data.js?v=187f611a31",
+  "./js/core/lotus_rules.js": "./js/core/lotus_rules.js?v=187f611a31",
+  "./js/core/market_rules.js": "./js/core/market_rules.js?v=187f611a31",
+  "./js/core/morning.js": "./js/core/morning.js?v=187f611a31",
+  "./js/core/site_rules.js": "./js/core/site_rules.js?v=187f611a31",
+  "./js/core/stars.js": "./js/core/stars.js?v=187f611a31",
+  "./js/core/state.js": "./js/core/state.js?v=187f611a31",
+  "./js/core/story.js": "./js/core/story.js?v=187f611a31",
+  "./js/core/trash_rules.js": "./js/core/trash_rules.js?v=187f611a31",
+  "./js/core/wellbeing.js": "./js/core/wellbeing.js?v=187f611a31",
+  "./js/gfx/backdrop.js": "./js/gfx/backdrop.js?v=187f611a31",
+  "./js/gfx/bento.js": "./js/gfx/bento.js?v=187f611a31",
+  "./js/gfx/care.js": "./js/gfx/care.js?v=187f611a31",
+  "./js/gfx/chars.js": "./js/gfx/chars.js?v=187f611a31",
+  "./js/gfx/controls.js": "./js/gfx/controls.js?v=187f611a31",
+  "./js/gfx/crowd.js": "./js/gfx/crowd.js?v=187f611a31",
+  "./js/gfx/dorm.js": "./js/gfx/dorm.js?v=187f611a31",
+  "./js/gfx/lotus.js": "./js/gfx/lotus.js?v=187f611a31",
+  "./js/gfx/market.js": "./js/gfx/market.js?v=187f611a31",
+  "./js/gfx/season.js": "./js/gfx/season.js?v=187f611a31",
+  "./js/gfx/shrine.js": "./js/gfx/shrine.js?v=187f611a31",
+  "./js/gfx/site.js": "./js/gfx/site.js?v=187f611a31",
+  "./js/gfx/stage.js": "./js/gfx/stage.js?v=187f611a31",
+  "./js/gfx/station.js": "./js/gfx/station.js?v=187f611a31",
+  "./js/gfx/street.js": "./js/gfx/street.js?v=187f611a31",
+  "./js/gfx/town.js": "./js/gfx/town.js?v=187f611a31",
+  "./js/main.js": "./js/main.js?v=187f611a31",
+  "./js/ui/ui.js": "./js/ui/ui.js?v=187f611a31",
+  "./js/work/bento_shift.js": "./js/work/bento_shift.js?v=187f611a31",
+  "./js/work/care_shift.js": "./js/work/care_shift.js?v=187f611a31",
+  "./js/work/dayoff.js": "./js/work/dayoff.js?v=187f611a31",
+  "./js/work/evening_walk.js": "./js/work/evening_walk.js?v=187f611a31",
+  "./js/work/lotus_shift.js": "./js/work/lotus_shift.js?v=187f611a31",
+  "./js/work/market_shop.js": "./js/work/market_shop.js?v=187f611a31",
+  "./js/work/morning_walk.js": "./js/work/morning_walk.js?v=187f611a31",
+  "./js/work/site_shift.js": "./js/work/site_shift.js?v=187f611a31"
  }
 }
 </script>
-<script type="module" src="js/main.js?v=f202db9103"></script>
+<script type="module" src="js/main.js?v=187f611a31"></script>
 
 </body></html>
