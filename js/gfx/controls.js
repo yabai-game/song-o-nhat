@@ -77,9 +77,12 @@ export class Controls {
     if (this.drag) return;
     this.idleT = moving ? 0 : (this.idleT || 0) + dt;
     if (moving) this.manual = false;
-    const rate = moving ? 2.2 : (!this.manual && this.idleT > 0.6 ? 1.8 : 0);
-    if (!rate) return;
     let d = behind - this.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+    // walking toward the camera (S / stick pulled down) holds the view instead of whipping it round 180°, and a
+    // character left facing the camera is not spun round either (player report: WASD after the chase camera)
+    const back = moving && (this.lastIn || 0) > 0.5;
+    const rate = moving ? (back ? 0 : 2.2) : (!this.manual && this.idleT > 0.6 && Math.abs(d) < 1.9 ? 1.8 : 0);
+    if (!rate) return;
     this.yaw += d * Math.min(1, dt * rate);
     // keep the steering frame in step while the stick is held, slowly enough that the path stays straight
     if (this.joyId != null && this.joyYaw != null) { let j = this.yaw - this.joyYaw; j = Math.atan2(Math.sin(j), Math.cos(j)); if (Math.abs(this.joy.x) < 0.35) this.joyYaw += j * Math.min(1, dt * 1.2); }
@@ -94,6 +97,7 @@ export class Controls {
     if (k.has('KeyS') || k.has('ArrowDown')) iy += 1;
     const l = Math.hypot(ix, iy);
     if (l > 1) { ix /= l; iy /= l; }
+    this.lastIn = l > 0.05 ? iy / Math.min(1, l) : 0; // > 0: pulling toward the camera (see follow)
     // camera sits at +z of the player rotated by yaw, so forward = (-sin yaw, -cos yaw), right = (cos yaw, -sin yaw);
     // screen-up on the stick is iy < 0: move = right·ix + forward·(-iy)
     const yaw = this.joyId != null && this.joyYaw != null ? this.joyYaw : this.keys.size && this.keyYaw != null ? this.keyYaw : this.yaw;
