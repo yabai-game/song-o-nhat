@@ -68,10 +68,16 @@ function b64ToBuffer(s) {
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out.buffer;
 }
+/** loading progress for the start screen: models started / finished (boot preloads everything) */
+export const loadStats = { started: 0, done: 0 };
 export function loadModel(name) {
   if (!cache[name]) {
-    cache[name] = fetch(`models/${name}.json?v=${MODEL_V}`)
+    loadStats.started++;
+    // phones on a shaky network: retry a failed download twice before giving up
+    const get = (tries) => fetch(`models/${name}.json?v=${MODEL_V}`)
       .then((r) => { if (!r.ok) throw new Error(`${name}: ${r.status}`); return r.json(); })
+      .catch((e) => (tries > 0 ? new Promise((res) => setTimeout(res, 800)).then(() => get(tries - 1)) : Promise.reject(e)));
+    cache[name] = get(2)
       .then((j) => new Promise((res, rej) => loader.parse(b64ToBuffer(j.b64), '', res, rej)))
       .then((gltf) => {
         // glass panes (vending machine window): their transmission is lost in export and they come
@@ -81,6 +87,7 @@ export function loadModel(name) {
         });
         return gltf;
       });
+    cache[name].then(() => { loadStats.done++; }, () => { loadStats.done++; });
   }
   return cache[name];
 }

@@ -41,7 +41,7 @@ export class Music {
   constructor() {
     this.ctx = null; this.bus = null; this.cur = null; this.want = null; this.buffers = {}; this.missing = new Set();
     this.muted = false; try { this.muted = localStorage.getItem(PREF) === '0'; } catch { /* storage blocked */ }
-    this.loading = {};
+    this.loading = {}; this.raw = {}; // raw = prefetched MP3 bytes (decoded only when a track is first played)
     const unlock = () => { this.start(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
     window.addEventListener('pointerdown', unlock); window.addEventListener('keydown', unlock);
     document.addEventListener('visibilitychange', () => { if (!this.ctx) return; document.hidden ? this.ctx.suspend() : (!this.muted && this.ctx.resume()); });
@@ -64,11 +64,16 @@ export class Music {
   async load(id) {
     if (this.buffers[id]) return this.buffers[id];
     if (!this.loading[id]) {
-      this.loading[id] = fetch(`${FILES}${id}.mp3`).then((r) => { if (!r.ok) throw new Error(id); return r.arrayBuffer(); })
-        .then((b) => this.ctx.decodeAudioData(b)).then((buf) => { this.buffers[id] = buf; return buf; })
+      const bytes = this.raw[id] ? Promise.resolve(this.raw[id]) : fetch(`${FILES}${id}.mp3`).then((r) => { if (!r.ok) throw new Error(id); return r.arrayBuffer(); });
+      this.loading[id] = bytes.then((b) => { delete this.raw[id]; return this.ctx.decodeAudioData(b); }).then((buf) => { this.buffers[id] = buf; return buf; })
         .catch(() => { this.missing.add(id); return null; });
     }
     return this.loading[id];
+  }
+  /** start screen: download every track up front (bytes only), so nothing is fetched while playing */
+  async prefetch(onEach) {
+    await Promise.all(Object.keys(TRACKS).map((id) => fetch(`${FILES}${id}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : null))
+      .then((b) => { if (b) this.raw[id] = b; else this.missing.add(id); }).catch(() => this.missing.add(id)).finally(() => onEach && onEach())));
   }
   /** called often: switches only when the wanted track changes */
   set(id) {

@@ -65,7 +65,7 @@ button:focus-visible { outline: 2.5px solid var(--sakura); outline-offset: 2px; 
 .seg button { appearance: none; border: 0; background: transparent; color: var(--ink-dim); font-weight: 600; font-size: 14px; padding: 6px 18px; border-radius: 999px; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .sw { display: flex; flex-wrap: wrap; gap: 8px; }
-.sw button { width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); cursor: pointer; padding: 0; position: relative; }
+.sw button { width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); cursor: pointer; padding: 0; position: relative; }
 .sw button[aria-pressed="true"] { outline: 2.5px solid var(--accent); outline-offset: 2px; border-color: var(--accent-ink); }
 .sw button.orig::after { content: "Gốc"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
 .name-in { width: 100%; box-sizing: border-box; border-radius: 10px; border: 1.5px solid var(--line); background: rgba(0,0,0,.25); color: var(--ink); font: inherit; font-size: 15px; padding: 9px 12px; user-select: text; -webkit-user-select: text; }
@@ -278,9 +278,10 @@ button.small { font-size: 13px; padding: 8px 12px; }
 .sbar.mini .sb-i { font-size: 12px; line-height: 1; } .sbar.mini .sb-t { flex: 1; height: 6px; }
 @media (orientation: landscape) { #shifthud .mini-bars { top: calc(86px + env(safe-area-inset-top, 0px)); } }
 /* ☰ pause / home button during play; the top row moves right to make room */
-.menu-btn { position: absolute; z-index: 6; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--hud); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: inherit; font-size: 18px; line-height: 1; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 10px rgba(40,25,15,.3); }
+.menu-btn { position: absolute; z-index: 6; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--hud); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: inherit; font-size: 18px; line-height: 1; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 10px rgba(40,25,15,.3); }
 .menu-btn[hidden] { display: none; }
-#app.has-menu .top { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 46px); }
+#sh-quit { min-width: 40px; min-height: 40px; justify-content: center; box-sizing: border-box; }
+#app.has-menu .top { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 92px); }
 /* the goal pill stays on one line next to the ☰ button (shrinks on narrow phones) */
 #shifthud .top .goal { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: clamp(11px, 3.3vw, 14px); }
 .tag[hidden], .bubble[hidden] { display: none; }
@@ -329,7 +330,7 @@ button.small { font-size: 13px; padding: 8px 12px; }
 #btn-cal, #btn-note { display: none !important; }
 .phone-btn { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 46px) !important; }
 #app.has-menu .top { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 92px); }
-#shifthud .rank { top: calc(56px + env(safe-area-inset-top, 0px)) !important; max-width: calc(100% - 190px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; }
+#shifthud .rank { top: calc(56px + env(safe-area-inset-top, 0px)) !important; box-sizing: border-box; max-width: calc(100% - 208px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; }
 #shifthud .mini-bars { top: calc(56px + env(safe-area-inset-top, 0px)) !important; left: auto !important; right: max(12px, env(safe-area-inset-right, 0px)); width: auto; display: flex; gap: 4px; }
 #shifthud .mini-bars .sbar.mini { padding: 3px 6px; gap: 3px; }
 #shifthud .mini-bars .sbar.mini .sb-t { width: 26px; flex: none; height: 5px; }
@@ -342,4 +343,75 @@ button.small { font-size: 13px; padding: 8px 12px; }
 #shifthud .tip.mini b::after { content: ' ▾'; opacity: .6; font-weight: 400; }
 @media (orientation: landscape) {
   #shifthud .rank, #shifthud .mini-bars { top: calc(56px + env(safe-area-inset-top, 0px)) !important; }
+  #shifthud .tip { width: min(300px, calc(100% - 460px)); }
 }
+
+/* S21 UI fixes: prevent #toast and #ach-toast from overlapping #modal .card or #dayhud .top, and compact cards on 812x375 landscape */
+#toast { box-sizing: border-box; z-index: 26; }
+#app:has(#modal:not([hidden])) #toast,
+#app:has(#talk:not([hidden])) #toast {
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  bottom: auto;
+  padding: 6px 12px;
+  font-size: 12px;
+  max-width: min(340px, calc(100vw - 24px));
+}
+#app:has(#modal:not([hidden])) #toast small,
+#app:has(#talk:not([hidden])) #toast small { font-size: 11px; margin-top: 1px; }
+#app:has(#toast:not([hidden])) #modal { padding-top: calc(64px + env(safe-area-inset-top, 0px)); box-sizing: border-box; }
+#app:has(#ach-toast:not([hidden])) #modal { padding-bottom: calc(46px + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; }
+#app:has(#talk:not([hidden])):not(:has(#modal:not([hidden]))) #ach-toast {
+  bottom: auto;
+  top: calc(212px + env(safe-area-inset-top, 0px));
+}
+
+@media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  .acts { gap: 6px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  #modal { padding: 8px 14px; box-sizing: border-box; }
+  #modal .card { width: min(500px, calc(100vw - 280px)); max-height: calc(100vh - 16px); padding: 11px 14px; gap: 6px; }
+  #modal .card .big { font-size: 24px; line-height: 1; }
+  #modal .card h2 { font-size: 16px; }
+  #modal .card p, #modal .card li { font-size: 12.5px; line-height: 1.32; }
+  #modal .card .go, #modal .card .ghost { padding: 8px 12px; font-size: 13.5px; min-height: 40px; box-sizing: border-box; }
+  .payslip { padding: 5px 9px; gap: 2px; font-size: 11.5px; }
+  .payslip .prow.sub, .payslip .prow.net { padding-top: 3px; font-size: 12.5px; }
+  .nb-stamps { grid-template-columns: repeat(8, 1fr); gap: 3px; margin: 2px 0; }
+  .nb-stamp { padding: 3px 2px; font-size: 9.5px; }
+  .nb-stamp .ic { font-size: 13px; margin-bottom: 0; }
+  .nb-list { grid-template-columns: 1fr 1fr; max-height: 22vh; gap: 4px; }
+  .lime-list { max-height: 30vh; gap: 6px; }
+  .cal-cell { min-height: 26px; padding: 1px; }
+  #app:has(#modal:not([hidden])) #toast {
+    left: max(8px, env(safe-area-inset-left, 0px));
+    right: auto;
+    top: calc(56px + env(safe-area-inset-top, 0px));
+    bottom: auto;
+    transform: none;
+    max-width: 128px;
+    padding: 5px 7px;
+    font-size: 11px;
+    text-align: left;
+  }
+  #app:has(#toast:not([hidden])) #modal { padding-top: 8px; }
+  #app:has(#ach-toast:not([hidden])) #ach-toast {
+    left: auto;
+    right: max(8px, env(safe-area-inset-right, 0px));
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    transform: none;
+    max-width: 132px;
+    font-size: 10.5px;
+    padding: 4px 8px;
+  }
+  #app:has(#ach-toast:not([hidden])) #modal { padding-bottom: 8px; }
+}
+
+/* start screen: logo in the middle, progress bar with percent at the bottom (everything preloads before play) */
+#loading .loadbot { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(28px + env(safe-area-inset-bottom, 0px)); width: min(420px, calc(100% - 40px)); display: grid; gap: 7px; }
+#loading .loadbot .bar { width: 100%; height: 8px; border-radius: 99px; }
+#loading .loadbot .bar i { border-radius: 99px; background: linear-gradient(90deg, var(--accent), #ffb36b); transition: width .25s; }
+#loading .loadrow { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+#loading .loadrow .msg { max-width: none; text-align: left; font-size: 12.5px; }
+#loading .loadrow b { font-size: 15px; color: var(--accent); font-variant-numeric: tabular-nums; }
+#loading .hint { font-size: 11px; color: var(--ink-dim); text-align: center; opacity: .8; }
+

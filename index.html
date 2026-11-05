@@ -16,26 +16,26 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&family=Zen+Maru+Gothic:wght@500;700&display=swap">
-<link rel="stylesheet" href="css/game.css?v=e4485dcb5c">
+<link rel="stylesheet" href="css/game.css?v=9932efbf0e">
 <style id="s14-style">
-.menu-btn { width: 34px; height: 34px; font-size: 16px; left: max(10px, env(safe-area-inset-left, 0px)); }
-.cal-btn { left: calc(max(10px, env(safe-area-inset-left, 0px)) + 36px); font-size: 15px; }
-.note-btn { left: calc(max(10px, env(safe-area-inset-left, 0px)) + 72px); font-size: 15px; }
-.phone-btn { left: calc(max(10px, env(safe-area-inset-left, 0px)) + 108px); font-size: 15px; }
+.menu-btn { width: 40px; height: 40px; font-size: 17px; left: max(12px, env(safe-area-inset-left, 0px)); }
+.cal-btn { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 44px); font-size: 15px; }
+.note-btn { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 88px); font-size: 15px; }
+.phone-btn { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 46px); font-size: 16px; }
 .phone-btn .badge { position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: #e63946; color: #fff; font-size: 10.5px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
 .phone-btn .badge[hidden] { display: none; }
-#app.has-menu #shifthud .top { left: calc(max(10px, env(safe-area-inset-left, 0px)) + 146px); }
+#app.has-menu #shifthud .top { left: calc(max(12px, env(safe-area-inset-left, 0px)) + 92px); }
 #app.has-menu #dayhud .top { left: max(10px, env(safe-area-inset-left, 0px)); }
 #dayhud .day-col { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 44vw; }
-#app.has-menu #dayhud .day-col { margin-top: 42px; }
-.ach-toast { position: absolute; z-index: 26; top: calc(50px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); background: rgba(28, 22, 18, 0.94); border: 1.5px solid var(--gold); color: var(--gold); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+#app.has-menu #dayhud .day-col { margin-top: 46px; }
+.ach-toast { box-sizing: border-box; position: absolute; z-index: 27; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: rgba(28, 22, 18, 0.94); border: 1.5px solid var(--gold); color: var(--gold); border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 800; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
 .ach-toast[hidden] { display: none !important; }
-.nb-stamps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin: 6px 0; }
-.nb-stamp { border: 1.5px dashed var(--line); border-radius: 10px; padding: 6px 4px; text-align: center; font-size: 11px; line-height: 1.25; background: rgba(0,0,0,.2); opacity: .55; }
+.nb-stamps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 4px 0; }
+.nb-stamp { border: 1.5px dashed var(--line); border-radius: 10px; padding: 4px 3px; text-align: center; font-size: 10.5px; line-height: 1.15; background: rgba(0,0,0,.2); opacity: .55; }
 .nb-stamp.stamped { border-style: solid; border-color: #ff7a70; background: rgba(226,87,76,.16); opacity: 1; color: #ffd666; }
-.nb-stamp .ic { font-size: 17px; display: block; margin-bottom: 2px; }
-.nb-list { display: grid; gap: 6px; max-height: 36vh; overflow-y: auto; padding-right: 2px; }
-.nb-item { border: 1.5px solid var(--line); border-radius: 10px; padding: 7px 9px; background: rgba(0,0,0,.22); font-size: 12.5px; line-height: 1.35; display: grid; gap: 2px; }
+.nb-stamp .ic { font-size: 15px; display: block; margin-bottom: 1px; }
+.nb-list { display: grid; gap: 5px; max-height: 26vh; overflow-y: auto; padding-right: 2px; }
+.nb-item { border: 1.5px solid var(--line); border-radius: 10px; padding: 6px 8px; background: rgba(0,0,0,.22); font-size: 12px; line-height: 1.3; display: grid; gap: 2px; }
 .nb-item.locked { opacity: .56; border-style: dashed; }
 .nb-item.unlocked { border-color: var(--gold); background: rgba(255,214,102,.1); }
 .nb-item .at { font-size: 11px; color: var(--gold); font-weight: 700; }
@@ -43,18 +43,18 @@
 .home-chips[hidden] { display: none !important; }
 .hchip { background: var(--hud); border: 1px solid var(--gold); color: var(--gold); border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.22); }
 #shifthud .home-chips { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); top: calc(128px + env(safe-area-inset-top, 0px)); max-width: 46vw; }
-.lime-list { display: grid; gap: 8px; max-height: 46vh; overflow-y: auto; padding-right: 2px; }
+.lime-list { display: grid; gap: 8px; max-height: 44vh; overflow-y: auto; padding-right: 2px; }
 .lime-msg { background: rgba(0,0,0,.24); border: 1.5px solid var(--line); border-radius: 12px; padding: 9px 11px; display: grid; gap: 5px; font-size: 13px; line-height: 1.42; }
 .lime-msg.unread { border-color: #5bd17d; background: rgba(91,209,125,.1); }
 .lime-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-dim); }
 .lime-head b { color: #7ed6a0; font-size: 13.5px; }
-.lime-acts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
-.lime-acts button { appearance: none; border: 1.5px solid var(--line); background: rgba(255,255,255,.1); color: var(--ink); border-radius: 9px; padding: 6px 9px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.lime-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+.lime-acts button { appearance: none; box-sizing: border-box; min-height: 40px; border: 1.5px solid var(--line); background: rgba(255,255,255,.1); color: var(--ink); border-radius: 9px; padding: 8px 11px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .lime-acts button.pri { border-color: var(--gold); color: var(--gold); background: rgba(255,214,102,.14); }
 
 .pill.red-day, #sh-rank.red-day { border-color: #ff7a70 !important; color: #ff9e94 !important; }
 .cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
-.cal-nav button { appearance: none; border: 1.5px solid var(--line); background: rgba(0,0,0,.25); color: var(--ink); border-radius: 10px; padding: 5px 11px; font-weight: 800; cursor: pointer; }
+.cal-nav button { appearance: none; box-sizing: border-box; min-width: 40px; min-height: 40px; display: inline-grid; place-items: center; border: 1.5px solid var(--line); background: rgba(0,0,0,.25); color: var(--ink); border-radius: 10px; padding: 6px 12px; font-weight: 800; cursor: pointer; }
 .cal-nav b { font-size: 15px; text-align: center; }
 .cal-wk, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
 .cal-wk span { font-size: 11.5px; font-weight: 700; color: var(--ink-dim); padding: 2px 0; }
@@ -88,8 +88,11 @@
       <img class="brand" src="img/brand/yabai_logo_white.png" alt="YABAI" width="845" height="213">
       <div class="jp">日本で生きる</div>
       <h1>Sống ở Nhật</h1>
+    </div>
+    <div class="loadbot">
+      <div class="loadrow"><span class="msg" id="loadmsg">Đang tải thị trấn, nhân vật và nhạc…</span><b id="loadpct">0%</b></div>
       <div class="bar"><i id="bar"></i></div>
-      <div class="msg" id="loadmsg">Đang tải thị trấn và nhân vật…</div>
+      <div class="hint">Lần đầu tải toàn bộ game (~60 MB), từ lần sau sẽ vào nhanh hơn.</div>
     </div>
   </div>
 
@@ -207,68 +210,68 @@
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/audio/music.js": "./js/audio/music.js?v=e4485dcb5c",
-  "./js/core/bento_data.js": "./js/core/bento_data.js?v=e4485dcb5c",
-  "./js/core/bento_rules.js": "./js/core/bento_rules.js?v=e4485dcb5c",
-  "./js/core/bicycle.js": "./js/core/bicycle.js?v=e4485dcb5c",
-  "./js/core/calendar.js": "./js/core/calendar.js?v=e4485dcb5c",
-  "./js/core/care_data.js": "./js/core/care_data.js?v=e4485dcb5c",
-  "./js/core/care_rules.js": "./js/core/care_rules.js?v=e4485dcb5c",
-  "./js/core/career.js": "./js/core/career.js?v=e4485dcb5c",
-  "./js/core/clinic.js": "./js/core/clinic.js?v=e4485dcb5c",
-  "./js/core/crowd.js": "./js/core/crowd.js?v=e4485dcb5c",
-  "./js/core/dayoff_rules.js": "./js/core/dayoff_rules.js?v=e4485dcb5c",
-  "./js/core/disaster.js": "./js/core/disaster.js?v=e4485dcb5c",
-  "./js/core/evening.js": "./js/core/evening.js?v=e4485dcb5c",
-  "./js/core/festival.js": "./js/core/festival.js?v=e4485dcb5c",
-  "./js/core/gait.js": "./js/core/gait.js?v=e4485dcb5c",
-  "./js/core/holiday.js": "./js/core/holiday.js?v=e4485dcb5c",
-  "./js/core/home_life.js": "./js/core/home_life.js?v=e4485dcb5c",
-  "./js/core/jobs.js": "./js/core/jobs.js?v=e4485dcb5c",
-  "./js/core/lotus_data.js": "./js/core/lotus_data.js?v=e4485dcb5c",
-  "./js/core/lotus_rules.js": "./js/core/lotus_rules.js?v=e4485dcb5c",
-  "./js/core/market_rules.js": "./js/core/market_rules.js?v=e4485dcb5c",
-  "./js/core/morning.js": "./js/core/morning.js?v=e4485dcb5c",
-  "./js/core/paperwork.js": "./js/core/paperwork.js?v=e4485dcb5c",
-  "./js/core/site_rules.js": "./js/core/site_rules.js?v=e4485dcb5c",
-  "./js/core/stars.js": "./js/core/stars.js?v=e4485dcb5c",
-  "./js/core/state.js": "./js/core/state.js?v=e4485dcb5c",
-  "./js/core/story.js": "./js/core/story.js?v=e4485dcb5c",
-  "./js/core/train.js": "./js/core/train.js?v=e4485dcb5c",
-  "./js/core/trash_rules.js": "./js/core/trash_rules.js?v=e4485dcb5c",
-  "./js/core/wellbeing.js": "./js/core/wellbeing.js?v=e4485dcb5c",
-  "./js/gfx/backdrop.js": "./js/gfx/backdrop.js?v=e4485dcb5c",
-  "./js/gfx/bento.js": "./js/gfx/bento.js?v=e4485dcb5c",
-  "./js/gfx/care.js": "./js/gfx/care.js?v=e4485dcb5c",
-  "./js/gfx/chars.js": "./js/gfx/chars.js?v=e4485dcb5c",
-  "./js/gfx/controls.js": "./js/gfx/controls.js?v=e4485dcb5c",
-  "./js/gfx/crowd.js": "./js/gfx/crowd.js?v=e4485dcb5c",
-  "./js/gfx/dorm.js": "./js/gfx/dorm.js?v=e4485dcb5c",
-  "./js/gfx/festival.js": "./js/gfx/festival.js?v=e4485dcb5c",
-  "./js/gfx/lotus.js": "./js/gfx/lotus.js?v=e4485dcb5c",
-  "./js/gfx/market.js": "./js/gfx/market.js?v=e4485dcb5c",
-  "./js/gfx/season.js": "./js/gfx/season.js?v=e4485dcb5c",
-  "./js/gfx/services.js": "./js/gfx/services.js?v=e4485dcb5c",
-  "./js/gfx/shrine.js": "./js/gfx/shrine.js?v=e4485dcb5c",
-  "./js/gfx/site.js": "./js/gfx/site.js?v=e4485dcb5c",
-  "./js/gfx/stage.js": "./js/gfx/stage.js?v=e4485dcb5c",
-  "./js/gfx/station.js": "./js/gfx/station.js?v=e4485dcb5c",
-  "./js/gfx/street.js": "./js/gfx/street.js?v=e4485dcb5c",
-  "./js/gfx/town.js": "./js/gfx/town.js?v=e4485dcb5c",
-  "./js/main.js": "./js/main.js?v=e4485dcb5c",
-  "./js/net/firebase_config.js": "./js/net/firebase_config.js?v=e4485dcb5c",
-  "./js/ui/ui.js": "./js/ui/ui.js?v=e4485dcb5c",
-  "./js/work/bento_shift.js": "./js/work/bento_shift.js?v=e4485dcb5c",
-  "./js/work/care_shift.js": "./js/work/care_shift.js?v=e4485dcb5c",
-  "./js/work/dayoff.js": "./js/work/dayoff.js?v=e4485dcb5c",
-  "./js/work/evening_walk.js": "./js/work/evening_walk.js?v=e4485dcb5c",
-  "./js/work/lotus_shift.js": "./js/work/lotus_shift.js?v=e4485dcb5c",
-  "./js/work/market_shop.js": "./js/work/market_shop.js?v=e4485dcb5c",
-  "./js/work/morning_walk.js": "./js/work/morning_walk.js?v=e4485dcb5c",
-  "./js/work/site_shift.js": "./js/work/site_shift.js?v=e4485dcb5c"
+  "./js/audio/music.js": "./js/audio/music.js?v=9932efbf0e",
+  "./js/core/bento_data.js": "./js/core/bento_data.js?v=9932efbf0e",
+  "./js/core/bento_rules.js": "./js/core/bento_rules.js?v=9932efbf0e",
+  "./js/core/bicycle.js": "./js/core/bicycle.js?v=9932efbf0e",
+  "./js/core/calendar.js": "./js/core/calendar.js?v=9932efbf0e",
+  "./js/core/care_data.js": "./js/core/care_data.js?v=9932efbf0e",
+  "./js/core/care_rules.js": "./js/core/care_rules.js?v=9932efbf0e",
+  "./js/core/career.js": "./js/core/career.js?v=9932efbf0e",
+  "./js/core/clinic.js": "./js/core/clinic.js?v=9932efbf0e",
+  "./js/core/crowd.js": "./js/core/crowd.js?v=9932efbf0e",
+  "./js/core/dayoff_rules.js": "./js/core/dayoff_rules.js?v=9932efbf0e",
+  "./js/core/disaster.js": "./js/core/disaster.js?v=9932efbf0e",
+  "./js/core/evening.js": "./js/core/evening.js?v=9932efbf0e",
+  "./js/core/festival.js": "./js/core/festival.js?v=9932efbf0e",
+  "./js/core/gait.js": "./js/core/gait.js?v=9932efbf0e",
+  "./js/core/holiday.js": "./js/core/holiday.js?v=9932efbf0e",
+  "./js/core/home_life.js": "./js/core/home_life.js?v=9932efbf0e",
+  "./js/core/jobs.js": "./js/core/jobs.js?v=9932efbf0e",
+  "./js/core/lotus_data.js": "./js/core/lotus_data.js?v=9932efbf0e",
+  "./js/core/lotus_rules.js": "./js/core/lotus_rules.js?v=9932efbf0e",
+  "./js/core/market_rules.js": "./js/core/market_rules.js?v=9932efbf0e",
+  "./js/core/morning.js": "./js/core/morning.js?v=9932efbf0e",
+  "./js/core/paperwork.js": "./js/core/paperwork.js?v=9932efbf0e",
+  "./js/core/site_rules.js": "./js/core/site_rules.js?v=9932efbf0e",
+  "./js/core/stars.js": "./js/core/stars.js?v=9932efbf0e",
+  "./js/core/state.js": "./js/core/state.js?v=9932efbf0e",
+  "./js/core/story.js": "./js/core/story.js?v=9932efbf0e",
+  "./js/core/train.js": "./js/core/train.js?v=9932efbf0e",
+  "./js/core/trash_rules.js": "./js/core/trash_rules.js?v=9932efbf0e",
+  "./js/core/wellbeing.js": "./js/core/wellbeing.js?v=9932efbf0e",
+  "./js/gfx/backdrop.js": "./js/gfx/backdrop.js?v=9932efbf0e",
+  "./js/gfx/bento.js": "./js/gfx/bento.js?v=9932efbf0e",
+  "./js/gfx/care.js": "./js/gfx/care.js?v=9932efbf0e",
+  "./js/gfx/chars.js": "./js/gfx/chars.js?v=9932efbf0e",
+  "./js/gfx/controls.js": "./js/gfx/controls.js?v=9932efbf0e",
+  "./js/gfx/crowd.js": "./js/gfx/crowd.js?v=9932efbf0e",
+  "./js/gfx/dorm.js": "./js/gfx/dorm.js?v=9932efbf0e",
+  "./js/gfx/festival.js": "./js/gfx/festival.js?v=9932efbf0e",
+  "./js/gfx/lotus.js": "./js/gfx/lotus.js?v=9932efbf0e",
+  "./js/gfx/market.js": "./js/gfx/market.js?v=9932efbf0e",
+  "./js/gfx/season.js": "./js/gfx/season.js?v=9932efbf0e",
+  "./js/gfx/services.js": "./js/gfx/services.js?v=9932efbf0e",
+  "./js/gfx/shrine.js": "./js/gfx/shrine.js?v=9932efbf0e",
+  "./js/gfx/site.js": "./js/gfx/site.js?v=9932efbf0e",
+  "./js/gfx/stage.js": "./js/gfx/stage.js?v=9932efbf0e",
+  "./js/gfx/station.js": "./js/gfx/station.js?v=9932efbf0e",
+  "./js/gfx/street.js": "./js/gfx/street.js?v=9932efbf0e",
+  "./js/gfx/town.js": "./js/gfx/town.js?v=9932efbf0e",
+  "./js/main.js": "./js/main.js?v=9932efbf0e",
+  "./js/net/firebase_config.js": "./js/net/firebase_config.js?v=9932efbf0e",
+  "./js/ui/ui.js": "./js/ui/ui.js?v=9932efbf0e",
+  "./js/work/bento_shift.js": "./js/work/bento_shift.js?v=9932efbf0e",
+  "./js/work/care_shift.js": "./js/work/care_shift.js?v=9932efbf0e",
+  "./js/work/dayoff.js": "./js/work/dayoff.js?v=9932efbf0e",
+  "./js/work/evening_walk.js": "./js/work/evening_walk.js?v=9932efbf0e",
+  "./js/work/lotus_shift.js": "./js/work/lotus_shift.js?v=9932efbf0e",
+  "./js/work/market_shop.js": "./js/work/market_shop.js?v=9932efbf0e",
+  "./js/work/morning_walk.js": "./js/work/morning_walk.js?v=9932efbf0e",
+  "./js/work/site_shift.js": "./js/work/site_shift.js?v=9932efbf0e"
  }
 }
 </script>
-<script type="module" src="js/main.js?v=e4485dcb5c"></script>
+<script type="module" src="js/main.js?v=9932efbf0e"></script>
 
 </body></html>
