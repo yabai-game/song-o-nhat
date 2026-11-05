@@ -572,14 +572,14 @@ export async function buildSite() {
       g.strokeStyle = '#c92a1d'; g.lineWidth = 10; g.strokeRect(6, 6, 372, 116);
       g.fillStyle = '#c92a1d'; g.fillRect(14, 14, 356, 34);
       g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.font = '800 20px "Zen Maru Gothic", "Yu Gothic", sans-serif'; g.fillText('参道入口 · Lối vào đền', 192, 31);
+      g.font = '800 20px "Zen Maru Gothic", "Yu Gothic", sans-serif'; g.fillText('参道入口', 192, 31); // in-world signs: Japanese only
       g.fillStyle = '#1d1d1d'; g.font = '900 42px "Zen Maru Gothic", "Yu Gothic", sans-serif';
       g.fillText('⛩ さくら神社 →', 192, 84);
     });
     const sPost = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 2.7, 8), M('#6b4a30'));
-    sPost.position.set(ROUTE.shrine.x + 1.2, 1.35, 29.15); sPost.castShadow = true; scene.add(sPost);
+    sPost.position.set(ROUTE.shrine.x + 1.7, 1.35, 29.3); sPost.castShadow = true; scene.add(sPost); // clear of the x = 7 street light
     const sBoard = new THREE.Mesh(new THREE.PlaneGeometry(1.65, 0.55), new THREE.MeshStandardMaterial({ map: sTex, side: THREE.DoubleSide, roughness: 0.65 }));
-    sBoard.position.set(ROUTE.shrine.x + 1.14, 2.35, 29.15); sBoard.rotation.y = -Math.PI / 2; scene.add(sBoard);
+    sBoard.position.set(ROUTE.shrine.x + 1.64, 2.35, 29.3); sBoard.rotation.y = -Math.PI / 2; scene.add(sBoard);
   }
   // LED street lights (CC0 Meshy model): pole on the south sidewalk, the head reaching over the street.
   // The model's arm points +z from its pole, so it is turned around: pole at z 29.0, head at ≈ 27.2.

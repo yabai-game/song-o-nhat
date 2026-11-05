@@ -117,7 +117,7 @@ function buildYards(scene, gl) {
   if (gl.hedge) {
     const segs = [];
     const run = (x0, x1, z, h) => { const L = 1.77 * h / 0.9 * 0.95; for (let x = x0 + L / 2; x <= x1 - L / 2 + 0.01; x += L) segs.push([x, z, h]); };
-    run(-37.6, -29, 30.75, 1.5); run(-22.9, -17, 31.6, 1.35); run(16.3, 22, 30.75, 1.5); run(30, 37.6, 30.75, 1.5); run(6.1, 9.8, 30.7, 1.1);
+    run(-37.6, -29, 30.75, 1.5); run(-22.9, -17, 31.6, 1.35); run(16.3, 22, 30.75, 1.5); run(30, 37.6, 30.75, 1.5); // x 6..10 stays open: the path to the shrine, with its signpost
     run(-16.3, -9.7, 30.55, 0.8); run(10.3, 15.7, 30.7, 0.8); run(22.6, 29.4, 30.55, 0.8);
     const srcs = []; gl.hedge.scene.updateMatrixWorld(true); gl.hedge.scene.traverse((o) => { if (o.isMesh) srcs.push(o); });
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sv = new THREE.Vector3();
