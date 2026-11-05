@@ -873,8 +873,9 @@ const CREDITS = [
   ['Khăn', 'Folded Towel', 'Nicothin', 'c5f9e72edf7d4b5eaa2ec9b95c3b099d', 'CC BY 4.0'],
   ['Xe đạp', 'Low Poly Bicycles', 'EdwiixGG', 'c256e970e2874ad0ac04dcef730863af', 'CC BY 4.0'],
   ['Xe tải nhỏ', 'Simple Kei Truck', 'Spookyghostboo', 'fb477a6082c5442ca060dfcdf8eae928', 'CC BY 4.0'],
-  ['Gương cầu lồi', 'Japanese Road Signs (28 road signs and more)', 'Yanis (notbadworks)', '02c4941681264875a84b0f0b0c5c0ee1', 'CC BY 4.0'],
-  ['Bụi cây', 'Stylized Bush', 'Daniel (danielpetrov)', '9d9ce79d3ae040619e96d5b22c7de1a6', 'CC BY 4.0'],
+  ['Hàng rào cây', 'Shrub tiles pack (3 vars, seamless)', 'LOLIPOP', 'ce2fce219f634f328abc6280b2409613', 'CC BY 4.0'],
+  ['Gương cầu lồi', 'Blind spot traffic mirror', 'Insane Ninja', '6b7baf381f6c45ef8d92411e0467492b', 'CC BY 4.0'],
+  ['Biển 止まれ', 'Japanese Street Props', 'AlienKat', 'fc52f80909ba466c8b786bb2dada5dab', 'CC BY 4.0'],
   ['Bồn rửa inox', 'Low poly commercial sink', 'christian', '2d0cade455614fd989b2e81878fd7764', 'CC BY 4.0'],
   ['Khay inox đựng món', 'Gastronorm_Basic_1_2', 'MPS Porcellane di Saronno', '9fec684962424c8186b075dd99f9bef6', 'CC BY 4.0'],
 ];

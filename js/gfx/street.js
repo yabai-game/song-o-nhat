@@ -50,14 +50,7 @@ export function buildStreetDetails(scene, gl) {
   // stop sign (red inverted triangle 止まれ) by the crossing and an orange curve mirror at the dorm corner
   const poleM = new THREE.MeshStandardMaterial({ color: '#d9d9d6', roughness: 0.5, metalness: 0.4 });
   const pole = (x, z, h, mat = poleM) => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, h, 10), mat); p.position.set(x, h / 2, z); p.castShadow = true; scene.add(p); return p; };
-  pole(S.crossX - 2.2, 28.75, 2.4);
-  const tri = new THREE.Shape(); tri.moveTo(-0.38, 0.22); tri.lineTo(0.38, 0.22); tri.lineTo(0, -0.44); tri.closePath();
-  const stopTex = canvasTexture(128, 128, (g) => { g.fillStyle = '#d42a2a'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#ffffff'; g.font = 'bold 26px "Noto Sans JP", sans-serif'; g.textAlign = 'center'; g.fillText('止まれ', 64, 52); g.font = 'bold 14px sans-serif'; g.fillText('STOP', 64, 70); });
-  const stopGeo = new THREE.ShapeGeometry(tri); stopGeo.computeBoundingBox();
-  const uv = stopGeo.attributes.uv, pos = stopGeo.attributes.position;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + 0.38) / 0.76, (pos.getY(i) + 0.44) / 0.66);
-  const stop = new THREE.Mesh(stopGeo, new THREE.MeshStandardMaterial({ map: stopTex, side: THREE.DoubleSide, roughness: 0.6 }));
-  stop.position.set(S.crossX - 2.2, 2.2, 28.71); stop.rotation.y = Math.PI; scene.add(stop);
+  pole(S.crossX - 2.2, 28.75, 2.55);
   // models: bicycles (three colours) by the konbini and the dorm, plants by the doors, a kei truck
   const place = (gltf, list, tint) => {
     if (!gltf) return;
@@ -74,10 +67,12 @@ export function buildStreetDetails(scene, gl) {
   const bikeTint = ['#c8352d', '#e0e0dc', '#3a6fb0', '#2f8f57'];
   place(gl.bicycle, [[-3.4, 29.15, 0.08], [-2.7, 29.2, -0.05], [-28.2, 29.25, 0.1], [-27.5, 29.3, -0.08]], bikeTint);
   place(gl.kei_truck, [[15.5, 22.7, Math.PI / 2]]);
-  // curve mirror (カーブミラー) with its 注意 plate at the dorm corner, turned to the street ("Japanese Road Signs", Yanis, CC BY)
-  place(gl.curve_mirror, [[-29.2, 28.95, Math.PI - 0.5]]);
-  // the mirror face is metal with nothing to reflect (black): make it a bright, slightly blue convex glass
-  scene.traverse((o) => { if (o.isMesh && o.material && /^Mirror(\.|$)/.test(o.material.name || '')) { o.material = o.material.clone(); o.material.color.set('#cfdbe2'); o.material.metalness = 0.25; o.material.roughness = 0.12; } });
+  // red 止まれ sign on its pole by the crossing, facing traffic coming east ("Japanese Street Props", AlienKat, CC BY)
+  if (gl.stop_sign) { const st = gl.stop_sign.scene.clone(true); st.position.set(S.crossX - 2.2 - 0.05, 1.85, 28.75); st.rotation.y = Math.PI / 2; scene.add(st); }
+  // curve mirror (カーブミラー) at the dorm corner, turned to the street ("Blind spot traffic mirror", Insane Ninja,
+  // CC BY); its red frame is painted the orange of Japanese road mirrors
+  place(gl.curve_mirror, [[-29.2, 28.95, -Math.PI / 4]]);
+  scene.traverse((o) => { if (o.isMesh && o.material && /^Cover/i.test(o.material.name || '')) { o.material = o.material.clone(); o.material.color.set('#f08a2c'); } });
   buildYards(scene, gl);
 }
 
@@ -93,8 +88,8 @@ export function lotTexture() {
 
 /**
  * The empty ground beside the houses on the south row (player feedback): concrete-block walls (ブロック塀)
- * with a cap along the lot fronts, gardens of bushes ("Stylized Bush", danielpetrov, CC BY) behind and
- * between the walls, a trimmed hedge before the house yards, outdoor air-conditioner units and gas meters.
+ * with a cap along the lot fronts, trimmed hedges (Shrub tiles pack) behind
+ * and between the walls and before the house yards, outdoor air-conditioner units and gas meters.
  * House footprints (x): dorm −28.4..−23.6, house −16.5..−9.5, konbini −7.7..5.7, house 10.2..15.8, house 22.5..29.5.
  */
 function buildYards(scene, gl) {
@@ -117,21 +112,18 @@ function buildYards(scene, gl) {
   // lot-front walls in the gaps (openings left for the alley by the konbini and the shrine path)
   wall(-38, -28.6); wall(15.9, 19.0); wall(20.2, 22.4); wall(29.6, 38);
   wall(29.6, 36.5, -28.5, true); wall(29.6, 36.5, 15.95, true); wall(29.6, 36.5, 22.4, true); // side walls between lots
-  // gardens: bushes behind the walls and in the gaps (instanced, varied size and turn)
-  if (gl.bush) {
-    const spots = [];
-    const row = (x0, x1, z, s0, s1, step) => { for (let x = x0; x <= x1; x += step) spots.push([x + (Math.random() - 0.5) * 0.4, z + (Math.random() - 0.5) * 0.5, Math.random() * 6, s0 + Math.random() * (s1 - s0)]); };
-    row(-37, -29.4, 31.2, 1.2, 1.9, 1.5);   // west of the dorm, behind the wall
-    row(-22.8, -17.2, 32.2, 1.0, 1.6, 1.4); // behind the trash point and the vending machines
-    row(16.6, 21.8, 31.3, 1.3, 2.0, 1.4);   // between the two east houses
-    row(30.3, 37, 31.3, 1.2, 1.9, 1.5);     // east end
-    row(6.2, 9.6, 30.8, 0.9, 1.3, 1.1);     // beside the shrine path
-    row(-16.2, -9.8, 30.55, 0.55, 0.65, 0.62); row(10.4, 15.6, 30.7, 0.55, 0.65, 0.62); row(22.7, 29.3, 30.55, 0.55, 0.65, 0.62); // trimmed hedges before the yards
-    const srcs = []; gl.bush.scene.updateMatrixWorld(true); gl.bush.scene.traverse((o) => { if (o.isMesh) srcs.push(o); });
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sv = new THREE.Vector3();
+  // gardens: trimmed hedges ("Shrub tiles pack", LOLIPOP, CC BY; 1.77 m tiles that join seamlessly) — tall ones
+  // behind the lot walls, low ones before the house yards
+  if (gl.hedge) {
+    const segs = [];
+    const run = (x0, x1, z, h) => { const L = 1.77 * h / 0.9 * 0.95; for (let x = x0 + L / 2; x <= x1 - L / 2 + 0.01; x += L) segs.push([x, z, h]); };
+    run(-37.6, -29, 30.75, 1.5); run(-22.9, -17, 31.6, 1.35); run(16.3, 22, 30.75, 1.5); run(30, 37.6, 30.75, 1.5); run(6.1, 9.8, 30.7, 1.1);
+    run(-16.3, -9.7, 30.55, 0.8); run(10.3, 15.7, 30.7, 0.8); run(22.6, 29.4, 30.55, 0.8);
+    const srcs = []; gl.hedge.scene.updateMatrixWorld(true); gl.hedge.scene.traverse((o) => { if (o.isMesh) srcs.push(o); });
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sv = new THREE.Vector3();
     for (const src of srcs) {
-      const im = new THREE.InstancedMesh(src.geometry, src.material, spots.length);
-      spots.forEach(([x, z, ry, s], i) => { e.set(0, ry, 0); q.setFromEuler(e); p.set(x, 0, z); sv.set(s, s * (s < 0.7 ? 1.1 : 1), s); m4.compose(p, q, sv).multiply(src.matrixWorld); im.setMatrixAt(i, m4); });
+      const im = new THREE.InstancedMesh(src.geometry, src.material, segs.length);
+      segs.forEach(([x, z, h], i) => { const k = h / 0.9; p.set(x, 0, z); sv.set(k, k, k); m4.compose(p, q, sv).multiply(src.matrixWorld); im.setMatrixAt(i, m4); });
       im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); scene.add(im);
     }
   }
