@@ -1,7 +1,7 @@
 // Details for the south street walked every morning and evening (player request: a richer street).
 // A Japanese residential street has no raised sidewalk: white edge lines, a green walking strip on the
-// school-route side, gutters with grates, manholes, a zebra crossing with 止まれ, a stop sign and a curve
-// mirror, bicycles parked by the konbini and the dorm, potted plants by the doors, a kei truck at the kerb.
+// school-route side, gutters with grates, manholes, a zebra crossing with 止まれ, a stop sign, a curve
+// mirror (model), bicycles parked by the konbini and the dorm, potted plants by the doors, a kei truck at the kerb.
 // Models (CC BY, Sketchfab): "Low Poly Bicycles" (EdwiixGG), "Simple Kei Truck" (Spookyghostboo, maker
 // emblem removed), "Optimized Potted Plants" (Nicholas-3D). Everything else is drawn here.
 import * as THREE from 'three';
@@ -58,13 +58,6 @@ export function buildStreetDetails(scene, gl) {
   for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + 0.38) / 0.76, (pos.getY(i) + 0.44) / 0.66);
   const stop = new THREE.Mesh(stopGeo, new THREE.MeshStandardMaterial({ map: stopTex, side: THREE.DoubleSide, roughness: 0.6 }));
   stop.position.set(S.crossX - 2.2, 2.2, 28.71); stop.rotation.y = Math.PI; scene.add(stop);
-  const orange = new THREE.MeshStandardMaterial({ color: '#e8742a', roughness: 0.6 });
-  pole(-29.2, 28.9, 2.9, orange);
-  const mirror = new THREE.Group(); mirror.position.set(-29.2, 2.75, 28.75); mirror.rotation.y = Math.PI + 0.6; scene.add(mirror);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.05, 8, 28), orange); mirror.add(rim);
-  const glass = new THREE.Mesh(new THREE.SphereGeometry(0.36, 20, 12, 0, Math.PI * 2, 0, 0.6), new THREE.MeshStandardMaterial({ color: '#c8d6dc', metalness: 0.95, roughness: 0.08 }));
-  glass.rotation.x = Math.PI / 2; glass.position.z = -0.25; glass.scale.set(1, 1, 0.5); mirror.add(glass);
-
   // models: bicycles (three colours) by the konbini and the dorm, plants by the doors, a kei truck
   const place = (gltf, list, tint) => {
     if (!gltf) return;
@@ -81,6 +74,10 @@ export function buildStreetDetails(scene, gl) {
   const bikeTint = ['#c8352d', '#e0e0dc', '#3a6fb0', '#2f8f57'];
   place(gl.bicycle, [[-3.4, 29.15, 0.08], [-2.7, 29.2, -0.05], [-28.2, 29.25, 0.1], [-27.5, 29.3, -0.08]], bikeTint);
   place(gl.kei_truck, [[15.5, 22.7, Math.PI / 2]]);
+  // curve mirror (カーブミラー) with its 注意 plate at the dorm corner, turned to the street ("Japanese Road Signs", Yanis, CC BY)
+  place(gl.curve_mirror, [[-29.2, 28.95, Math.PI - 0.5]]);
+  // the mirror face is metal with nothing to reflect (black): make it a bright, slightly blue convex glass
+  scene.traverse((o) => { if (o.isMesh && o.material && /^Mirror(\.|$)/.test(o.material.name || '')) { o.material = o.material.clone(); o.material.color.set('#cfdbe2'); o.material.metalness = 0.25; o.material.roughness = 0.12; } });
   buildYards(scene, gl);
 }
 

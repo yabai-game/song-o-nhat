@@ -39,7 +39,7 @@ function pipePile(parent, x, y, z, rows, cols, len, ry = 0, r = 0.09, color = '#
   return mesh;
 }
 
-const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight', 'trash_bags', 'bicycle', 'kei_truck', 'bush'];
+const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight', 'trash_bags', 'bicycle', 'kei_truck', 'bush', 'curve_mirror'];
 const KONBINI_Z = 33.3;                  // mini mart lot centre: its 7.7 m deep lot fronts the sidewalk (z ≈ 29.4)
 const KONBINI_SIGN = { z: KONBINI_Z - 3.2 }; // shop front (for the light spilling out at night)
 const DORM_Z = 33.3;                     // dorm model centre: its 7.3 m deep block fronts the sidewalk (z ≈ 29.7)
