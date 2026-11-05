@@ -40,6 +40,7 @@ export function deltaChips(list) {
 // name tags and bubbles projected each frame
 const _v = new THREE.Vector3();
 export class Overhead {
+  static MAX_BUBBLES = 2;
   constructor() { this.items = []; }
   tag(obj, text, me = false, y = 1.95) {
     const el = document.createElement('div'); el.className = 'tag' + (me ? ' me' : ''); el.textContent = text;
@@ -47,11 +48,19 @@ export class Overhead {
     const it = { el, obj, y, kind: 'tag' }; this.items.push(it); return it;
   }
   say(obj, text, sec = 3, y = 1.95) {
+    const [jp, vi] = String(text).split(' — ');
+    // less clutter (player feedback): skip a bubble that repeats the tip card at the top
+    const tip = document.getElementById('sh-tip');
+    if (tip && !tip.hidden && tip.querySelector('b') && tip.querySelector('b').textContent.trim() === jp.trim()) return;
     // one bubble per character: replace the previous
     for (const it of this.items) if (it.kind === 'bubble' && it.obj === obj) { it.t = 0; }
+    // at most two bubbles on screen: the oldest other one goes
+    const live = this.items.filter((it) => it.kind === 'bubble' && it.t > 0 && it.obj !== obj);
+    if (live.length >= Overhead.MAX_BUBBLES) live.slice(0, live.length - Overhead.MAX_BUBBLES + 1).forEach((it) => { it.t = 0; });
+    // short shouts (no translation) pass quickly; nothing lingers longer than 4 s
+    sec = Math.min(vi ? 4 : 2, sec);
     const el = document.createElement('div'); el.className = 'bubble';
-    const [jp, vi] = String(text).split(' — ');
-    el.innerHTML = vi ? `<span class="jp">${esc(jp)}</span>\n${esc(vi)}` : esc(text);
+    el.innerHTML = vi ? `<span class="jp">${esc(jp)}</span><span class="vi">${esc(vi)}</span>` : esc(text);
     $('tags').appendChild(el);
     this.items.push({ el, obj, y: y + 0.45, kind: 'bubble', t: sec });
   }

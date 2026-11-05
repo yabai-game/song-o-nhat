@@ -392,7 +392,11 @@ export class CareShift {
     }
     if (this.endT >= 0) { this.endT -= dt; if (this.endT < 0) this.win(); }
 
-    // residents turn towards the player when near; their tags show the Japanese line and satisfaction
+    // residents turn towards the player when near. Less clutter (player feedback): only the nearest resident
+    // in reach shows the full Japanese line + satisfaction; the others show ❗ when they need help; none during
+    // the opening shot
+    let focus = -1, fd = NEAR_TAG;
+    this.spots.forEach((sp, n) => { const d = Math.hypot(pos.x - sp.x, pos.z - sp.z); if (d < fd) { fd = d; focus = n; } });
     s.folk.forEach((f, i) => {
       const ch = this.who.folk[i], sp = this.spots[i], d = Math.hypot(pos.x - sp.x, pos.z - sp.z);
       const isUrgent = !!(s.urgent && s.urgent.i === i);
@@ -420,14 +424,16 @@ export class CareShift {
       } else if (f.need) {
         const jpLine = f.jp || NEEDS[f.need].jp;
         const viLine = f.hintShown ? `\n（${NEEDS[f.need].vi}）` : '';
-        txt = d < NEAR_TAG ? `${jpLine}${viLine}\n${pill}` : `❗ ${satPct}%`;
-      } else if (d < 2.6) {
+        txt = i === focus ? `${jpLine}${viLine}\n${pill}` : '❗';
+      } else if (i === focus && d < 2.6) {
         txt = pill;
       }
+      if (this.intro > 0 && !isUrgent) txt = '';
       const it = this.tags[i];
       if (it) {
         it.el.classList.toggle('urgent', isUrgent);
-        if (it.text !== txt) { it.text = txt; it.el.textContent = txt; it.el.hidden = !txt; it.w = 0; }
+        if (it.text !== txt) { it.text = txt; it.el.textContent = txt; it.w = 0; }
+        if (it.el.hidden !== !txt) it.el.hidden = !txt; // empty tags (created blank) stay hidden
       }
     });
 
