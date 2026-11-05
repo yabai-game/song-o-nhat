@@ -873,7 +873,7 @@ const CREDITS = [
   ['Khăn', 'Folded Towel', 'Nicothin', 'c5f9e72edf7d4b5eaa2ec9b95c3b099d', 'CC BY 4.0'],
   ['Xe đạp', 'Low Poly Bicycles', 'EdwiixGG', 'c256e970e2874ad0ac04dcef730863af', 'CC BY 4.0'],
   ['Xe tải nhỏ', 'Simple Kei Truck', 'Spookyghostboo', 'fb477a6082c5442ca060dfcdf8eae928', 'CC BY 4.0'],
-  ['Chậu cây', 'Optimized Potted Plants', 'Nicholas-3D', '967b4bf23fac4098993776fcfc2d3318', 'CC BY 4.0'],
+  ['Bụi cây', 'Stylized Bush', 'Daniel (danielpetrov)', '9d9ce79d3ae040619e96d5b22c7de1a6', 'CC BY 4.0'],
   ['Bồn rửa inox', 'Low poly commercial sink', 'christian', '2d0cade455614fd989b2e81878fd7764', 'CC BY 4.0'],
   ['Khay inox đựng món', 'Gastronorm_Basic_1_2', 'MPS Porcellane di Saronno', '9fec684962424c8186b075dd99f9bef6', 'CC BY 4.0'],
 ];

@@ -415,6 +415,8 @@ export class CareShift {
           ch.yaw += dy * Math.min(1, dt * (this.anim && this.anim.i === i ? 6 : 2));
         }
       }
+      const wc = this.stage.wheels && this.stage.wheels[i];
+      if (wc) wc.rotation.y = ch.yaw; // the wheelchair turns with its resident (it stays put while they stand up)
       const satPct = Math.round(f.sat);
       const heart = f.sat >= 50 ? '💗' : f.sat >= 30 ? '🧡' : '💔';
       const pill = `${heart} Độ hài lòng • ${satPct}%`;

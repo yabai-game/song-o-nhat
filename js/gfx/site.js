@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, signTexture, makeSun, skyDome, loadModel, loadBrand, BRAND_ASPECT } from './stage.js';
-import { STREET, asphaltTexture, buildStreetDetails } from './street.js';
+import { STREET, asphaltTexture, lotTexture, buildStreetDetails } from './street.js';
 import { SITE, PIPE_KINDS, PIPE_ORDER } from '../core/site_rules.js';
 import { buildBackdrop } from './backdrop.js';
 
@@ -39,7 +39,7 @@ function pipePile(parent, x, y, z, rows, cols, len, ry = 0, r = 0.09, color = '#
   return mesh;
 }
 
-const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight', 'trash_bags', 'bicycle', 'kei_truck', 'pot_tall', 'pot_box', 'pot_round'];
+const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight', 'trash_bags', 'bicycle', 'kei_truck', 'bush'];
 const KONBINI_Z = 33.3;                  // mini mart lot centre: its 7.7 m deep lot fronts the sidewalk (z ≈ 29.4)
 const KONBINI_SIGN = { z: KONBINI_Z - 3.2 }; // shop front (for the light spilling out at night)
 const DORM_Z = 33.3;                     // dorm model centre: its 7.3 m deep block fronts the sidewalk (z ≈ 29.7)
@@ -137,7 +137,8 @@ export async function buildSite() {
   // dirt only inside the site fence; the suburb around stands on plain lots, the town beyond on a street grid
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(56, 52), new THREE.MeshStandardMaterial({ map: dirt, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(0, 0.004, -4); ground.receiveShadow = true; scene.add(ground);
-  const lots = new THREE.Mesh(new THREE.PlaneGeometry(116, 106), new THREE.MeshStandardMaterial({ color: '#a29f96', roughness: 1 }));
+  const lotTex = lotTexture(); lotTex.repeat.set(116 / 4, 106 / 4); // 4 m concrete slabs with joints
+  const lots = new THREE.Mesh(new THREE.PlaneGeometry(116, 106), new THREE.MeshStandardMaterial({ map: lotTex, roughness: 1 }));
   lots.rotation.x = -Math.PI / 2; lots.position.set(0, -0.01, -5); lots.receiveShadow = true; scene.add(lots);
   dirt.repeat.set(8, 8);
   // compacted gravel yard under and in front of the scaffold

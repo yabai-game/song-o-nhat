@@ -107,8 +107,12 @@ export async function buildCare() {
   const chairs = [];
   for (const [x, z] of CARE_ROOM.tables) for (const dx of [-0.6, 0.6]) chairs.push([x + dx, z - 0.95, 0]);
   placeModel(chair, chairs);
-  // wheelchairs: the model faces +z like the residents, so it takes the same turn
-  placeModel(wheel, CARE_ROOM.folk.map(([x, z, ry]) => [x, z, ry, 1]));
+  // wheelchairs: one object per resident (the model faces +z like them) so it can turn with its resident
+  const wheels = CARE_ROOM.folk.map(([x, z, ry]) => {
+    const w = wheel.scene.clone(true); w.position.set(x, 0, z); w.rotation.y = ry;
+    w.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(w); return w;
+  });
   placeModel(plant, [[-7.9, -5.8, 0, 1.05], [8, -6, 1.2, 1.1]]);
   placeModel(cart, [[6.6, -3.8, -0.4, 1]]);
   placeModel(plant, [[-5.2, -6.2, 0.6, 0.9], [7.2, -6.1, 2.1, 0.8]]); // by the window curtain and the sideboard
@@ -136,7 +140,7 @@ export async function buildCare() {
   blocks.push({ x: -8.1, z: -3.2, r: 0.7 }, { x: -7.9, z: -5.8, r: 0.45 }, { x: 8, z: -6, r: 0.45 }, { x: 6.6, z: -3.8, r: 0.7 });
 
   return {
-    scene, sun, blocks,
+    scene, sun, blocks, wheels,
     showcase: { pos: new THREE.Vector3(...CARE_ROOM.showcase.pos), look: new THREE.Vector3(...CARE_ROOM.showcase.look) },
     towel, // the towel model, cloned for the wipe action
     update() {
