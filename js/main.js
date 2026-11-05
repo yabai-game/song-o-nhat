@@ -869,6 +869,11 @@ const CREDITS = [
   ['Đèn đá', 'Japanese Stone Lantern', 'Sahir Virmani', 'e0417d1e05984727a50f9ab1451d162d', 'CC BY 4.0'],
   ['Đền', 'Japanese shrine', 'GreenG', '56baeb7b13ba4238a2f54c363e7a3e0b', 'CC BY 4.0'],
   ['Futon', 'Japanese futon/bed', 'nicolas_solo', '0d5590d1d2184aa98797c3d6382afd7e', 'CC BY 4.0'],
+  ['Bộ ấm trà', 'Japanese Tea Set', 'Geraldo Pratama Wahyu Teddy', '99c0bcbb59fa4efebbb918df747e86a5', 'CC BY 4.0'],
+  ['Khăn', 'Folded Towel', 'Nicothin', 'c5f9e72edf7d4b5eaa2ec9b95c3b099d', 'CC BY 4.0'],
+  ['Xe đạp', 'Low Poly Bicycles', 'EdwiixGG', 'c256e970e2874ad0ac04dcef730863af', 'CC BY 4.0'],
+  ['Xe tải nhỏ', 'Simple Kei Truck', 'Spookyghostboo', 'fb477a6082c5442ca060dfcdf8eae928', 'CC BY 4.0'],
+  ['Chậu cây', 'Optimized Potted Plants', 'Nicholas-3D', '967b4bf23fac4098993776fcfc2d3318', 'CC BY 4.0'],
   ['Bồn rửa inox', 'Low poly commercial sink', 'christian', '2d0cade455614fd989b2e81878fd7764', 'CC BY 4.0'],
   ['Khay inox đựng món', 'Gastronorm_Basic_1_2', 'MPS Porcellane di Saronno', '9fec684962424c8186b075dd99f9bef6', 'CC BY 4.0'],
 ];

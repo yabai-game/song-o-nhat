@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, signTexture, makeSun, skyDome, loadModel, loadBrand, BRAND_ASPECT } from './stage.js';
+import { STREET, asphaltTexture, buildStreetDetails } from './street.js';
 import { SITE, PIPE_KINDS, PIPE_ORDER } from '../core/site_rules.js';
 import { buildBackdrop } from './backdrop.js';
 
@@ -38,7 +39,7 @@ function pipePile(parent, x, y, z, rows, cols, len, ry = 0, r = 0.09, color = '#
   return mesh;
 }
 
-const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight', 'trash_bags'];
+const MODELS = ['house_beige', 'house_wood', 'house_modern', 'apartment', 'apartment_lo', 'building_wip', 'excavator', 'vending', 'minimart', 'streetlight', 'trash_bags', 'bicycle', 'kei_truck', 'pot_tall', 'pot_box', 'pot_round'];
 const KONBINI_Z = 33.3;                  // mini mart lot centre: its 7.7 m deep lot fronts the sidewalk (z ≈ 29.4)
 const KONBINI_SIGN = { z: KONBINI_Z - 3.2 }; // shop front (for the light spilling out at night)
 const DORM_Z = 33.3;                     // dorm model centre: its 7.3 m deep block fronts the sidewalk (z ≈ 29.7)
@@ -331,12 +332,15 @@ export async function buildSite() {
 
   // ---- Saitama suburb: streets, houses ("Japanese Residential Home" 01–03 by Morrissey Alexander, CC BY),
   // tower blocks, street trees, far city ----
-  const asphalt = M('#5d5f61', { roughness: 0.95 }), lineM = new THREE.MeshBasicMaterial({ color: '#e8e4d6' });
-  for (const [x, z, w, d] of [[0, -34, 130, 7], [35, -6, 7, 62], [-35, -6, 7, 62], [0, 25, 77, 7]]) {
-    const r = new THREE.Mesh(new THREE.PlaneGeometry(w, d), asphalt); r.rotation.x = -Math.PI / 2; r.position.set(x, 0.02, z); r.receiveShadow = true; scene.add(r);
+  const lineM = new THREE.MeshBasicMaterial({ color: '#e8e4d6' });
+  for (const [x, z, w, d] of [[0, -34, 130, 7], [35, -6, 7, 62], [-35, -6, 7, 62], [0, STREET.z, 77, 7]]) {
+    const tex = asphaltTexture(); tex.repeat.set(w / 6, d / 6);
+    const r = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 })); r.rotation.x = -Math.PI / 2; r.position.set(x, 0.02, z); r.receiveShadow = true; scene.add(r);
+    if (z === STREET.z) continue; // the south street gets edge lines, a dashed centre line and more (street.js)
     const line = new THREE.Mesh(new THREE.PlaneGeometry(w > d ? w : 0.12, w > d ? 0.12 : d), lineM);
     line.rotation.x = -Math.PI / 2; line.position.set(x, 0.03, z); scene.add(line);
   }
+  buildStreetDetails(scene, gl);
   // near rows (east and west in the shift's walking direction, and the south street walked every morning
   // and evening) use the detailed houses; the far north row uses the light ones
   const beigeN = [], woodN = [], beigeF = [], woodF = [];
@@ -680,6 +684,7 @@ export async function buildSite() {
   }
   poleLine([[-50, -30.5], [-36, -30.5], [-22, -30.5], [-8, -30.5], [6, -30.5], [20, -30.5], [34, -30.5], [48, -30.5]]);
   poleLine([[31.5, 18], [31.5, 4], [31.5, -10], [31.5, -24]]);
+  poleLine([[-26, 21.45], [-12.5, 21.45], [13.5, 21.45], [26, 21.45]]); // along the south street (clear of the gate and the fence logos)
   poleLine([[-31.5, 18], [-31.5, 4], [-31.5, -10], [-31.5, -24]]);
 
   // ---- gameplay props on the deck: 3 pipe stacks (short/med/long) on the left and 3 rack slots (A/B/C) on the right ----
