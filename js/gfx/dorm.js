@@ -11,10 +11,11 @@ export const DORM = {
   stove: { x: 1.78, z: -1.25 },    // in front of the kitchenette gas stove
   door: { x: 2.2, z: 1.65 },       // genkan
   bounds: { x0: -2.4, x1: 2.45, z0: -1.95, z1: 2.1 },
-  blocks: [{ x: 1.25, z: 0.75, r: 0.62 }, { x: -2.0, z: -1.75, r: 0.55 }, { x: 1.96, z: -1.88, r: 0.48 }],
+  blocks: [{ x: 1.25, z: 0.75, r: 0.62 }, { x: -2.0, z: -1.75, r: 0.55 }, { x: 1.96, z: -1.88, r: 0.48 }, { x: 2.16, z: -0.35, r: 0.42 }, { x: -1.78, z: 0.6, r: 0.4 }],
+  washer: { x: 1.65, z: -0.35 },   // stand here to use the washing machine (S16 laundry)
 };
 
-/** models = { lowtable, gas_stove } (glTF, optional): community models placed in the room */
+/** models = { lowtable, gas_stove, futon, washing_machine, drying_rack, rice_cooker, cooking_pot } (glTF, optional) */
 export function buildDorm(models = {}) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#2a211b');
@@ -101,6 +102,32 @@ export function buildDorm(models = {}) {
     scene.add(st);
   } else {
     put(B(0.58, 0.14, 0.44), col('#3a3f45'), stovePos.x, stovePos.y + 0.07, stovePos.z);
+  }
+  const prop = (m, x, y, z, ry = 0, s = 1) => {
+    if (!m) return null;
+    const o = m.scene.clone(true); o.traverse((c) => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+    o.position.set(x, y, z); o.rotation.y = ry; o.scale.setScalar(s); scene.add(o); return o;
+  };
+  // cooking pot on the gas stove, on top of the stove model's own height
+  if (models.cooking_pot) {
+    let top = stovePos.y + 0.14;
+    if (models.gas_stove) { const bb = new THREE.Box3().setFromObject(scene.children[scene.children.length - 1]); if (isFinite(bb.max.y)) top = bb.max.y; }
+    prop(models.cooking_pot, stovePos.x - 0.1, top, stovePos.z + 0.02, 0.4);
+  }
+  // rice cooker (炊飯器) on a small shelf next to the kitchenette — every trainee room has one
+  put(B(0.42, 0.5, 0.36), col('#b88958'), 1.18, 0.25, -1.96);
+  put(B(0.44, 0.03, 0.38), col('#9e7144'), 1.18, 0.515, -1.96);
+  prop(models.rice_cooker, 1.18, 0.53, -1.94, 0.2);
+  // washing machine (洗濯機) against the right wall, door towards the room (S16 laundry)
+  prop(models.washing_machine, 2.16, 0, -0.35, -Math.PI / 2);
+  // folding drying rack (物干しスタンド) on the left side; clothes hang on it while laundry dries indoors (rainy days)
+  prop(models.drying_rack, -1.78, 0, 0.6, Math.PI / 2, 0.75);
+  const drying = new THREE.Group(); drying.visible = false; scene.add(drying);
+  for (const [dz, c, w, h] of [[-0.55, '#3b6ea8', 0.34, 0.42], [-0.15, '#f4f1ea', 0.3, 0.36], [0.25, '#c0504d', 0.32, 0.4], [0.62, '#5f7f58', 0.22, 0.3]]) {
+    for (const dx of [-0.2, 0.2]) {
+      const cl = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: c, roughness: 0.95, side: THREE.DoubleSide }));
+      cl.position.set(-1.78 + dx, 0.72 - h / 2, 0.6 + dz); cl.rotation.y = Math.PI / 2; cl.rotation.z = dx * 0.6; drying.add(cl);
+    }
   }
   // rising steam particles above the stove pots (visible during stir-frying)
   const steamGroup = new THREE.Group();
@@ -191,6 +218,8 @@ export function buildDorm(models = {}) {
 
   return {
     scene, sun, onigiri, steamGroup,
+    /** laundry drying indoors on the rack (S16: rainy-day washing) */
+    setDrying(on) { drying.visible = !!on; },
     /** 'day' (morning light through the window) or 'night' (dark window, ceiling lamp on) */
     setTime(which) {
       const night = which === 'night';

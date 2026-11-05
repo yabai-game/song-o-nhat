@@ -84,8 +84,8 @@ async function boot() {
     G.stages.care = care;
     G.stages.bento = bento;
     G.stages.lotus = lotus;
-    const [lowtable, gas_stove, brandWhite, futon] = await Promise.all([loadModel('lowtable'), loadModel('gas_stove'), loadBrand('white'), loadModel('futon')]);
-    G.stages.dorm = buildDorm({ lowtable, gas_stove, brandWhite, futon });
+    const [lowtable, gas_stove, brandWhite, futon, washing_machine, drying_rack, rice_cooker, cooking_pot] = await Promise.all([loadModel('lowtable'), loadModel('gas_stove'), loadBrand('white'), loadModel('futon'), loadModel('washing_machine'), loadModel('drying_rack'), loadModel('rice_cooker'), loadModel('cooking_pot')]);
+    G.stages.dorm = buildDorm({ lowtable, gas_stove, brandWhite, futon, washing_machine, drying_rack, rice_cooker, cooking_pot });
     $('bar').style.width = '100%';
     G.controls = new Controls($('joy'));
     G.shift = new SiteShift({ site: G.stages.site, controls: G.controls, overhead: G.overhead, camRig: G.camRig });
@@ -1804,6 +1804,10 @@ const CREDITS = [
   ['Futon', 'Japanese futon/bed', 'nicolas_solo', '0d5590d1d2184aa98797c3d6382afd7e', 'CC BY 4.0'],
   ['Bộ ấm trà', 'Japanese Tea Set', 'Geraldo Pratama Wahyu Teddy', '99c0bcbb59fa4efebbb918df747e86a5', 'CC BY 4.0'],
   ['Khăn', 'Folded Towel', 'Nicothin', 'c5f9e72edf7d4b5eaa2ec9b95c3b099d', 'CC BY 4.0'],
+  ['Máy giặt', '[Stylized] Washing machine', 'metrosp', '5ee9aa73c0344183ac2b14355b32e5ed', 'CC BY 4.0'],
+  ['Giá phơi đồ', 'Drying Rack FREE Low Poly', 'LadyLionStudios', 'b2bcc6bd61d24d4b843fa78f75a4a8ca', 'CC BY 4.0'],
+  ['Nồi cơm điện', 'Rice Cooker', 'AyunFat', '3f70c8b7cf704bdb952e09c0d5f5ab65', 'CC BY 4.0'],
+  ['Nồi', 'Kitchen Cooking Pot', 'Replexx', 'c2acd4b4956c4a04a7bd7402bf918743', 'CC BY 4.0'],
   ['Xe đạp', 'Low Poly Bicycles', 'EdwiixGG', 'c256e970e2874ad0ac04dcef730863af', 'CC BY 4.0'],
   ['Xe tải nhỏ', 'Simple Kei Truck', 'Spookyghostboo', 'fb477a6082c5442ca060dfcdf8eae928', 'CC BY 4.0'],
   ['Hàng rào cây', 'Shrub tiles pack (3 vars, seamless)', 'LOLIPOP', 'ce2fce219f634f328abc6280b2409613', 'CC BY 4.0'],
@@ -1972,6 +1976,7 @@ function frame() {
   if (G.mode === 'evening') G.evening.update(dt, t);
   if (G.mode === 'market') G.market.update(dt, t);
   if (G.mode === 'dayoff') G.dayoff.update(dt, t);
+  if (G.stageId === 'dorm') st.setDrying?.(!!G.S?.home?.drying); // clothes on the rack while laundry dries indoors
   if (G.streetCrowd) {
     const onStreet = G.stageId === 'site' && (G.mode === 'morning' || G.mode === 'evening' || G.mode === 'dayoff');
     G.streetCrowd.setVisible(onStreet);
