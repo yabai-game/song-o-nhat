@@ -1,9 +1,14 @@
 // Morning before work: wake up in the dorm, walk out, walk along the street to the site gate.
-// Care home job: walk to the station at the east end of the street, wait on the platform behind the
-// yellow line, ride the train, then walk into the care home and greet the nurse.
+// Care home / bento / lotus job: walk to the station at the east end of the street, check the
+// timetable (時刻表), wait on the platform behind the yellow line, ride the train, then walk into
+// the workplace and greet the supervisor/nurse.
 // Rules and stat effects live in core/morning.js; this module drives the 3D scenes and the HUD.
 import * as THREE from 'three';
-import { MORNING, createMorning, clock, wake, tick, act, leaveRoom, arrive, toPlatform, board, alight } from '../core/morning.js';
+import {
+  MORNING, createMorning, clock, wake, tick, act, leaveRoom, arrive,
+  toPlatform, board, alight, nextTrain, followingTrain, lastSafeTrain,
+  missTrain, delayToday, takeDelayCert,
+} from '../core/morning.js';
 import { applyFx, save } from '../core/state.js';
 import { KINDS, DAY_JP, TRASH_MIN, createSort, answer, result, rng } from '../core/trash_rules.js';
 import { SEASONS, weekday, weatherOf, weatherFx } from '../core/calendar.js';
@@ -28,13 +33,14 @@ const BUTTONS = [
   { id: 'drink', icon: '🥤', label: 'Mua nước', jp: '自販機' },
   { id: 'greet', icon: '🙋', label: 'Chào', jp: 'おはよう' },
   { id: 'run', icon: '🏃', label: 'Chạy', jp: '走る' },
+  { id: 'cert', icon: '📄', label: 'Lấy 遅延証明書', jp: '遅延証明書' },
   { id: 'board', icon: '🚃', label: 'Lên tàu', jp: '乗る', main: true },
 ];
 const SHOW = {
   wake: ['wake', 'snooze'],
   room: ['out', 'eat', 'trash'],
   street: ['drop', 'greet', 'drink', 'run'],
-  platform: ['board'],
+  platform: ['cert', 'board'],
   ride: [],
   walkin: ['greet'],
 };
@@ -97,27 +103,32 @@ export class MorningWalk {
       if (!this.active) return;
       const ph = this.st.phase;
       if (e.code === 'Space' || e.code === 'Digit1') { e.preventDefault(); this.action(ph === 'wake' ? 'wake' : ph === 'room' ? (this.near(DORM.table) ? 'eat' : 'out') : ph === 'platform' ? 'board' : ph === 'walkin' ? 'greet' : this.nearV() ? 'drink' : 'greet'); }
-      if (e.code === 'Digit2' || e.code === 'ShiftLeft') this.action(this.st.phase === 'wake' ? 'snooze' : 'run');
+      if (e.code === 'Digit2' || e.code === 'ShiftLeft') this.action(this.st.phase === 'wake' ? 'snooze' : (this.st.phase === 'platform' ? 'cert' : 'run'));
     });
   }
 
   /** stages = { dorm, site }; who = { player, suzuki, hung }; setStage(id) switches the rendered scene */
   /** commute: 'walk' (street to the site gate) or 'train' (dorm → station → care home / bento factory, 22 min) */
-  start({ S, stages, who, setStage, dayLabel, onEnd, commute = 'walk', walkin = null, demoTrash = false, storage = null }) {
-    Object.assign(this, { S, stages, who, setStage, onEnd, commute, demoTrash: !!demoTrash, storage });
+  start({ S, stages, who, setStage, dayLabel, onEnd, commute = 'walk', walkin = null, demoTrash = false, demoDelay = null, onResetCrowd = null, storage = null }) {
+    Object.assign(this, { S, stages, who, setStage, onEnd, commute, demoTrash: !!demoTrash, demoDelay, onResetCrowd, storage });
     this.walkin = walkin || walkinFor(S && S.job, stages);
-    this.st = createMorning();
+    const cal = S?.cal || { year: 1, season: 0, day: ((S?.story || 0) % 28) + 1 };
+    const weather = S?.cal ? weatherOf(S.cal, S?.seed || 1) : 'sunny';
+    const dInfo = commute === 'train' ? (demoDelay || delayToday(cal, weather, S?.seed || 1)) : null;
+    this.st = createMorning({ delay: dInfo, useTimetable: commute === 'train' });
     this.active = true; this.paused = false; this.running = false; this.rise = -1; this.busy = 0; this.bestD = Infinity; this.stuckT = 0;
     this.platT = 0; this.rideT = -1; this.boarding = false; this.warned = false; this.greetT = -1; this.pendingGreet = false;
     this.sorted = false; this.carryingBag = false; this.trashSt = null; this.pendingDrop = false;
     this.ridingBike = false; this.policeChecked = false;
+    this.curTrain = null; this.doorCloseT = -1; this.arrivedSent = false; this.melodyShown = false;
+    this.hurryWarned = false; this.delayGateTipShown = false;
     if (this.stages.site) {
       if (this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
       if (this.stages.site.setTrashDropped) this.stages.site.setTrashDropped(false);
     }
     // swap the shift buttons for the morning ones
     const box = $('acts'); this.saved = [...box.children]; box.replaceChildren(...this.mine);
-    show('shifthud'); show('sh-gust', false);
+    show('shifthud'); show('sh-gust', false); show('sh-ticket', false);
     $('sh-rank').textContent = dayLabel;
     this.enterRoom();
     if (this.demoTrash) {
@@ -140,7 +151,7 @@ export class MorningWalk {
     if (this.stages.station) this.stages.station.sendTrain('reset');
     if (this.stages.site && this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
     $('acts').replaceChildren(...this.saved);
-    show('shifthud', false); show('sh-tip', false);
+    show('shifthud', false); show('sh-tip', false); show('sh-ticket', false);
     this.btn.run.classList.remove('on');
   }
 
@@ -162,10 +173,44 @@ export class MorningWalk {
   }
   hud() {
     const s = this.st, g = $('sh-goal');
-    const late = s.min > MORNING.CHOREI, close = s.min > MORNING.EARLY;
-    const txt = `⏰ ${clock(s.min)} · 朝礼 ${clock(MORNING.CHOREI)}${late ? ' · muộn rồi!' : ''}`;
+    const isTrain = this.commute === 'train';
+    const safeTrain = isTrain ? lastSafeTrain(0) : null;
+    const remSafe = safeTrain ? (safeTrain.schedDep - s.min) : 99;
+    const hurry = isTrain && (s.phase === 'street' || s.phase === 'room') && remSafe >= 0 && remSafe <= 3;
+    const missedLastSafe = isTrain && (s.phase === 'street' || s.phase === 'platform') && s.min > (safeTrain ? safeTrain.dep : MORNING.CHOREI);
+    const late = s.min > MORNING.CHOREI;
+    const close = s.min > MORNING.EARLY || hurry || missedLastSafe;
+
+    let trainPill = '';
+    if (isTrain && s.phase === 'street') {
+      const nt = nextTrain(s.min, s.delay || 0);
+      trainPill = ` · 🚃 次 ${nt.label}${s.delay ? ` (+${s.delay}p)` : ''}${hurry ? ' · 急いで！' : ''}`;
+      if (hurry && !this.hurryWarned) {
+        this.hurryWarned = true;
+        this.tip('急いで！', `Còn ≤ 3 phút tới chuyến cuối kịp giờ (${safeTrain.label}) — nhanh chân ra ga!`, 4.5);
+      }
+    }
+
+    const txt = `⏰ ${clock(s.min)} · 朝礼 ${clock(MORNING.CHOREI)}${trainPill}${late ? ' · muộn rồi!' : ''}`;
     if (g.textContent !== txt) g.textContent = txt;
     g.classList.toggle('warn', close);
+
+    // Electronic departure board on the platform (#sh-ticket)
+    const tk = $('sh-ticket');
+    if (tk) {
+      if (s.phase === 'platform') {
+        const t1 = this.curTrain || nextTrain(s.min, s.delay || 0);
+        const t2 = followingTrain(t1.dep, s.delay || 0);
+        const delayTag = s.delay > 0 ? ` · 🚨遅れ+${s.delay}分 (${s.delayReasonJp})` : (t1.crowded ? ' (混雑)' : '');
+        const certTag = s.delayCert ? ' · 📄済' : '';
+        const boardTxt = `🚉 次発 ${t1.label} 普通${delayTag} · 次々発 ${t2.label}${certTag}`;
+        if (tk.textContent !== boardTxt) tk.textContent = boardTxt;
+        tk.hidden = false;
+      } else {
+        tk.hidden = true;
+      }
+    }
+
     for (const a of BUTTONS) this.btn[a.id].hidden = !SHOW[s.phase].includes(a.id);
     if (s.phase === 'room') {
       this.btn.eat.disabled = s.ate;
@@ -190,6 +235,9 @@ export class MorningWalk {
       const stopped = this.stages.station.trainState() === 'stopped';
       this.btn.board.disabled = !stopped;
       this.btn.board.classList.toggle('hot', stopped);
+      const showCert = s.delay > 0 && !s.delayCert;
+      this.btn.cert.hidden = !showCert;
+      this.btn.cert.classList.toggle('hot', showCert);
     } else if (s.phase === 'walkin') {
       this.btn.greet.classList.toggle('hot', this.near(this.walkin.greeterAt, 2.2));
     }
@@ -269,8 +317,9 @@ export class MorningWalk {
       this.tip('ゴミ集積所', 'Lại gần vòng vàng cạnh cửa ký túc xá rồi bấm 🗑️ Bỏ rác', 5);
     } else if (train) {
       const dest = this.walkin.stage === 'bento' ? 'xưởng' : this.walkin.stage === 'lotus' ? 'ruộng sen' : 'viện';
+      const nt = nextTrain(this.st.min, this.st.delay || 0);
       $('sh-place').querySelector('span').textContent = 'Đường ra ga さくら駅';
-      this.tip('駅はあっち', `Đi bộ tới biển 🚉 さくら駅 ở cuối phố, đi tàu tới ${dest} trước 7:45 (朝礼)`, 5);
+      this.tip('駅はあっち', `Ra ga さくら駅 đón tàu (chuyến kế ${nt.label}, chuyến cuối kịp giờ 7:34) tới ${dest}`, 5);
     } else {
       $('sh-place').querySelector('span').textContent = 'Đường tới công trường';
       this.tip('行ってきます！', 'Đi bộ tới cổng công trường trước 7:45 (họp đầu ca 朝礼)', 5);
@@ -371,7 +420,7 @@ export class MorningWalk {
 
   // ---- train commute, phase 3: the platform of さくら駅 ----
   enterPlatform() {
-    const P = this.who.player, stn = this.stages.station;
+    const P = this.who.player, stn = this.stages.station, s = this.st;
     this.carryingBag = false; P.unpinAll();
     if (this.stages.site && this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
     this.setStage('station'); stn.sendTrain('reset');
@@ -379,17 +428,35 @@ export class MorningWalk {
     this.controls.reset({ yaw: -Math.PI / 2 + 0.5, pitch: 0.3, groundY: STATION.floor, yawLimit: [-Infinity, Infinity] }); // camera on the track side
     this.controls.enabled = true; this.controls.target = null;
     this.platT = 0; this.warned = false; this.boarding = false; this.gated = false;
+    this.curTrain = nextTrain(s.min, s.delay || 0);
+    this.doorCloseT = -1; this.arrivedSent = false; this.melodyShown = false; this.delayGateTipShown = false;
     $('sh-place').querySelector('span').textContent = 'Ga さくら駅 · sân ga 1番線';
-    this.tip('改札を通って', 'Qua cổng soát vé 改札, rồi đứng chờ ở vạch xanh 乗車位置 sau vạch vàng', 5);
+    if (s.delay > 0) {
+      this.tip(
+        `🚨 ただいま電車が${s.delay}分遅れています（${s.delayReasonJp}）`,
+        `Tàu đang chậm ${s.delay} phút (${s.delayReasonVi}) — nhớ bấm 📄 Lấy 遅延証明書 ở cổng soát vé!`,
+        7,
+      );
+    } else {
+      this.tip('改札を通って', `Qua cổng soát vé 改札, đứng chờ chuyến ${this.curTrain.label} ở vạch xanh 乗車位置 sau vạch vàng`, 5);
+    }
     this.camRig.init = false;
   }
   // phase 4: the ride (the camera follows the train out of the station)
   ride() {
     const s = this.st, P = this.who.player, dest = this.walkin.stage === 'bento' ? 'xưởng' : this.walkin.stage === 'lotus' ? 'ruộng sen' : 'viện';
-    board(s); P.holder.visible = false; this.controls.enabled = false; this.controls.target = null;
+    const tr = this.curTrain || nextTrain(s.min, s.delay || 0);
+    const bRes = board(s, tr, this.S);
+    if (!this.demoTrash && this.storage && !this.S?.flags?.demo) save(this.S, this.storage);
+    P.holder.visible = false; this.controls.enabled = false; this.controls.target = null;
     this.stages.station.sendTrain('leave'); this.rideT = 0;
-    show('sh-tip', false);
-    toast('🚃 電車で' + MORNING.TRAIN + '分', `Đi tàu ${MORNING.TRAIN} phút tới ga gần ${dest} · ⏰ ${clock(s.min)}`);
+    show('sh-tip', false); show('sh-ticket', false);
+    const crowdNote = bRes.crowd?.kind === 'rush'
+      ? ' · 満員電車 đông nghẹt (🧠 −2)'
+      : bRes.crowd?.kind === 'quiet'
+        ? ' · Tàu sớm vắng (🧠 +1)'
+        : '';
+    toast(`🚃 Chuyến ${tr.label} (${MORNING.TRAIN} phút)`, `Đi tàu ${MORNING.TRAIN} phút tới ga gần ${dest} · ⏰ ${clock(s.min)}${crowdNote}`, 4);
   }
   // phase 5: into the workplace room, greet the supervisor/nurse
   greeterNpc() {
@@ -431,21 +498,25 @@ export class MorningWalk {
     this.camRig.init = false;
   }
   greetNurse() {
-    const P = this.who.player, N = this.greeterNpc();
+    const P = this.who.player, N = this.greeterNpc(), s = this.st;
     if (this.greetT >= 0) return;
     this.greetT = 0; this.busy = 1.6; P.bendTo = 0.45; setTimeout(() => { P.bendTo = 0; }, 700);
     if (N) {
       P.yaw = Math.atan2(N.holder.position.x - P.holder.position.x, N.holder.position.z - P.holder.position.z);
       N.yaw = Math.atan2(P.holder.position.x - N.holder.position.x, P.holder.position.z - N.holder.position.z);
       N.play('talk');
-      setTimeout(() => this.active && this.overhead.say(N, 'おはよう！今日もよろしくね。 — Chào em! Hôm nay nhờ em nhé.', 3), 600);
+      const excused = s.delay > 0 && s.delayCert && Math.floor(s.min) > MORNING.CHOREI;
+      const line = excused
+        ? '遅延証明書ありがとう。電車大変だったね。 — Cảm ơn giấy xác nhận tàu trễ nhé.'
+        : 'おはよう！今日もよろしくね。 — Chào em! Hôm nay nhờ em nhé.';
+      setTimeout(() => this.active && this.overhead.say(N, line, 3), 600);
     }
-    this.overhead.say(P, 'おはようございます！', 2.2);
+    this.overhead.say(P, s.delay > 0 && s.delayCert && Math.floor(s.min) > MORNING.CHOREI ? 'すみません、遅延証明書です！' : 'おはようございます！', 2.2);
   }
 
   action(id) {
     if (!this.active || this.paused) return;
-    if (this.rise >= 0 || (this.busy > 0 && id !== 'run')) return; // still getting up / eating / buying
+    if (this.rise >= 0 || (this.busy > 0 && id !== 'run' && id !== 'cert')) return; // still getting up / eating / buying
     const S = this.S, s = this.st, P = this.who.player;
     if (id === 'wake' || id === 'snooze') {
       if (s.phase !== 'wake' || this.rise >= 0) return;
@@ -550,6 +621,12 @@ export class MorningWalk {
       this.busy = 0.8; P.yaw = Math.PI;
       this.overhead.say(P, 'ガコン！ 缶コーヒー', 2);
       toast('🥤 Cà phê lon', deltaText(r.deltas));
+    } else if (id === 'cert') {
+      if (s.phase !== 'platform' || !s.delay || s.delayCert) return;
+      takeDelayCert(s);
+      this.overhead.say(P, '遅延証明書をもらった！', 2);
+      toast('📄 Đã lấy 遅延証明書', `Giấy chứng nhận tàu chậm ${s.delay} phút (${s.delayReasonJp}) — nộp cho công ty sẽ không bị tính đi muộn!`, 4.5);
+      this.hud();
     } else if (id === 'board') {
       if (s.phase !== 'platform' || this.boarding || this.stages.station.trainState() !== 'stopped') return;
       this.boarding = true; this.controls.target = new THREE.Vector3(STATION.door.x, 0, STATION.door.z);
@@ -584,7 +661,12 @@ export class MorningWalk {
     const place = this.commute === 'train' ? (this.walkin.stage === 'bento' ? 'xưởng cơm hộp' : this.walkin.stage === 'lotus' ? 'ruộng sen' : 'viện dưỡng lão') : 'công trường';
     card(`<h2>Bỏ qua buổi sáng?</h2><p>Đi thẳng tới ${place}, đến vừa kịp giờ.</p>`, [
       { label: 'Đi tiếp', on: () => { this.paused = false; } },
-      { label: 'Bỏ qua →', cls: 'ghost', on: () => { this.st.phase = 'street'; this.st.min = Math.min(this.st.min, MORNING.CHOREI - 3); this.finish(); } },
+      { label: 'Bỏ qua →', cls: 'ghost', on: () => {
+        this.st.phase = 'street';
+        if (this.commute === 'train' && !this.st.trainTaken) this.st.trainTaken = '7:28';
+        this.st.min = Math.min(this.st.min, MORNING.CHOREI - 3);
+        this.finish();
+      } },
     ]);
   }
 
@@ -593,36 +675,125 @@ export class MorningWalk {
     this.carryingBag = false; P.unpinAll();
     if (this.stages.site && this.stages.site.trashRing) this.stages.site.trashRing.visible = false;
     this.paused = true;
-    const head = r.kind === 'early' ? '👍 Đến sớm 5 phút' : r.kind === 'ontime' ? '🙂 Vừa kịp giờ' : '😓 Đến muộn';
-    const lesson = r.kind === 'late'
-      ? 'Ở Nhật, “đúng giờ” nghĩa là có mặt trước giờ hẹn. Đến muộn họp đầu ca là cả đội phải chờ bạn.'
-      : r.kind === 'early' ? '5分前行動 (gofun-mae kōdō): có mặt trước 5 phút — người Nhật rất quý điều này.' : 'Lần sau thử đến sớm hơn 5 phút nhé (5分前行動).';
-    const hungLine = r.kind === 'late' ? '遅いぞ！みんな待ってる。 — Muộn rồi! Mọi người đang chờ.' : 'おはよう！今日も頑張ろう。 — Chào em! Hôm nay cố lên nhé.';
     const train = this.commute === 'train';
+    const head = r.kind === 'early'
+      ? '👍 Đến sớm 5 phút'
+      : r.kind === 'ontime'
+        ? '🙂 Vừa kịp giờ'
+        : r.kind === 'excused'
+          ? '📄 Đến muộn có 遅延証明書 (Được miễn trừ)'
+          : '😓 Đến muộn';
+    const lesson = train
+      ? 'Ở Nhật tàu chạy đúng từng phút; nên ra ga sớm 1 chuyến. Tàu chậm thì nhớ xin 遅延証明書 nộp cho công ty.'
+      : (r.kind === 'late'
+        ? 'Ở Nhật, “đúng giờ” nghĩa là có mặt trước giờ hẹn. Đến muộn họp đầu ca là cả đội phải chờ bạn.'
+        : r.kind === 'early' ? '5分前行動 (gofun-mae kōdō): có mặt trước 5 phút — người Nhật rất quý điều này.' : 'Lần sau thử đến sớm hơn 5 phút nhé (5分前行動).');
+    const hungLine = r.kind === 'late' ? '遅いぞ！みんな待ってる。 — Muộn rồi! Mọi người đang chờ.' : 'おはよう！今日も頑張ろう。 — Chào em! Hôm nay cố lên nhé.';
     if (!train) { this.overhead.say(this.who.hung, hungLine, 4); if (P.helmet) P.helmet.visible = true; }
     const whereTxt = train ? (this.walkin.stage === 'bento' ? 'Bạn tới xưởng cơm hộp' : this.walkin.stage === 'lotus' ? 'Bạn tới ruộng sen' : 'Bạn tới viện dưỡng lão') : 'Bạn tới cổng công trường';
+    const trainMetaHtml = train
+      ? `<p>🚃 Chuyến đã đi: <b>${esc(r.trainTaken || '—')}</b> · Lỡ tàu: <b>${r.missed || 0} lần</b> · 遅延証明書: <b>${r.delayCert ? '✅ Có' : (r.delay > 0 ? '❌ Quên lấy' : 'Không')}</b></p>
+         ${r.kind === 'excused' ? '<p class="jpline" style="text-align:center">「遅延証明書ありがとう。」 — Quản lý nhận giấy xác nhận tàu trễ, không trừ điểm chuyên cần.</p>' : ''}`
+      : '';
     card(`<h2>${head}</h2><p>${whereTxt} lúc <b>${clock(r.min)}</b> · 朝礼 ${clock(MORNING.CHOREI)}.</p>
+      ${trainMetaHtml}
       <div class="deltas">${deltaChips(r.deltas) || '<span class="delta">—</span>'}</div>
       <p class="lesson">${esc(lesson)}</p>`, [
       { label: 'Vào họp đầu ca →', on: () => { this.stop(); this.onEnd(r); } },
     ]);
   }
 
-  /** platform: the train comes in once the player waits at the mark (or after a while), never
-   *  while they stand past the yellow line; boarding walks them to the doors. */
+  /**
+   * platform: clock runs while on the platform; the next train arrives 1 minute before its departure
+   * (`sendTrain('arrive')`), opens doors for 1 minute (`発車メロディー`), warns `ドアが閉まります` for
+   * 3 seconds at departure time, then leaves (`sendTrain('leave')`). If not boarded, records `missTrain`.
+   */
   platform(dt) {
-    const stn = this.stages.station, P = this.who.player, pos = P.holder.position, state = stn.trainState();
+    const stn = this.stages.station, P = this.who.player, pos = P.holder.position, s = this.st;
+    const state = stn.trainState();
     this.platT += dt;
+    if (!this.curTrain) this.curTrain = nextTrain(s.min, s.delay || 0);
+    const tr = this.curTrain;
+
     // through the ticket gates: the IC card beeps
-    if (!this.gated && pos.x > STATION.gateX) { this.gated = true; this.overhead.say(P, 'ピッ♪', 1.2); }
-    if (state === 'away' && !this.boarding && (this.near(STATION.mark, 1.3) || this.platT > 8)) {
-      stn.sendTrain('arrive');
-      this.tip('まもなく電車が参ります', 'Tàu sắp vào ga — đứng sau vạch vàng (黄色い線の内側)', 4);
+    if (!this.gated && pos.x > STATION.gateX) {
+      this.gated = true;
+      this.overhead.say(P, 'ピッ♪', 1.2);
+      if (s.delay > 0 && !s.delayCert && !this.delayGateTipShown) {
+        this.delayGateTipShown = true;
+        this.tip(
+          `🚨 ただいま電車が${s.delay}分遅れています（${s.delayReasonJp}）`,
+          'Bấm nút 📄 Lấy 遅延証明書 trước khi lên tàu để không bị trừ điểm đi muộn!',
+          6,
+        );
+      }
     }
-    if (state === 'in' && pos.z > STATION.line - 0.15) {
-      pos.z = STATION.line - 0.35;
-      if (!this.warned) { this.warned = true; this.tip('黄色い線の内側までお下がりください', 'Lùi vào sau vạch vàng! Tàu đang vào ga', 3.5); }
+
+    // Advance the platform clock according to train state:
+    // - While train is 'away', tick at 1 min/sec (or 2.5 min/sec after gate if waiting > 3 min for a delayed train)
+    // - While train is 'in' (sliding to a stop), speed up 3D braking and hold clock at tr.arr so player gets full 1 min dwell
+    // - While train is 'stopped' before departure, tick 1 game minute over 4 real seconds (0.25 min/sec)
+    // - At tr.dep, show ドアが閉まります for 3 real seconds before departing
+    if (state === 'away') {
+      const waitFast = this.gated && (s.delayCert || !s.delay) && (tr.arr - s.min > 3);
+      tick(s, dt * (waitFast ? 2.5 : 1));
+      if (s.min >= tr.arr - 0.6 && !this.arrivedSent) {
+        this.arrivedSent = true;
+        stn.sendTrain('arrive');
+        this.tip('まもなく電車が参ります', `Chuyến ${tr.label} đang vào ga — đứng sau vạch vàng (黄色い線の内側)`, 4);
+      }
+    } else if (state === 'in') {
+      stn.update(dt * 6);
+      if (s.min < tr.arr) tick(s, dt);
+      else s.min = tr.arr;
+      if (pos.z > STATION.line - 0.15) {
+        pos.z = STATION.line - 0.35;
+        if (!this.warned) { this.warned = true; this.tip('黄色い線の内側までお下がりください', 'Lùi vào sau vạch vàng! Tàu đang vào ga', 3.5); }
+      }
+    } else if (state === 'stopped') {
+      if (!this.melodyShown) {
+        this.melodyShown = true;
+        s.min = Math.max(s.min, tr.arr);
+        this.overhead.say(P, '♪ 発車メロディー', 2);
+        this.tip(`🚃 Chuyến ${tr.label} mở cửa (đứng 1 phút)`, `Bấm 🚃 Lên tàu (乗る) trước giờ chạy ${tr.depLabel}!`, 4);
+      }
+      if (this.doorCloseT < 0) {
+        tick(s, dt * 0.25);
+        if (s.min >= tr.dep) {
+          s.min = tr.dep;
+          this.doorCloseT = 0;
+          this.tip('🔔 ドアが閉まります', `Cửa tàu chuyến ${tr.label} sắp đóng! Nhanh chân lên tàu!`, 3);
+        }
+      } else {
+        s.min = tr.dep;
+        this.doorCloseT += dt;
+        if (this.doorCloseT >= 3.0 && !this.boarding) {
+          this.doorCloseT = -1;
+          stn.sendTrain('leave');
+          const mRes = missTrain(s, tr);
+          this.curTrain = mRes.next;
+          this.arrivedSent = false;
+          this.melodyShown = false;
+          this.paused = true;
+          card(`<div class="big">🚃💨</div><h2>電車が行ってしまった… — Lỡ tàu rồi!</h2>
+            <p>Chuyến tàu <b>${tr.label}</b> đã đóng cửa và rời ga. Chuyến sau: <b>${mRes.next.label}</b>${s.delay ? ` (chậm +${s.delay}p → ${mRes.next.depLabel})` : ''}.</p>
+            <p class="lesson">${mRes.next.safe
+              ? `💡 Chuyến ${mRes.next.label} vẫn còn kịp giờ họp 朝礼 7:45 nếu bạn lên tàu ngay khi tàu tới.`
+              : `⚠️ Đã qua chuyến cuối kịp giờ (7:34)! Đi chuyến ${mRes.next.label} sẽ tới nơi sau 7:45 (muộn họp 朝礼).`}</p>`, [
+            {
+              label: `Chờ chuyến ${mRes.next.label} →`,
+              on: () => {
+                this.paused = false;
+                stn.sendTrain('reset');
+                if (this.onResetCrowd) this.onResetCrowd();
+              },
+            },
+          ]);
+          return;
+        }
+      }
     }
+
     if (this.boarding && !this.controls.target) {
       if (Math.hypot(pos.x - STATION.door.x, pos.z - STATION.door.z) < 0.9) { this.boarding = false; this.ride(); }
       else this.controls.target = new THREE.Vector3(STATION.door.x, 0, STATION.door.z);
@@ -678,7 +849,7 @@ export class MorningWalk {
           speed = dt > 0 ? Math.hypot(pos.x - ox, pos.z - oz) / dt : 0;
           let dy = Math.atan2(this.dir.x, this.dir.z) - P.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
           P.yaw += dy * Math.min(1, dt * 12);
-          tick(s, dt);
+          if (!plat) tick(s, dt);
         }
       }
       if (this.pendingOut && !c.target && this.near(DORM.door, 2.4)) { this.pendingOut = false; this.action('out'); }

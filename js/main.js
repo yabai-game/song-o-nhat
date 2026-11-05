@@ -2100,6 +2100,7 @@ async function morningStep(st) {
     commute: train ? 'train' : 'walk',
     storage,
     setStage, dayLabel: hudCalText(S, 'Buổi sáng'),
+    onResetCrowd: () => { if (G.stationCrowd) G.stationCrowd.reset(); },
     onEnd: () => { S.flags.morningDay = curDayKey(S); save(S, storage); hideAll(); talkStep(st); },
   });
 }
