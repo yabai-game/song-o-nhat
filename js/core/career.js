@@ -62,7 +62,17 @@ export function takeExam(S, questions, answers) {
   const score = questions.reduce((n, q, i) => n + (answers[i] === q.answer ? 1 : 0), 0);
   const pass = score >= CAREER.PASS;
   const c = S.career; c.tries++;
-  if (pass) { const from = S.job; S.job = c.target; S.jobXp = 0; S.career = null; return { pass, score, from, to: S.job }; }
+  if (pass) {
+    const from = S.job;
+    S.job = c.target;
+    S.jobXp = 0;
+    S.career = null;
+    S.flags = S.flags || {};
+    S.flags.careerPassed = true;
+    S.festLog = S.festLog || {};
+    S.festLog.tokuteiPassed = true;
+    return { pass, score, from, to: S.job };
+  }
   c.lessons = CAREER.LESSONS - 1; // study one more evening, then retake
   S.money -= CAREER.FEE;
   return { pass, score };

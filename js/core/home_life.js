@@ -195,10 +195,17 @@ export function sendMoney(S, amount, route = 'legal', rng = Math.random) {
     return { ok: false, lost: false, fee: r.fee, deltas: [] };
   }
   const scammed = r.scam > 0 && rng() < r.scam;
+  S.festLog = S.festLog || {};
+  if (r.id === 'cheap') {
+    S.festLog.cheapRemitCount = (S.festLog.cheapRemitCount || 0) + 1;
+  } else {
+    S.festLog.legalRemitCount = (S.festLog.legalRemitCount || 0) + 1;
+  }
   if (scammed) {
     const deltas = applyFx(S, { money: -totalCost, mental: -10 });
     return { ok: true, lost: true, fee: r.fee, amount: amt, deltas };
   }
+  S.festLog.remitCount = (S.festLog.remitCount || 0) + 1;
   const mental = remitMentalBonus(amt);
   const deltas = applyFx(S, { money: -totalCost, mental });
   if (h) h.homesick = clamp(h.homesick - 5);
@@ -359,6 +366,8 @@ export function cookVietnamese(S, dish) {
   }
   const deltas = applyFx(S, { money: -d.share, ...d.fx });
   if (h) h.homesick = clamp(h.homesick - 8);
+  S.festLog = S.festLog || {};
+  S.festLog.vnCookCount = (S.festLog.vnCookCount || 0) + 1;
   return { ok: true, dish: d, cost: d.share, min: d.min, deltas };
 }
 

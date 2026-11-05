@@ -50,6 +50,13 @@ export function newState(draft, rng = Math.random) {
     papers: { tennyu: false, hoken: false, yucho: false, juminzei: false, zairyu: false },
     ill: null, bike: null,
     prep: { water: false, food: false, light: false, radio: false, bag: false, stormReady: false, shelterKnown: false },
+    notebook: {},
+    festLog: {
+      visited: [], stamps: {}, acts: {}, bonOdoriBest: 0, fireworks: false, launches: 0, yukata: false,
+      joyaBell: false, soba: false, nyCall: false, amazake: false, nengajo: false, giriChoco: false,
+      remitCount: 0, legalRemitCount: 0, cheapRemitCount: 0, vnCookCount: 0, lastSickDay: 0, lastLateDay: 0,
+    },
+    pets: { goldfish: 0 },
     flags: {}, certs: [jpLevel(START_TTS.jp)], log: [], pantry: [],
   };
 }
@@ -134,6 +141,19 @@ export function load(storage) {
     if (!S.prep || typeof S.prep !== 'object') {
       S.prep = { water: false, food: false, light: false, radio: false, bag: false, stormReady: false, shelterKnown: false };
     }
+    if (!S.notebook || typeof S.notebook !== 'object' || Array.isArray(S.notebook)) S.notebook = {};
+    if (!S.pets || typeof S.pets !== 'object') S.pets = { goldfish: 0 };
+    if (typeof S.pets.goldfish !== 'number') S.pets.goldfish = 0;
+    if (!S.festLog || typeof S.festLog !== 'object') {
+      S.festLog = {
+        visited: [], stamps: {}, acts: {}, bonOdoriBest: 0, fireworks: false, launches: 0, yukata: false,
+        joyaBell: false, soba: false, nyCall: false, amazake: false, nengajo: false, giriChoco: false,
+        remitCount: 0, legalRemitCount: 0, cheapRemitCount: 0, vnCookCount: 0, lastSickDay: 0, lastLateDay: 0,
+      };
+    }
+    if (!Array.isArray(S.festLog.visited)) S.festLog.visited = [];
+    if (!S.festLog.stamps || typeof S.festLog.stamps !== 'object') S.festLog.stamps = {};
+    if (!S.festLog.acts || typeof S.festLog.acts !== 'object') S.festLog.acts = {};
     return S;
   } catch { return null; }
 }

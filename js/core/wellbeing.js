@@ -33,6 +33,10 @@ export function sickLeave(S, kind) {
   S.money += money;
   S.health = WELL.BACK_TO; S.mental = WELL.BACK_TO;
   S.boss = clamp(S.boss - WELL.BOSS_LOSS);
+  if (S?.cal) {
+    S.festLog = S.festLog || {};
+    S.festLog.lastSickDay = ((S.cal.year || 1) - 1) * 112 + (S.cal.season || 0) * 28 + (S.cal.day || 1);
+  }
   const lines = [`💴 Mất 1 ngày lương: −${WELL.DAY_PAY.toLocaleString('ja-JP')} ¥`];
   if (hospital) {
     lines.push(hasHoken

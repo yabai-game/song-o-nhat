@@ -7,11 +7,14 @@ import * as THREE from 'three';
 import { SEASON_IDS, SEASON_LOOK, makeSeasonFx } from './season.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, signTexture, makeSun, skyDome, loadModel, shadowAll } from './stage.js';
+import { makeFestival, FESTIVAL_SPOTS } from './festival.js';
 import { buildBackdrop } from './backdrop.js';
 
 const MODELS = ['torii', 'stone_lantern', 'temple', 'sakura', 'lantern', 'house_beige'];
 
 export const SHRINE = {
+  /** festival spots (S19): stalls, bon-odori tower, New Year's Eve bell — stand positions for interaction rings */
+  festival: FESTIVAL_SPOTS,
   start: { x: 0, z: 10.6, yaw: Math.PI },
   bounds: { x0: -8.5, x1: 9.2, z0: -2.4, z1: 11.4 },
   spots: {
@@ -51,10 +54,10 @@ export async function buildShrine() {
   fill.position.set(-6, 10, 8);
   scene.add(fill);
   const sun = makeSun(scene, { color: 0xfff3de, intensity: 2.3, size: 18, offset: [8, 15, 10] });
-  skyDome(scene, '#74b2dc', '#e5f0f5');
+  const sky = skyDome(scene, '#74b2dc', '#e5f0f5');
 
   // Distant town & mountains backdrop around the shrine grounds
-  buildBackdrop(scene, {
+  const backdrop = buildBackdrop(scene, {
     houseLight: gl.house_beige,
     isFree: (x, z) => !(Math.abs(x) < 42 && Math.abs(z) < 42),
     ground: false,
@@ -292,12 +295,19 @@ export async function buildShrine() {
   const pm4 = new THREE.Matrix4(), pq = new THREE.Quaternion(), pe = new THREE.Euler(), pp = new THREE.Vector3(), pone = new THREE.Vector3(1, 1, 1);
 
   // seasons (S15); the snow sheets leave the stone approach swept
+  const fest = makeFestival(scene, { sky, hemi, sun, fill, backdrop });
   const season = seasonal(scene, petals, grass.material, [{ x: -6.8, z: -5.5, w: 10.4, d: 16, y: 0.03 }, { x: 5.8, z: -5.5, w: 8.4, d: 16, y: 0.03 }, { x: 0, z: -8.25, w: 3.2, d: 10.5, y: 0.03 }], new THREE.Vector3(0, 0, 0));
   return {
     scene,
     sun,
     rings,
     setSeason: season,
+    /** S19 festivals: dress the shrine (EVENTS id or null), time of day, fireworks */
+    setFestival: fest.setFestival,
+    setTime: fest.setTime,
+    fireworks: fest.fireworks,
+    launch: fest.launch,
+    get festival() { return fest.festival; },
     setKyoTied(on) {
       kyoSlip.visible = !!on;
     },
@@ -309,6 +319,7 @@ export async function buildShrine() {
     },
     update(dt, t) {
       season.update(dt);
+      fest.update(dt, t);
       for (const r of Object.values(rings)) {
         if (r.visible) r.scale.setScalar(1 + Math.sin(t * 5) * 0.05);
       }
@@ -340,7 +351,7 @@ function seasonal(scene, petals, ground = null, snowAreas = [], centre = new THR
   const fx = makeSeasonFx(scene, { snowAreas, fall: false });
   const set = (s) => {
     const id = (typeof s === 'number' ? SEASON_IDS[s] : s) || 'spring', L = SEASON_LOOK[id] || SEASON_LOOK.spring, c = new THREE.Color(L.sakura);
-    mats.forEach((m, i) => { m.color.copy(base[i]).multiply(c); if (m.emissive) m.emissive.set(id === 'winter' ? '#6a6e74' : '#000000'); }); // snow on the bare branches
+    mats.forEach((m, i) => { m.color.copy(base[i]).multiply(c); if (m.emissive) m.emissive.set(id === 'winter' ? '#3a3d42' : '#000000'); }); // snow on the bare branches
     if (ground) { ground.color.copy(gBase).multiply(new THREE.Color(GROUND[id])); if (id === 'winter') ground.color.set('#eef2f5'); }
     petals.visible = id === 'spring' || id === 'autumn';
     petals.material.color.set(id === 'autumn' ? '#d9762e' : '#f6c3d0');

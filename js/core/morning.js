@@ -209,5 +209,9 @@ export function arrive(S, st) {
       ...meta,
     };
   }
+  if (S?.cal) {
+    S.festLog = S.festLog || {};
+    S.festLog.lastLateDay = ((S.cal.year || 1) - 1) * 112 + (S.cal.season || 0) * 28 + (S.cal.day || 1);
+  }
   return { kind: 'late', min: m, deltas: applyFx(S, { boss: -4, mental: -2 }), ...meta };
 }

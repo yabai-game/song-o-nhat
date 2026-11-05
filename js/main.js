@@ -63,6 +63,10 @@ import {
   PREP_ITEMS, QUAKE_STEPS, SHELTER_QUESTION,
   ensurePrep, prepScore, buyPrep, quakeToday, resolveQuake, markStormReady, stormPrep, answerShelter,
 } from './core/disaster.js';
+import {
+  FESTIVALS, ANNUAL_FESTIVAL_IDS, BOUNENKAI_QUESTIONS, doBounenkai, doValentine,
+  ACHIEVEMENTS, checkAchievements,
+} from './core/festival.js';
 
 const storage = (() => { try { return window.localStorage; } catch { return { getItem: () => null, setItem() {}, removeItem() {} }; } })();
 const G = {
@@ -250,13 +254,15 @@ function bindUi() {
   $('btn-career').addEventListener('click', careerScreen);
   $('btn-menu').addEventListener('click', pauseMenu);
   $('btn-cal').addEventListener('click', calendarModal);
+  $('btn-note')?.addEventListener('click', notebookModal);
   $('btn-phone')?.addEventListener('click', phoneModal);
   $('day-label').parentElement?.addEventListener('click', calendarModal);
-  // the ☰ menu button, 📅 calendar button, and 📱 LIME phone button show whenever a game screen is up
+  // the ☰ menu button, 📅 calendar button, 📒 notebook button, and 📱 LIME phone button show whenever a game screen is up
   setInterval(() => {
     const on = !['title', 'creator', 'jobs'].includes(G.mode) && $('title').hidden && $('creator').hidden;
     $('btn-menu').hidden = !on;
     $('btn-cal').hidden = !on || !G.S;
+    if ($('btn-note')) $('btn-note').hidden = !on || !G.S;
     if ($('btn-phone')) $('btn-phone').hidden = !on || !G.S;
     $('app').classList.toggle('has-menu', on);
     if (G.S) {
@@ -268,6 +274,7 @@ function bindUi() {
       const bd = $('phone-badge');
       if (bd) { bd.hidden = u <= 0; bd.textContent = String(u); }
       renderHomeChips(G.S, cal);
+      notifyAchievements(G.S);
     }
   }, 300);
   $('stats').addEventListener('click', onStatsTap);
@@ -445,6 +452,76 @@ function calendarModal() {
     }
   };
   renderCal();
+}
+
+let achToastTimer = null;
+function notifyAchievements(S = G.S) {
+  if (!S || S.flags?.demo) return;
+  const newly = checkAchievements(S);
+  if (!newly.length) return;
+  save(S, storage);
+  const el = $('ach-toast');
+  const msg = `📒 ピロン♪ Thành tựu mới: ${newly.map((a) => `${a.icon} ${a.vi} (${a.jp})`).join(' · ')}`;
+  if (el) {
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(achToastTimer);
+    achToastTimer = setTimeout(() => { el.hidden = true; }, 4500);
+  }
+}
+
+function notebookModal() {
+  // like the phone: opens over a choice card (day-off hub…) and brings that card back when closed
+  const overCard = !$('modal').hidden && G.mode === 'talk' && !!G.S?.life;
+  if ((!$('modal').hidden && !overCard) || !G.S) return;
+  const mod = activeModule(), was = mod ? mod.paused : false;
+  if (mod) mod.paused = true;
+  const S = G.S;
+  notifyAchievements(S);
+  const nb = S.notebook || {};
+  const visited = S.festLog?.festivalsVisited || {};
+  const unlockedList = ACHIEVEMENTS.filter((a) => nb[a.id]);
+  const lockedList = ACHIEVEMENTS.filter((a) => !nb[a.id]);
+  const stampCount = ANNUAL_FESTIVAL_IDS.filter((id) => visited[id]).length;
+  const goldfishCount = S.pets?.goldfish || 0;
+
+  const stampsHtml = ANNUAL_FESTIVAL_IDS.map((id) => {
+    const f = FESTIVALS[id];
+    const done = Boolean(visited[id]);
+    return `<div class="nb-stamp ${done ? 'stamped' : ''}">
+      <span class="ic">${f.icon}</span>
+      <div><b>${esc(f.jp)}</b></div>
+      <div>${esc(f.vi)}</div>
+      <div style="margin-top:2px;font-weight:800">${done ? '💮 Đã đóng dấu' : '⬜ Chưa tham gia'}</div>
+    </div>`;
+  }).join('');
+
+  const itemsHtml = [
+    ...unlockedList.map((a) => `<div class="nb-item unlocked">
+      <div>${a.icon} <b>${esc(a.vi)}</b> · <span class="jp">${esc(a.jp)}</span></div>
+      <div>${esc(a.desc || a.hint || '')}</div>
+      <div class="at">📅 Đã mở: ${esc(nb[a.id]?.at || '')}</div>
+    </div>`),
+    ...lockedList.map((a) => `<div class="nb-item locked">
+      <div>🔒 <b>${esc(a.vi)}</b> · <span class="jp">${esc(a.jp)}</span></div>
+      <div>💡 Gợi ý: ${esc(a.hint)}</div>
+    </div>`),
+  ].join('');
+
+  card(`
+    <h2>📒 Sổ tay thành tựu & Lễ hội</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px">
+      <span class="delta">🏆 Thành tựu: ${unlockedList.length}/${ACHIEVEMENTS.length}</span>
+      <span class="delta">💮 Dấu lễ hội: ${stampCount}/${ANNUAL_FESTIVAL_IDS.length}</span>
+      <span class="delta">🐠 Cá vàng ở phòng: ${goldfishCount} con</span>
+    </div>
+    <div style="font-size:13px;font-weight:700;margin-top:2px">🎌 Bảng đóng dấu 8 lễ hội lớn trong năm (祭りスタンプ帳)</div>
+    <div class="nb-stamps">${stampsHtml}</div>
+    <div style="font-size:13px;font-weight:700">🏆 Danh sách thành tựu (${unlockedList.length}/${ACHIEVEMENTS.length})</div>
+    <div class="nb-list">${itemsHtml}</div>
+  `, [
+    { label: 'Đóng sổ tay', on: () => { if (mod) mod.paused = was; if (overCard) runStep(); } },
+  ]);
 }
 
 function renderHomeChips(S = G.S, cal = ensureCal(S)) {
@@ -1071,13 +1148,54 @@ function saturdayPrompt() {
 
 function seasonalWorkEventCard(ev) {
   const S = G.S;
-  if (ev.id === 'tet_vn') return tetVnEveningCard(ev);
+  if (ev.id === 'tet_vn') {
+    return tetVnEveningCard(ev, () => {
+      S.lDay.eventDone = true;
+      S.flags.eveningDay = curDayKey(S);
+      save(S, storage);
+      notifyAchievements(S);
+      finishStep('🧧 Đêm Giao thừa Tết Việt');
+    });
+  }
+  if (ev.id === 'bounenkai') {
+    return bounenkaiEveningCard(ev, () => {
+      S.lDay.eventDone = true;
+      S.flags.eveningDay = curDayKey(S);
+      save(S, storage);
+      notifyAchievements(S);
+      finishStep('🍻 Tiệc 忘年会 cuối năm');
+    });
+  }
+  if (ev.id === 'valentine') {
+    return valentineCard(ev, () => {
+      S.lDay.eventDone = true;
+      save(S, storage);
+      notifyAchievements(S);
+      runStep();
+    });
+  }
+  if (FESTIVALS[ev.id]?.where === 'shrine') {
+    return lifeFestivalShrineVisit(ev.id, () => {
+      S.lDay.eventDone = true;
+      if (ev.time === 'evening') {
+        S.flags.eveningDay = curDayKey(S);
+        save(S, storage);
+        notifyAchievements(S);
+        finishStep(`${ev.icon} ${ev.vi}`);
+      } else {
+        save(S, storage);
+        notifyAchievements(S);
+        runStep();
+      }
+    });
+  }
   setStage('town'); G.stages.town.setTime(ev.time === 'evening' ? 'night' : 'day'); hideNpcs();
   G.mode = 'talk';
   dayHud(`${ev.icon} ${ev.vi}`);
   const deltas = applyFx(S, ev.fx || { mental: 5, culture: 3 });
   S.lDay.eventDone = true;
   save(S, storage);
+  notifyAchievements(S);
   card(`<div class="big">${ev.icon}</div><h2>🎉 ${esc(ev.jp)} — ${esc(ev.vi)}</h2>
     <p>${esc(ev.desc)}</p>
     <div class="deltas">${deltaChips(deltas)}</div>`, [
@@ -1085,35 +1203,138 @@ function seasonalWorkEventCard(ev) {
   ]);
 }
 
-function tetVnEveningCard(ev) {
+function bounenkaiEveningCard(ev, onDone = () => runStep()) {
+  const S = G.S;
+  setStage('dorm'); G.stages.dorm.setTime('night'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('🍻 Tiệc tất niên · 忘年会');
+
+  const startQuiz = (drink) => {
+    const answers = [];
+    const askQ = (idx) => {
+      if (idx >= BOUNENKAI_QUESTIONS.length) {
+        const r = doBounenkai(S, answers, drink);
+        save(S, storage);
+        notifyAchievements(S);
+        const deltas = Object.entries(r.fx || {}).filter(([, v]) => v);
+        card(`<div class="big">🍻</div><h2>お開き — Tan tiệc 忘年会 vui vẻ!</h2>
+          <p>Bạn đã trả lời đúng <b>${r.correct}/${r.total}</b> phép ứng xử bàn tiệc Nhật Bản và chọn <b>${drink === 'oolong' ? '🍵 Trà Ô long (ウーロン茶)' : '🍺 Bia tươi (生ビール)'}</b> khi cụng ly 乾杯.</p>
+          <div class="deltas">${deltaChips([['money', -r.cost], ...deltas])}</div>
+          <p class="lesson">🍻 ${esc(r.note)}</p>`, [
+          { label: 'Về ký túc xá nghỉ ngơi →', on: onDone },
+        ]);
+        return;
+      }
+      const q = BOUNENKAI_QUESTIONS[idx];
+      const btns = q.choices.map((ch, cIdx) => ({
+        label: ch,
+        on: () => {
+          answers[idx] = cIdx;
+          askQ(idx + 1);
+        },
+      }));
+      card(`<h2>🍻 Tiệc tất niên 忘年会 · Ứng xử (${idx + 1}/${BOUNENKAI_QUESTIONS.length})</h2>
+        <p class="jpline">「お疲れ様でした！乾杯！」</p>
+        <p>${esc(q.q)}</p>`, btns);
+    };
+    askQ(0);
+  };
+
+  card(`<div class="big">🍻</div><h2>忘年会 — Tiệc tổng kết cuối năm cùng công ty</h2>
+    <p>Tối nay cả tổ tập trung ở quán ăn dự tiệc <b>忘年会 (Bounenkai)</b> để nhìn lại một năm làm việc vất vả (phí tham dự: <b>4.000 ¥</b>).</p>
+    <p class="lesson">💡 Khi hô <b>乾杯 (Kanpai)</b>, nếu bạn không uống được rượu bia thì hoàn toàn có thể gọi <b>🍵 Trà Ô long (ウーロン茶)</b> để cụng ly — rất lịch sự và không bị trừ bất kỳ điểm quan hệ nào!</p>`, [
+    {
+      label: '🍺 Tham dự & chọn Bia cụng ly (4.000 ¥)',
+      on: () => {
+        if ((S.money || 0) < 4000) { toast('💴 Chưa đủ 4.000 ¥', 'Phí dự tiệc 忘年会 là 4.000 ¥'); return; }
+        startQuiz('beer');
+      },
+    },
+    {
+      label: '🍵 Tham dự & chọn Trà Ô long ウーロン茶 (4.000 ¥ · không trừ điểm)',
+      on: () => {
+        if ((S.money || 0) < 4000) { toast('💴 Chưa đủ 4.000 ¥', 'Phí dự tiệc 忘年会 là 4.000 ¥'); return; }
+        startQuiz('oolong');
+      },
+    },
+    {
+      label: '🏠 Xin phép cáo từ về nghỉ sớm (0 ¥)',
+      cls: 'ghost',
+      on: onDone,
+    },
+  ]);
+}
+
+function valentineCard(ev, onDone = () => runStep()) {
+  const S = G.S;
+  setStage('dorm'); G.stages.dorm.setTime('day'); hideNpcs();
+  G.mode = 'talk';
+  dayHud('🍫 Ngày Valentine · バレンタイン');
+
+  const pick = (buyGiri, count) => {
+    const r = doValentine(S, buyGiri, count);
+    if (!r.ok) {
+      toast('💴 Chưa đủ tiền', `Cần ${yen(500 * count)} để mua 義理チョコ`);
+      return;
+    }
+    save(S, storage);
+    notifyAchievements(S);
+    const deltas = [
+      ...(r.cost ? [['money', -r.cost]] : []),
+      ...Object.entries(r.fx || {}).filter(([, v]) => v),
+    ];
+    card(`<div class="big">🍫</div><h2>バレンタインデー — Ngày Valentine ở Nhật</h2>
+      <p>${buyGiri
+        ? `Bạn đã tặng <b>${count} hộp 義理チョコ</b> cảm ơn các đồng nghiệp trong tổ. Ai cũng mỉm cười cảm ơn 「ありがとう！」.`
+        : 'Bạn mỉm cười chúc mọi người trong tổ một ngày làm việc vui vẻ.'}</p>
+      <div class="deltas">${deltaChips(deltas)}</div>
+      <p class="lesson">🍫 ${esc(r.note)}</p>`, [
+      { label: 'Tiếp tục →', on: onDone },
+    ]);
+  };
+
+  card(`<div class="big">🍫</div><h2>バレンタイン — Phong tục Valentine tại Nhật</h2>
+    <p>Ở chỗ làm, mọi người trao nhau những hộp sô-cô-la nhỏ <b>義理チョコ (Giri-choco — sô-cô-la lịch sự cảm ơn đồng nghiệp)</b> giá 500 ¥/phần.</p>
+    <p class="lesson">💡 Văn hóa Nhật Bản phân biệt <b>14/2 バレンタイン</b> và <b>14/3 ホワイトデー (White Day — ngày đáp lễ)</b>. Bạn có thể mua 義理チョコ tặng đồng nghiệp hoặc bỏ qua đều được.</p>`, [
+    { label: '🍫 Mua 3 phần 義理チョコ tặng đồng nghiệp (1.500 ¥ · 🤝 +6, 🧠 +3, 🎌 +2)', on: () => pick(true, 3) },
+    { label: '🍫 Mua 1 phần 義理チョコ (500 ¥ · 🤝 +2, 🧠 +3, 🎌 +2)', on: () => pick(true, 1) },
+    { label: '😊 Không mua, chỉ chúc mọi người vui vẻ (0 ¥ · 🧠 +1, 🎌 +1)', cls: 'ghost', on: () => pick(false, 0) },
+  ]);
+}
+
+function tetVnEveningCard(ev, onDone = null) {
   const S = G.S;
   setStage('dorm'); G.stages.dorm.setTime('night'); hideNpcs();
   G.mode = 'talk';
   dayHud(`🧧 ${ev.vi}`);
+  S.festLog = S.festLog || { festivalsVisited: {} };
+  S.festLog.festivalsVisited = S.festLog.festivalsVisited || {};
+  S.festLog.festivalsVisited.tet_vn = true;
   if (!S.lDay.tetBaseFx) {
     applyFx(S, ev.fx || { mental: 6, culture: 3 });
     S.lDay.tetBaseFx = true;
     save(S, storage);
+    notifyAchievements(S);
   }
   const sendTetLixi = (amount) => {
     card(`<h2>🧧 Gửi lì xì Tết ${yen(amount)} về quê</h2>
       <p>Chọn cách gửi tiền lì xì năm mới cho gia đình:</p>`, [
       { label: `🏦 Dịch vụ chính thức / 郵便局の口座 (phí ${yen(REMIT_ROUTES.legal.fee)})`, on: () => {
         const r = sendMoney(S, amount, 'legal');
-        if (!r.ok) { toast('💴 Không đủ tiền', `Cần ${yen(amount + r.fee)}`); tetVnEveningCard(ev); return; }
-        S.lDay.tetLixi = true; save(S, storage);
+        if (!r.ok) { toast('💴 Không đủ tiền', `Cần ${yen(amount + r.fee)}`); tetVnEveningCard(ev, onDone); return; }
+        S.lDay.tetLixi = true; save(S, storage); notifyAchievements(S);
         toast(`🧧 Đã gửi lì xì ${yen(amount)} về nhà!`, 'Cả nhà chúc Tết rộn ràng qua LIME!');
-        tetVnEveningCard(ev);
+        tetVnEveningCard(ev, onDone);
       } },
       { label: `🤝 Nhờ người quen chuyển chui (phí ${yen(REMIT_ROUTES.cheap.fee)}, tỉ giá tốt)`, on: () => {
         const r = sendMoney(S, amount, 'cheap');
-        if (!r.ok) { toast('💴 Không đủ tiền', `Cần ${yen(amount + r.fee)}`); tetVnEveningCard(ev); return; }
-        S.lDay.tetLixi = true; save(S, storage);
+        if (!r.ok) { toast('💴 Không đủ tiền', `Cần ${yen(amount + r.fee)}`); tetVnEveningCard(ev, onDone); return; }
+        S.lDay.tetLixi = true; save(S, storage); notifyAchievements(S);
         if (r.lost) toast('😱 Bị lừa mất tiền lì xì!', `Mất trắng ${yen(amount + r.fee)} · 🧠 −10`, 5);
         else toast(`🧧 Đã gửi lì xì ${yen(amount)} về nhà!`, 'Cả nhà mừng tuổi đầu xuân!');
-        tetVnEveningCard(ev);
+        tetVnEveningCard(ev, onDone);
       } },
-      { label: '← Quay lại đêm Tết', cls: 'ghost', on: () => tetVnEveningCard(ev) },
+      { label: '← Quay lại đêm Tết', cls: 'ghost', on: () => tetVnEveningCard(ev, onDone) },
     ]);
   };
   const btns = [];
@@ -1125,7 +1346,7 @@ function tetVnEveningCard(ev) {
         S.lDay.tetCalled = true;
         save(S, storage);
         toast('📹 Đón giao thừa qua màn hình điện thoại', `Chúc mừng năm mới cả nhà! · Nhớ nhà còn ${r.homesick}/100`);
-        tetVnEveningCard(ev);
+        tetVnEveningCard(ev, onDone);
       },
     });
   }
@@ -1141,8 +1362,9 @@ function tetVnEveningCard(ev) {
         if (!r.ok) { toast('💴 Chưa đủ tiền góp', 'Cần 1.500 ¥'); return; }
         S.lDay.tetCooked = true;
         save(S, storage);
+        notifyAchievements(S);
         toast('🟩 Cắt bánh chưng đêm Tết nơi đất khách', 'Ấm lòng hương vị quê nhà · 🧠 +12, ❤️ +3, 🤝 +3');
-        tetVnEveningCard(ev);
+        tetVnEveningCard(ev, onDone);
       },
     });
   }
@@ -1152,12 +1374,23 @@ function tetVnEveningCard(ev) {
     on: () => {
       S.lDay.eventDone = true;
       save(S, storage);
-      runStep();
+      notifyAchievements(S);
+      if (onDone) onDone();
+      else runStep();
     },
   });
   card(`<div class="big">🧧</div><h2>🎉 ${esc(ev.jp)} — ${esc(ev.vi)}</h2>
     <p>${esc(ev.desc)}</p>
     <p class="lesson">Ở Nhật ngày mùng 1 Tết âm lịch vẫn là ngày đi làm bình thường. Tối về ký túc xá, anh em thực tập sinh mới quây quần gọi về quê đón giao thừa và cắt bánh chưng.</p>`, btns);
+}
+
+function activeCalendarFestivalId(cal) {
+  if (!cal) return null;
+  const ev = eventsOn(cal)[0];
+  if (ev && FESTIVALS[ev.id]) return ev.id;
+  if (cal.season === 1 && cal.day >= 13 && cal.day <= 16) return 'obon';
+  if (cal.season === 3 && cal.day >= 1 && cal.day <= 3) return 'shogatsu';
+  return null;
 }
 
 async function lifeDayOffHub(group = null) {
@@ -1169,17 +1402,64 @@ async function lifeDayOffHub(group = null) {
   const P = G.player; P.holder.rotation.x = 0; P.holder.position.set(0.2, 0, 0.8); P.yaw = 0; P.play('idle');
   const evs = eventsOn(S.cal);
   const ev = evs[0] || null;
+  const festId = !isTyphoon ? activeCalendarFestivalId(S.cal) : null;
   dayHud(isTyphoon ? '🌀 Nghỉ bão ở nhà' : ev ? `${ev.icon} ${ev.vi}` : '🎌 Ngày nghỉ');
   const fx = curWeatherFx(S);
   const hActs = !isTyphoon ? holidayActs(S, S.cal).filter((a) => !d['holi_' + a.id] || a.id === 'cards') : [];
-  const hasHolidayGroup = !!(ev && !d.eventDone) || hActs.length > 0;
+  const hasHolidayGroup = !!(ev && !d.eventDone) || Boolean(festId && !d.eventDone) || hActs.length > 0;
   const openDocs = !isTyphoon
     ? paperTodo(S, S.cal).filter((doc) => isPaperOpen(doc.place, S.cal, d.min) || doc.id === 'juminzei')
     : [];
 
   if (group === 'holiday') {
     const btns = [];
-    if (ev && !d.eventDone) {
+    if (festId && FESTIVALS[festId]) {
+      const fDef = FESTIVALS[festId];
+      if (fDef.where === 'shrine') {
+        btns.push({
+          label: `⛩️ Vào lễ hội 3D đền さくら神社: ${fDef.icon} ${fDef.jp} — ${fDef.vi}`,
+          on: () => lifeFestivalShrineVisit(festId, () => {
+            d.eventDone = true;
+            save(S, storage);
+            notifyAchievements(S);
+            runStep();
+          }),
+        });
+      } else if (festId === 'bounenkai' && !d.eventDone) {
+        btns.push({
+          label: `🍻 Dự tiệc tất niên 忘年会 cùng công ty (4.000 ¥ · +2h)`,
+          on: () => bounenkaiEveningCard(ev || fDef, () => {
+            d.eventDone = true;
+            d.min += 120;
+            save(S, storage);
+            notifyAchievements(S);
+            runStep();
+          }),
+        });
+      } else if (festId === 'tet_vn' && !d.eventDone) {
+        btns.push({
+          label: `🧧 Đón Tết Nguyên Đán tại ký túc xá (+2h)`,
+          on: () => tetVnEveningCard(ev || fDef, () => {
+            d.eventDone = true;
+            d.min += 120;
+            save(S, storage);
+            notifyAchievements(S);
+            runStep();
+          }),
+        });
+      } else if (festId === 'valentine' && !d.eventDone) {
+        btns.push({
+          label: `🍫 Ngày Valentine バレンタイン (+1h)`,
+          on: () => valentineCard(ev || fDef, () => {
+            d.eventDone = true;
+            d.min += 60;
+            save(S, storage);
+            notifyAchievements(S);
+            runStep();
+          }),
+        });
+      }
+    } else if (ev && !d.eventDone) {
       btns.push({
         label: `🎉 ${ev.jp} — ${ev.vi} (+1h)`,
         on: () => {
@@ -1187,6 +1467,7 @@ async function lifeDayOffHub(group = null) {
           d.eventDone = true;
           d.min += 60;
           save(S, storage);
+          notifyAchievements(S);
           card(`<div class="big">${ev.icon}</div><h2>🎉 ${esc(ev.jp)} — ${esc(ev.vi)}</h2>
             <p>${esc(ev.desc)}</p>
             <div class="deltas">${deltaChips(deltas)}</div>`, [
@@ -1940,6 +2221,26 @@ function runHolidayAct(hAct) {
     return;
   }
 
+  const festMap = {
+    hanami: 'hanami',
+    hanabi: 'natsumatsuri',
+    bon: 'obon',
+    momiji: 'kouyou',
+    joya: 'oomisoka',
+    hatsumode: 'shogatsu',
+  };
+  if (festMap[hAct.id]) {
+    d['holi_' + hAct.id] = true;
+    save(S, storage);
+    lifeFestivalShrineVisit(festMap[hAct.id], () => {
+      d.min = (d.min || 540) + (hAct.min || 120);
+      save(S, storage);
+      notifyAchievements(S);
+      runStep();
+    });
+    return;
+  }
+
   const effCost = (hAct.id === 'hanabi' && S.bike?.owned) ? 0 : (hAct.cost || 0);
   if ((S.money || 0) < effCost) {
     toast('💴 Chưa đủ tiền', `Cần ${yen(effCost)} cho hoạt động này`);
@@ -1951,6 +2252,7 @@ function runHolidayAct(hAct) {
   d['holi_' + hAct.id] = true;
   d.min = (d.min || 540) + (hAct.min || 120);
   save(S, storage);
+  notifyAchievements(S);
   card(`<div class="big">${hAct.icon}</div><h2>${esc(hAct.jp)} — ${esc(hAct.vi)}</h2>
     <p>${esc(hAct.desc || '')}</p>
     <div class="deltas">${deltaChips(deltas)}</div>`, [
@@ -1958,8 +2260,48 @@ function runHolidayAct(hAct) {
   ]);
 }
 
+async function lifeFestivalShrineVisit(festId, onDone = null) {
+  const S = G.S;
+  S.lDay = S.lDay || { dayKey: curDayKey(S), min: 10 * 60 };
+  const d = S.lDay;
+  const fDef = FESTIVALS[festId] || { icon: '⛩️', jp: 'さくら神社', vi: 'Đền Sakura', time: 'day' };
+  if (!G.stages.shrine) { toast(`⛩️ Đang vào lễ hội ${fDef.jp}…`, fDef.vi); await ensureShrine(); }
+  hideNpcs();
+  await dress(false);
+  const [hung, hoa] = [await npc('hung', 'shrine'), await npc('hoa', 'shrine')];
+  await spawnWorkers();
+  G.mode = 'dayoff';
+  const startMin = (fDef.time === 'night' || fDef.time === 'dusk')
+    ? Math.max(d.min || 19 * 60, 19 * 60)
+    : (d.min || 10 * 60);
+  G.dayoff.start({
+    S,
+    stages: G.stages,
+    who: { player: G.player, hung, hoa },
+    setStage,
+    storage,
+    hubReturn: true,
+    directShrine: true,
+    festival: festId,
+    min: startMin,
+    dayLabel: hudCalText(S, `${fDef.icon} ${fDef.jp}`),
+    onNotify: notifyAchievements,
+    onEnd: (endSt) => {
+      d.min = Math.max((d.min || 540) + 120, endSt?.min || 720);
+      save(S, storage);
+      notifyAchievements(S);
+      if (onDone) onDone(endSt);
+      else runStep();
+    },
+  });
+}
+
 async function lifeShrineVisit() {
   const S = G.S, d = S.lDay;
+  const todayFest = activeCalendarFestivalId(S.cal);
+  if (todayFest && FESTIVALS[todayFest]?.where === 'shrine') {
+    return lifeFestivalShrineVisit(todayFest);
+  }
   if (!G.stages.shrine) { toast('⛩️ Đang vào đền さくら神社…', '休日 · Ngày nghỉ'); await ensureShrine(); }
   hideNpcs();
   await dress(false);
@@ -1975,9 +2317,11 @@ async function lifeShrineVisit() {
     hubReturn: true,
     min: d.min || 10 * 60,
     dayLabel: hudCalText(S, 'Đền さくら神社'),
+    onNotify: notifyAchievements,
     onEnd: (endSt) => {
       d.min = Math.max((d.min || 540) + 180, endSt?.min || 720);
       save(S, storage);
+      notifyAchievements(S);
       runStep();
     },
   });
