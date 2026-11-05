@@ -902,14 +902,7 @@ export class MorningWalk {
       this.camPos.set(tx + 14, 4.6, STATION.trackZ + 13); this.camLook.set(tx, 1.8, STATION.trackZ);
       this.camRig.to(this.camPos, this.camLook, dt, 3);
     } else {
-      // chase camera (player feedback 2026-11-05: the view stayed at an angle to the way the character faces):
-      // it swings behind the character while walking (slower while turning), and re-centres after a short stop
-      c.idleT = moving ? 0 : (c.idleT || 0) + dt;
-      if (!c.drag && (moving || c.idleT > 0.5)) {
-        let dy = P.yaw + Math.PI - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-        const rate = moving ? (Math.abs(c.joy.x) < 0.4 ? 3.2 : 0) : 2.4;
-        c.yaw += dy * Math.min(1, dt * rate);
-      }
+      c.follow(P.yaw + Math.PI, moving, dt); // chase camera, see Controls.follow
       const dist = 4.6 * (portrait ? 1.15 : 1), cp = Math.cos(c.pitch);
       this.camPos.set(pos.x + Math.sin(c.yaw) * dist * cp, pos.y + 1.5 + Math.sin(c.pitch) * dist, pos.z + Math.cos(c.yaw) * dist * cp);
       this.camLook.set(pos.x - Math.sin(c.yaw) * 2, pos.y + 1.0, pos.z - Math.cos(c.yaw) * 2);

@@ -478,13 +478,7 @@ export class LotusShift {
     if (this.intro > 0) {
       this.camRig.to(this.stage.showcase.pos, this.stage.showcase.look, dt, 3);
     } else {
-      // chase camera (player feedback 2026-11-05): swings behind the character while walking (slower while turning)
-      // and re-centres after a short stop, so the view and the way the character faces stay in line
-      c.idleT = moving ? 0 : (c.idleT || 0) + dt;
-      if (!c.drag && (moving || c.idleT > 0.5)) {
-        let dy = P.yaw + Math.PI - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-        c.yaw += dy * Math.min(1, dt * (moving ? (Math.abs(c.joy.x) < 0.4 ? 3.2 : 0) : 2.4));
-      }
+      c.follow(P.yaw + Math.PI, moving, dt); // chase camera, see Controls.follow
       const dist = 5.4 * (portrait ? 1.16 : 1), cp = Math.cos(c.pitch);
       this.camPos.set(
         pos.x + Math.sin(c.yaw) * dist * cp,
