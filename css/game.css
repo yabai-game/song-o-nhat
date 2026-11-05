@@ -341,10 +341,11 @@ button.small { font-size: 13px; padding: 8px 12px; }
 #shifthud .tip.mini { width: auto; max-width: calc(100% - 32px); padding: 4px 12px; border-radius: 99px; opacity: .9; }
 #shifthud .tip.mini span { display: none; }
 #shifthud .tip.mini b::after { content: ' ▾'; opacity: .6; font-weight: 400; }
-@media (orientation: landscape) {
-  #shifthud .rank, #shifthud .mini-bars { top: calc(56px + env(safe-area-inset-top, 0px)) !important; }
-  #shifthud .tip { width: min(300px, calc(100% - 460px)); }
-}
+/* rows below the top bar are placed by layoutHud() in main.js (measured, fits any screen); the place name flashes
+   mid-screen so it never covers the chores / tip; iOS must not inflate HUD text in landscape */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+#shifthud .place { top: 30% !important; }
+#shifthud .tip { width: min(380px, calc(100% - 32px)); }
 
 /* S21 UI fixes: prevent #toast and #ach-toast from overlapping #modal .card or #dayhud .top, and compact cards on 812x375 landscape */
 #toast { box-sizing: border-box; z-index: 26; }

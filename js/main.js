@@ -293,6 +293,41 @@ function bindUi() {
   $('day-label').parentElement?.addEventListener('click', calendarModal);
   // HUD tidy-up: the day pill on the walking / shift HUD opens the calendar too; the place pill only flashes when the
   // place changes; the tip shrinks to its title after 6 s (tap to open it again) and sits below whatever is above it
+  // HUD flow layout (fits every phone, owner: "khớp và hiển thị đầy đủ với mọi thiết bị"): row 1 is ☰ 📱 goal ✕;
+  // row 2 is the day pill + stat bars side by side when both fit, otherwise the bars drop under the day pill;
+  // then the chores chips (left) / work ticket (right); the tip always sits below all of them. Measured, never guessed.
+  const imp = (el, k, v) => { if (el.style.getPropertyValue(k) !== v) el.style.setProperty(k, v, 'important'); };
+  function layoutHud() {
+    const hud = $('shifthud'); if (hud.hidden) return;
+    const H = hud.getBoundingClientRect(); if (!H.width) return;
+    const rank = $('sh-rank'), bars = $('sh-bars'), chips = $('sh-chips'), ticket = $('sh-ticket'), tip = $('sh-tip');
+    const vis = (el) => el && !el.hidden && getComputedStyle(el).display !== 'none';
+    const L = Math.max(12, rank.getBoundingClientRect().left - H.left || 12);
+    let y = 0;
+    for (const el of [hud.querySelector('.top'), $('btn-menu'), $('btn-phone')]) {
+      if (!el || el.hidden) continue; const r = el.getBoundingClientRect(); if (r.height) y = Math.max(y, r.bottom - H.top);
+    }
+    y = Math.round(y + 6);
+    const W = H.width, rankOn = vis(rank) && rank.textContent.trim(), barsOn = vis(bars);
+    const rw = rankOn ? rank.scrollWidth : 0, bw = barsOn ? bars.offsetWidth : 0;
+    const inline = !rankOn || !barsOn || L + rw + 8 + bw + L <= W;
+    let bottom = y;
+    if (rankOn) { imp(rank, 'top', y + 'px'); imp(rank, 'max-width', (inline && barsOn ? W - 2 * L - bw - 8 : W - 2 * L) + 'px'); bottom = Math.max(bottom, y + rank.offsetHeight); }
+    if (barsOn) {
+      const by = inline ? y : bottom + 5;
+      imp(bars, 'top', by + 'px');
+      if (inline) { imp(bars, 'left', 'auto'); imp(bars, 'right', L + 'px'); } else { imp(bars, 'right', 'auto'); imp(bars, 'left', L + 'px'); }
+      bottom = Math.max(bottom, by + bars.offsetHeight);
+    }
+    let low = bottom;
+    for (const el of [chips, ticket]) {
+      if (!vis(el)) continue;
+      imp(el, 'top', (bottom + 6) + 'px');
+      if (el === chips) imp(el, 'max-width', (vis(ticket) ? W - 2 * L - ticket.offsetWidth - 8 : W - 2 * L) + 'px');
+      low = Math.max(low, bottom + 6 + el.offsetHeight);
+    }
+    if (vis(tip)) imp(tip, 'top', (low + 6) + 'px');
+  }
   $('sh-rank').style.pointerEvents = 'auto';
   $('sh-rank').addEventListener('click', () => { if (G.S) calendarModal(); });
   {
@@ -307,18 +342,9 @@ function bindUi() {
       if (p !== lastPlace) { lastPlace = p; if (p) flash(); }
       const t = tip.hidden ? '' : tip.textContent.trim();
       if (t !== lastTip) { lastTip = t; if (t) fresh(); }
-      if (!tip.hidden && !$('shifthud').hidden) {
-        const hud = $('shifthud').getBoundingClientRect();
-        let bottom = 0;
-        for (const id of ['sh-rank', 'sh-bars', 'sh-chips', 'sh-ticket', 'sh-place']) {
-          const el = $(id); if (!el || el.hidden) continue;
-          if (id === 'sh-place' && !el.classList.contains('flash')) continue;
-          const r = el.getBoundingClientRect(); if (r.height) bottom = Math.max(bottom, r.bottom);
-        }
-        const top = Math.round(Math.max(bottom - hud.top + 6, 90)) + 'px';
-        if (tip.style.top !== top) tip.style.top = top;
-      }
+      layoutHud();
     }, 200);
+    addEventListener('resize', () => requestAnimationFrame(layoutHud));
   }
   // the ☰ menu button, 📅 calendar button, 📒 notebook button, and 📱 LIME phone button show whenever a game screen is up
   setInterval(() => {
@@ -351,14 +377,6 @@ function bindUi() {
     const m = (k, icon, v, cls) => `<button type="button" class="sbar mini ${cls}" data-k="${k}" aria-label="${k}"><span class="sb-i">${icon}</span><span class="sb-t"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></span></button>`;
     const html = m('health', '❤️', S.health, lvl(S.health)) + m('mental', '🧠', S.mental, lvl(S.mental)) + m('skill', '🛠️', sk.pct, sk.maxed ? 'max' : 'skill');
     if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
-    // sit just below whatever is on the left under the top bar (the day / rank pill can wrap to two lines)
-    let bottom = 0;
-    for (const id of ['sh-rank']) {
-      const el = $(id); if (!el || el.hidden) continue;
-      const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
-      if (r.height && r.left < b.right && r.right > b.left) bottom = Math.max(bottom, r.bottom);
-    }
-    if (bottom) { const top = Math.round(bottom - hud.getBoundingClientRect().top + 6) + 'px'; if (box.style.top !== top) box.style.top = top; }
   }, 250);
   $('btn-credits').addEventListener('click', creditsScreen);
   $('cr-back').addEventListener('click', titleScreen);
