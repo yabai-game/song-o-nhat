@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&family=Zen+Maru+Gothic:wght@500;700&display=swap">
-<link rel="stylesheet" href="css/game.css?v=3ce7707628">
+<link rel="stylesheet" href="css/game.css?v=d25fbc2ea4">
 <style id="s14-style">
 .menu-btn { width: 34px; height: 34px; font-size: 16px; left: max(10px, env(safe-area-inset-left, 0px)); }
 .cal-btn { left: calc(max(10px, env(safe-area-inset-left, 0px)) + 36px); font-size: 15px; }
@@ -106,6 +106,7 @@
         <button class="ghost" id="btn-career" hidden>🔄 Đổi nghề</button>
         <button class="ghost" id="btn-demo">🎮 Thử ca làm 3D</button>
         <button class="ghost small" id="btn-credits">📜 Ghi công mô hình 3D</button>
+        <button class="ghost small" id="btn-music">🎵 Nhạc nền: bật</button>
       </div>
       <p class="fine">Bản dựng lại 3D · Chơi được: Xây dựng, Chăm sóc người già · Đào củ sen và Làm cơm hộp sắp mở</p>
     </div>
@@ -206,66 +207,68 @@
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/core/bento_data.js": "./js/core/bento_data.js?v=3ce7707628",
-  "./js/core/bento_rules.js": "./js/core/bento_rules.js?v=3ce7707628",
-  "./js/core/bicycle.js": "./js/core/bicycle.js?v=3ce7707628",
-  "./js/core/calendar.js": "./js/core/calendar.js?v=3ce7707628",
-  "./js/core/care_data.js": "./js/core/care_data.js?v=3ce7707628",
-  "./js/core/care_rules.js": "./js/core/care_rules.js?v=3ce7707628",
-  "./js/core/career.js": "./js/core/career.js?v=3ce7707628",
-  "./js/core/clinic.js": "./js/core/clinic.js?v=3ce7707628",
-  "./js/core/crowd.js": "./js/core/crowd.js?v=3ce7707628",
-  "./js/core/dayoff_rules.js": "./js/core/dayoff_rules.js?v=3ce7707628",
-  "./js/core/disaster.js": "./js/core/disaster.js?v=3ce7707628",
-  "./js/core/evening.js": "./js/core/evening.js?v=3ce7707628",
-  "./js/core/festival.js": "./js/core/festival.js?v=3ce7707628",
-  "./js/core/gait.js": "./js/core/gait.js?v=3ce7707628",
-  "./js/core/holiday.js": "./js/core/holiday.js?v=3ce7707628",
-  "./js/core/home_life.js": "./js/core/home_life.js?v=3ce7707628",
-  "./js/core/jobs.js": "./js/core/jobs.js?v=3ce7707628",
-  "./js/core/lotus_data.js": "./js/core/lotus_data.js?v=3ce7707628",
-  "./js/core/lotus_rules.js": "./js/core/lotus_rules.js?v=3ce7707628",
-  "./js/core/market_rules.js": "./js/core/market_rules.js?v=3ce7707628",
-  "./js/core/morning.js": "./js/core/morning.js?v=3ce7707628",
-  "./js/core/paperwork.js": "./js/core/paperwork.js?v=3ce7707628",
-  "./js/core/site_rules.js": "./js/core/site_rules.js?v=3ce7707628",
-  "./js/core/stars.js": "./js/core/stars.js?v=3ce7707628",
-  "./js/core/state.js": "./js/core/state.js?v=3ce7707628",
-  "./js/core/story.js": "./js/core/story.js?v=3ce7707628",
-  "./js/core/train.js": "./js/core/train.js?v=3ce7707628",
-  "./js/core/trash_rules.js": "./js/core/trash_rules.js?v=3ce7707628",
-  "./js/core/wellbeing.js": "./js/core/wellbeing.js?v=3ce7707628",
-  "./js/gfx/backdrop.js": "./js/gfx/backdrop.js?v=3ce7707628",
-  "./js/gfx/bento.js": "./js/gfx/bento.js?v=3ce7707628",
-  "./js/gfx/care.js": "./js/gfx/care.js?v=3ce7707628",
-  "./js/gfx/chars.js": "./js/gfx/chars.js?v=3ce7707628",
-  "./js/gfx/controls.js": "./js/gfx/controls.js?v=3ce7707628",
-  "./js/gfx/crowd.js": "./js/gfx/crowd.js?v=3ce7707628",
-  "./js/gfx/dorm.js": "./js/gfx/dorm.js?v=3ce7707628",
-  "./js/gfx/festival.js": "./js/gfx/festival.js?v=3ce7707628",
-  "./js/gfx/lotus.js": "./js/gfx/lotus.js?v=3ce7707628",
-  "./js/gfx/market.js": "./js/gfx/market.js?v=3ce7707628",
-  "./js/gfx/season.js": "./js/gfx/season.js?v=3ce7707628",
-  "./js/gfx/services.js": "./js/gfx/services.js?v=3ce7707628",
-  "./js/gfx/shrine.js": "./js/gfx/shrine.js?v=3ce7707628",
-  "./js/gfx/site.js": "./js/gfx/site.js?v=3ce7707628",
-  "./js/gfx/stage.js": "./js/gfx/stage.js?v=3ce7707628",
-  "./js/gfx/station.js": "./js/gfx/station.js?v=3ce7707628",
-  "./js/gfx/street.js": "./js/gfx/street.js?v=3ce7707628",
-  "./js/gfx/town.js": "./js/gfx/town.js?v=3ce7707628",
-  "./js/main.js": "./js/main.js?v=3ce7707628",
-  "./js/ui/ui.js": "./js/ui/ui.js?v=3ce7707628",
-  "./js/work/bento_shift.js": "./js/work/bento_shift.js?v=3ce7707628",
-  "./js/work/care_shift.js": "./js/work/care_shift.js?v=3ce7707628",
-  "./js/work/dayoff.js": "./js/work/dayoff.js?v=3ce7707628",
-  "./js/work/evening_walk.js": "./js/work/evening_walk.js?v=3ce7707628",
-  "./js/work/lotus_shift.js": "./js/work/lotus_shift.js?v=3ce7707628",
-  "./js/work/market_shop.js": "./js/work/market_shop.js?v=3ce7707628",
-  "./js/work/morning_walk.js": "./js/work/morning_walk.js?v=3ce7707628",
-  "./js/work/site_shift.js": "./js/work/site_shift.js?v=3ce7707628"
+  "./js/audio/music.js": "./js/audio/music.js?v=d25fbc2ea4",
+  "./js/core/bento_data.js": "./js/core/bento_data.js?v=d25fbc2ea4",
+  "./js/core/bento_rules.js": "./js/core/bento_rules.js?v=d25fbc2ea4",
+  "./js/core/bicycle.js": "./js/core/bicycle.js?v=d25fbc2ea4",
+  "./js/core/calendar.js": "./js/core/calendar.js?v=d25fbc2ea4",
+  "./js/core/care_data.js": "./js/core/care_data.js?v=d25fbc2ea4",
+  "./js/core/care_rules.js": "./js/core/care_rules.js?v=d25fbc2ea4",
+  "./js/core/career.js": "./js/core/career.js?v=d25fbc2ea4",
+  "./js/core/clinic.js": "./js/core/clinic.js?v=d25fbc2ea4",
+  "./js/core/crowd.js": "./js/core/crowd.js?v=d25fbc2ea4",
+  "./js/core/dayoff_rules.js": "./js/core/dayoff_rules.js?v=d25fbc2ea4",
+  "./js/core/disaster.js": "./js/core/disaster.js?v=d25fbc2ea4",
+  "./js/core/evening.js": "./js/core/evening.js?v=d25fbc2ea4",
+  "./js/core/festival.js": "./js/core/festival.js?v=d25fbc2ea4",
+  "./js/core/gait.js": "./js/core/gait.js?v=d25fbc2ea4",
+  "./js/core/holiday.js": "./js/core/holiday.js?v=d25fbc2ea4",
+  "./js/core/home_life.js": "./js/core/home_life.js?v=d25fbc2ea4",
+  "./js/core/jobs.js": "./js/core/jobs.js?v=d25fbc2ea4",
+  "./js/core/lotus_data.js": "./js/core/lotus_data.js?v=d25fbc2ea4",
+  "./js/core/lotus_rules.js": "./js/core/lotus_rules.js?v=d25fbc2ea4",
+  "./js/core/market_rules.js": "./js/core/market_rules.js?v=d25fbc2ea4",
+  "./js/core/morning.js": "./js/core/morning.js?v=d25fbc2ea4",
+  "./js/core/paperwork.js": "./js/core/paperwork.js?v=d25fbc2ea4",
+  "./js/core/site_rules.js": "./js/core/site_rules.js?v=d25fbc2ea4",
+  "./js/core/stars.js": "./js/core/stars.js?v=d25fbc2ea4",
+  "./js/core/state.js": "./js/core/state.js?v=d25fbc2ea4",
+  "./js/core/story.js": "./js/core/story.js?v=d25fbc2ea4",
+  "./js/core/train.js": "./js/core/train.js?v=d25fbc2ea4",
+  "./js/core/trash_rules.js": "./js/core/trash_rules.js?v=d25fbc2ea4",
+  "./js/core/wellbeing.js": "./js/core/wellbeing.js?v=d25fbc2ea4",
+  "./js/gfx/backdrop.js": "./js/gfx/backdrop.js?v=d25fbc2ea4",
+  "./js/gfx/bento.js": "./js/gfx/bento.js?v=d25fbc2ea4",
+  "./js/gfx/care.js": "./js/gfx/care.js?v=d25fbc2ea4",
+  "./js/gfx/chars.js": "./js/gfx/chars.js?v=d25fbc2ea4",
+  "./js/gfx/controls.js": "./js/gfx/controls.js?v=d25fbc2ea4",
+  "./js/gfx/crowd.js": "./js/gfx/crowd.js?v=d25fbc2ea4",
+  "./js/gfx/dorm.js": "./js/gfx/dorm.js?v=d25fbc2ea4",
+  "./js/gfx/festival.js": "./js/gfx/festival.js?v=d25fbc2ea4",
+  "./js/gfx/lotus.js": "./js/gfx/lotus.js?v=d25fbc2ea4",
+  "./js/gfx/market.js": "./js/gfx/market.js?v=d25fbc2ea4",
+  "./js/gfx/season.js": "./js/gfx/season.js?v=d25fbc2ea4",
+  "./js/gfx/services.js": "./js/gfx/services.js?v=d25fbc2ea4",
+  "./js/gfx/shrine.js": "./js/gfx/shrine.js?v=d25fbc2ea4",
+  "./js/gfx/site.js": "./js/gfx/site.js?v=d25fbc2ea4",
+  "./js/gfx/stage.js": "./js/gfx/stage.js?v=d25fbc2ea4",
+  "./js/gfx/station.js": "./js/gfx/station.js?v=d25fbc2ea4",
+  "./js/gfx/street.js": "./js/gfx/street.js?v=d25fbc2ea4",
+  "./js/gfx/town.js": "./js/gfx/town.js?v=d25fbc2ea4",
+  "./js/main.js": "./js/main.js?v=d25fbc2ea4",
+  "./js/net/firebase_config.js": "./js/net/firebase_config.js?v=d25fbc2ea4",
+  "./js/ui/ui.js": "./js/ui/ui.js?v=d25fbc2ea4",
+  "./js/work/bento_shift.js": "./js/work/bento_shift.js?v=d25fbc2ea4",
+  "./js/work/care_shift.js": "./js/work/care_shift.js?v=d25fbc2ea4",
+  "./js/work/dayoff.js": "./js/work/dayoff.js?v=d25fbc2ea4",
+  "./js/work/evening_walk.js": "./js/work/evening_walk.js?v=d25fbc2ea4",
+  "./js/work/lotus_shift.js": "./js/work/lotus_shift.js?v=d25fbc2ea4",
+  "./js/work/market_shop.js": "./js/work/market_shop.js?v=d25fbc2ea4",
+  "./js/work/morning_walk.js": "./js/work/morning_walk.js?v=d25fbc2ea4",
+  "./js/work/site_shift.js": "./js/work/site_shift.js?v=d25fbc2ea4"
  }
 }
 </script>
-<script type="module" src="js/main.js?v=3ce7707628"></script>
+<script type="module" src="js/main.js?v=d25fbc2ea4"></script>
 
 </body></html>

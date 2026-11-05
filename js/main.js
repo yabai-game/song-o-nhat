@@ -69,12 +69,16 @@ import {
 } from './core/festival.js';
 
 const storage = (() => { try { return window.localStorage; } catch { return { getItem: () => null, setItem() {}, removeItem() {} }; } })();
+import { Music, pickTrack } from './audio/music.js';
+const music = new Music(); // background music (Stardew-style: per place and per season)
+let musicT = 0;
 const G = {
   S: null, demoState: { flags: {} }, stage: null, stages: {}, player: null, own: null, wardrobe: {}, folk: [], npcs: {}, workers: [], streetCrowd: null, stationCrowd: null, demoJob: null, activeShift: null,
   draft: { gender: 'm', outfit: 'hoodie', colors: { top: null, bottom: null, hair: null, skin: null }, name: '' },
   mode: 'loading', yaw: 0, spin: 0.5, camRig: new CamRig(), overhead: new Overhead(), t: 0,
 };
 window.__game = G;
+G.music = music;
 
 // NPC looks: outfit model + colours (+ hard hat at the site)
 const NPC_LOOK = {
@@ -252,6 +256,9 @@ function bindUi() {
   $('btn-continue').addEventListener('click', () => { const S = load(storage); if (S) { G.S = S; G.draft.colors = S.look.colors; G.draft.outfit = S.look.outfit; setPlayer().then(runStep); } });
   $('btn-demo').addEventListener('click', demoScreen);
   $('btn-career').addEventListener('click', careerScreen);
+  const musicLabel = () => { const b = $('btn-music'); if (b) b.textContent = music.muted ? '🔇 Nhạc nền: tắt' : '🎵 Nhạc nền: bật'; };
+  musicLabel();
+  $('btn-music')?.addEventListener('click', () => { music.start(); music.toggle(); musicLabel(); });
   $('btn-menu').addEventListener('click', pauseMenu);
   $('btn-cal').addEventListener('click', calendarModal);
   $('btn-note')?.addEventListener('click', notebookModal);
@@ -328,6 +335,7 @@ function pauseMenu() {
   const demo = !G.S || G.S.flags.demo || G.demoJob;
   card(`<h2>⏸ Tạm dừng</h2><p>${demo ? 'Đang ở chế độ thử, không lưu.' : 'Tiến độ đã lưu tới bước gần nhất. Về màn hình chính thì phần đang làm dở (ca làm, đường đi) sẽ làm lại từ đầu bước này.'}</p>`, [
     { label: '▶ Tiếp tục', on: () => { if (mod) mod.paused = was; } },
+    { label: music.muted ? '🔈 Bật nhạc nền' : '🔇 Tắt nhạc nền', cls: 'ghost', on: () => { music.toggle(); if (mod) mod.paused = was; toast(music.muted ? '🔇 Đã tắt nhạc nền' : '🎵 Đã bật nhạc nền'); } },
     { label: '🏠 Về màn hình chính', cls: 'ghost', on: () => {
       try { if (mod && mod.stop) mod.stop(); } catch (e) { console.warn(e); }
       if (mod) mod.active = false;
@@ -2986,6 +2994,7 @@ function frame() {
   if (G.mode === 'market') G.market.update(dt, t);
   if (G.mode === 'dayoff') G.dayoff.update(dt, t);
   if (G.stageId === 'dorm') st.setDrying?.(!!G.S?.home?.drying); // clothes on the rack while laundry dries indoors
+  if ((musicT -= dt) <= 0) { musicT = 0.5; music.set(pickTrack({ mode: G.mode, stageId: G.stageId, season: G.S?.life && G.S?.cal ? G.S.cal.season : 0, festival: G.stages.shrine?.festival })); }
   if (G.streetCrowd) {
     const onStreet = G.stageId === 'site' && (G.mode === 'morning' || G.mode === 'evening' || G.mode === 'dayoff');
     G.streetCrowd.setVisible(onStreet);
