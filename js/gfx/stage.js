@@ -4,13 +4,29 @@ import{GLTFLoader}from'three/addons/loaders/GLTFLoader.js';
 export const MODEL_V='21';
 export const canvas=document.getElementById('c');
 export const LOW_MEM=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
-export const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+export const renderer=new THREE.WebGLRenderer({canvas,antialias:!LOW_MEM,powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,LOW_MEM?1.5:2));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.05;
 renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.shadowMap.type=LOW_MEM?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
+export function trimShadowCasters(scene,minRadius=1.0,minRadiusOnBones=0.25){
+if(!LOW_MEM)return 0;
+let n=0;
+const s=new THREE.Vector3();
+scene.traverse((o)=>{
+if(!o.isMesh||!o.castShadow||o.isSkinnedMesh)return;
+let onBone=false;
+for(let p=o.parent;p;p=p.parent)if(p.isBone){onBone=true;break;}
+const g=o.geometry;
+if(!g.boundingSphere)g.computeBoundingSphere();
+o.getWorldScale(s);
+const r=g.boundingSphere.radius*Math.max(s.x,s.y,s.z);
+if(r<(onBone?minRadiusOnBones:minRadius)){o.castShadow=false;n++;}
+});
+return n;
+}
 export const camera=new THREE.PerspectiveCamera(46,1,0.3,400);
 export const isPortrait=()=>canvas.clientWidth<canvas.clientHeight;
 export function resize(){

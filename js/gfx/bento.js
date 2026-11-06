@@ -1,6 +1,7 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import*as THREE from'three';
 import{mergeGeometries}from'three/addons/utils/BufferGeometryUtils.js';
+import{SimplifyModifier}from'three/addons/modifiers/SimplifyModifier.js';
 import{canvasTexture,signTexture,makeSun,loadModel}from'./stage.js';
 import{makeCharacter,makeSanitaryCap,wearHelmet}from'./chars.js';
 import{BENTO,ITEMS,ITEM_KEYS,DEFECTS}from'../core/bento_rules.js';
@@ -515,8 +516,14 @@ const sideMats={karaage:FOOD.karaage.mat,sausage:FOOD.sausage.mat,veg:FOOD.veg.m
 const panScale={karaage:1.1,sausage:1.2,veg:1.05};
 for(const key of ITEM_KEYS){
 const pans=panAssignments.filter((p)=>p.kind===key);
-const inst=new THREE.InstancedMesh(FOOD[key].geo,FOOD[key].mat,pans.length*piecesPerPan);
-inst.castShadow=true;
+let panGeo=FOOD[key].geo;
+try{
+const n=panGeo.attributes.position.count;
+panGeo=new SimplifyModifier().modify(FOOD[key].geo,Math.floor(n*0.66));
+panGeo.computeVertexNormals();
+}catch(err){console.warn('pan food simplify',err);panGeo=FOOD[key].geo;}
+const inst=new THREE.InstancedMesh(panGeo,FOOD[key].mat,pans.length*piecesPerPan);
+inst.castShadow=false;
 inst.receiveShadow=true;
 s1.setScalar(panScale[key]);
 let idx=0;

@@ -1,7 +1,7 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import{pageview,track}from'./net/stats.js';
 import*as THREE from'three';
-import{renderer,camera,resize,isPortrait,CamRig,loadModel,loadBrand,loadStats,LOW_MEM}from'./gfx/stage.js';
+import{renderer,camera,resize,isPortrait,CamRig,loadModel,loadBrand,loadStats,LOW_MEM,trimShadowCasters}from'./gfx/stage.js';
 import{OUTFITS,SWATCH,ensureSrc,makeCharacter,makeHelmet,makeSanitaryCap,wearHelmet,wearWaders,refHex}from'./gfx/chars.js';
 import{buildTown}from'./gfx/town.js';
 import{buildSite,DECK_Y,WANDER,ROUTE}from'./gfx/site.js';
@@ -148,6 +148,7 @@ for(const st of Object.values(G.stages)){
 if(!st?.scene)continue;
 try{
 if(!LOW_MEM)st.scene.traverse((o)=>{if(o.isMesh)for(const m of[].concat(o.material))for(const k of['map','emissiveMap','alphaMap','normalMap'])if(m&&m[k])renderer.initTexture(m[k]);});
+trimShadowCasters(st.scene);
 renderer.compile(st.scene,camera);
 }catch(e){console.warn('warm-up',e);}
 await new Promise((r)=>setTimeout(r,0));
