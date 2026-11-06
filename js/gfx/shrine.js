@@ -192,6 +192,13 @@ tree.scale.setScalar(sc);
 scene.add(tree);
 SHRINE.blocks.push({x:tx,z:tz,r:0.52});
 }
+const hanamiGroup=new THREE.Group();
+const putHanami=(geo,mat,x,y,z)=>{
+const m=new THREE.Mesh(geo,mat);
+m.position.set(x,y,z);
+m.castShadow=true;m.receiveShadow=true;
+hanamiGroup.add(m);
+};
 const tarpTex=canvasTexture(128,128,(g)=>{
 g.fillStyle='#1e6ec7';g.fillRect(0,0,128,128);
 g.strokeStyle='rgba(255,255,255,0.12)';g.lineWidth=2;
@@ -208,14 +215,15 @@ new THREE.MeshStandardMaterial({map:tarpTex,roughness:0.7,polygonOffset:true,pol
 tarp.rotation.x=-Math.PI/2;
 tarp.position.set(4.5,0.015,1.05);
 tarp.receiveShadow=true;
-scene.add(tarp);
-put(B(0.48,0.04,0.34),woodMid,4.5,0.035,1.02);
+hanamiGroup.add(tarp);
+putHanami(B(0.48,0.04,0.34),woodMid,4.5,0.035,1.02);
 for(const dx of[-0.14,0,0.14]){
-put(new THREE.CylinderGeometry(0.035,0.03,0.07,10),col('#5f7f58'),4.5+dx,0.08,0.96);
+putHanami(new THREE.CylinderGeometry(0.035,0.03,0.07,10),col('#5f7f58'),4.5+dx,0.08,0.96);
 }
 for(const[dx,c]of[[-0.08,'#f4a8b8'],[0,'#fbfaf4'],[0.08,'#7ea862']]){
-put(new THREE.SphereGeometry(0.032,8,6),col(c),4.5+dx,0.075,1.1);
+putHanami(new THREE.SphereGeometry(0.032,8,6),col(c),4.5+dx,0.075,1.1);
 }
+scene.add(hanamiGroup);
 for(const[m,list]of batch){
 const mesh=new THREE.Mesh(mergeGeometries(list,false),m);
 mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);
@@ -263,11 +271,12 @@ get festival(){return fest.festival;},
 setKyoTied(on){
 kyoSlip.visible=!!on;
 },
-syncRings(st){
+syncRings(st,showHanami=true){
 if(!st)return;
 rings.pray.visible=!st.prayed;
 rings.omikuji.visible=!st.omikuji;
-rings.hanami.visible=!st.hanami;
+rings.hanami.visible=showHanami&&!st.hanami;
+hanamiGroup.visible=showHanami;
 },
 update(dt,t){
 season.update(dt);
@@ -301,7 +310,11 @@ const GROUND={spring:'#ffffff',summer:'#e6f2d4',autumn:'#e8c890',winter:'#ffffff
 const fx=makeSeasonFx(scene,{snowAreas,fall:false});
 const set=(s)=>{
 const id=(typeof s==='number'?SEASON_IDS[s]:s)||'spring',L=SEASON_LOOK[id]||SEASON_LOOK.spring,c=new THREE.Color(L.sakura);
-mats.forEach((m,i)=>{m.color.copy(base[i]).multiply(c);if(m.emissive)m.emissive.set(id==='winter'?'#3a3d42':'#000000');});
+mats.forEach((m,i)=>{
+if(id==='summer')m.color.setRGB(0.28,1.15,0.32);
+else m.color.copy(base[i]).multiply(c);
+if(m.emissive)m.emissive.set(id==='winter'?'#3a3d42':'#000000');
+});
 if(ground){ground.color.copy(gBase).multiply(new THREE.Color(GROUND[id]));if(id==='winter')ground.color.set('#eef2f5');}
 petals.visible=id==='spring'||id==='autumn';
 petals.material.color.set(id==='autumn'?'#d9762e':'#f6c3d0');

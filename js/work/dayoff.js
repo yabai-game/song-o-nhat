@@ -288,6 +288,9 @@ this.tip('⛩ さくら神社 →','Đi dọc vỉa hè tới biển chỉ đư�
 this.camRig.init=false;
 this.hud();
 }
+hasHanami(){
+return(!this.festival||this.festival==='hanami')&&(!this.S?.cal||this.S.cal.season===0);
+}
 enterShrine(){
 this.st.phase='shrine';
 const P=this.who.player,shrine=this.stages.shrine;
@@ -309,16 +312,25 @@ P.look(this.S.look.colors);
 P.holder.position.set(SHRINE.start.x,0,SHRINE.start.z);
 P.yaw=SHRINE.start.yaw;
 P.play('idle');
+const showHanami=this.hasHanami();
 if(this.who.hung){
+if(showHanami){
 this.stages.shrine.scene.add(this.who.hung.holder);
 if(this.who.hung.helmet)this.who.hung.helmet.visible=false;
 seatOnTarp(this.who.hung,SHRINE.seats.hung.x,SHRINE.seats.hung.z,SHRINE.seats.hung.yaw);
+}else{
+this.who.hung.holder.removeFromParent();
+}
 }
 if(this.who.hoa){
+if(showHanami){
 this.stages.shrine.scene.add(this.who.hoa.holder);
 seatOnTarp(this.who.hoa,SHRINE.seats.hoa.x,SHRINE.seats.hoa.z,SHRINE.seats.hoa.yaw);
+}else{
+this.who.hoa.holder.removeFromParent();
 }
-shrine.syncRings(this.st);
+}
+shrine.syncRings(this.st,showHanami);
 this.syncFestRings();
 this.controls.reset({yaw:0,pitch:0.38,groundY:0,yawLimit:[-Infinity,Infinity]});
 this.controls.enabled=true;
@@ -418,11 +430,12 @@ const st=this.st;
 if(!st)return;
 const ph=st.phase;
 const icon=st.min>=18*60+30?'🌙':'☀️';
+const showHanami=this.hasHanami();
 const statusParts=[
 `🙏 ${st.prayed ? '✓' : '—'}`,
 `🎋 ${st.omikuji || '—'}`,
-`🌸 ${st.hanami ? '✓' : '—'}`,
 ];
+if(showHanami)statusParts.push(`🌸 ${st.hanami ? '✓' : '—'}`);
 if(this.festival){
 const fDef=FESTIVALS[this.festival];
 if(fDef)statusParts.unshift(`${fDef.icon} ${fDef.jp}`);
@@ -453,12 +466,8 @@ this.tip(
 );
 }else if(spot==='omikuji'&&!st.omikuji){
 visibleIds.add('omikuji');
-}else if(spot==='hanami'&&!st.hanami){
-visibleIds.add('hanami');
-}else if(this.festival){
-const f=this.festival;
-const activeStalls=SHRINE.festival?.show?.[f]||[];
-if(fSpot?.kind==='stall'){
+}else if(this.festival&&fSpot){
+if(fSpot.kind==='stall'){
 if(fSpot.id==='kingyo'){
 visibleIds.add('kingyo');
 hotFestId='kingyo';
@@ -466,21 +475,27 @@ this.tip('金魚すくい · Vớt cá vàng (300 ¥)','Bấm 🐠 Vớt cá đ�
 }else{
 const it=YATAI_ITEMS[fSpot.id];
 if(it){
-this._setBtnText('yatai',it.icon,it.vi,`${it.jp} ${it.cost}¥`);
+const shortVi={takoyaki:'Takoyaki',yakisoba:'Yakisoba',kakigori:'Đá bào',ringo_ame:'Kẹo táo',amazake:'Rượu ngọt',soba:'Mì Soba'}[fSpot.id]||it.vi;
+this._setBtnText('yatai',it.icon,shortVi,`${it.jp} ${it.cost}¥`);
 visibleIds.add('yatai');
 hotFestId='yatai';
 this.tip(`${it.icon} ${it.jp} · ${it.vi}`,`Giá: ${it.cost.toLocaleString()} ¥ — Bấm để thưởng thức tại quầy!`,0);
 }
 }
-}else if(fSpot?.kind==='yagura'){
+}else if(fSpot.kind==='yagura'){
 visibleIds.add('bon');
 hotFestId='bon';
 this.tip('盆踊り · Đài nhảy Bon Odori','Bấm 💃 Bon Odori để vỗ tay nhảy theo 16 nhịp trống Taiko!',0);
-}else if(fSpot?.kind==='bell'){
+}else if(fSpot.kind==='bell'){
 visibleIds.add('joya');
 hotFestId='joya';
 this.tip('除夜の鐘 · Tháp chuông giao thừa','Bấm 🔔 Chuông 108 để thỉnh tiếng chuông giao thừa xua tan 108 phiền não!',0);
-}else{
+}
+}else if(spot==='hanami'&&showHanami&&!st.hanami){
+visibleIds.add('hanami');
+}else if(this.festival){
+const f=this.festival;
+const activeStalls=SHRINE.festival?.show?.[f]||[];
 if(activeStalls.some((s)=>s!=='kingyo')){
 this._setBtnText('yatai','🏮','Quầy hàng','屋台');
 visibleIds.add('yatai');
@@ -504,7 +519,6 @@ visibleIds.add('festact');
 }else if(f==='kouyou'){
 this._setBtnText('festact','🍁','Ngắm lá đỏ','紅葉狩り');
 visibleIds.add('festact');
-}
 }
 }
 visibleIds.add('home');
@@ -641,7 +655,7 @@ this.S.festLog.festivalsVisited=this.S.festLog.festivalsVisited||{};
 this.S.festLog.festivalsVisited.shogatsu=true;
 }
 if(this.storage)save(this.S,this.storage);
-this.stages.shrine.syncRings(this.st);
+this.stages.shrine.syncRings(this.st,this.hasHanami());
 this.overhead.say(P,'どうか健康で働けますように… — Mong luôn khỏe mạnh bình an!',3.5);
 toast('⛩️ Đi lễ お参り hoàn tất!',`🎌 Văn hóa +${r.fx.culture} · 🧠 Tinh thần +${r.fx.mental}`);
 this.tip('お参り完了','Bạn đã hành lễ đúng phép 二礼二拍手一礼!',4);
@@ -660,7 +674,7 @@ if(r.reason==='money')toast('💴 Không đủ 100 ¥','Rút quẻ おみくじ 
 return;
 }
 if(this.storage)save(this.S,this.storage);
-this.stages.shrine.syncRings(this.st);
+this.stages.shrine.syncRings(this.st,this.hasHanami());
 this.paused=true;
 P.yaw=Math.PI;
 P.reachTo=0.55;
@@ -710,7 +724,7 @@ if(!r.ok)return;
 visitFestival(this.S,'hanami');
 this.S.festLog.hanami=true;
 if(this.storage)save(this.S,this.storage);
-this.stages.shrine.syncRings(this.st);
+this.stages.shrine.syncRings(this.st,this.hasHanami());
 this.paused=true;
 seatOnTarp(P,SHRINE.seats.player.x,SHRINE.seats.player.z,SHRINE.seats.player.yaw);
 if(hung)this.overhead.say(hung,r.lines[0].jp.replace(/[「」]/g,''),5);

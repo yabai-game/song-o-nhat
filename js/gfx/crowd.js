@@ -3,8 +3,8 @@ import{makeCharacter}from'./chars.js';
 import{STATION}from'./station.js';
 import{CROWD,KINDS,rng,pickLooks,makeWalker,stepWalker,turnYaw}from'../core/crowd.js';
 export const STREET_LANES=[
-{z:22.3,x0:-30,x1:8.5},
-{z:28.5,x0:-30,x1:8.5},
+{z:23.1,x0:-30,x1:8.5},
+{z:27.6,x0:-30,x1:8.5},
 ];
 const WAIT_X=[3,8,10.5];
 const WAIT_Z=4.2;

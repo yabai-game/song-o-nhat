@@ -103,7 +103,11 @@ const GROUND={spring:'#ffffff',summer:'#e6f2d4',autumn:'#e8c890',winter:'#ffffff
 const fx=makeSeasonFx(scene,{snowAreas,fall:false});
 const set=(s)=>{
 const id=(typeof s==='number'?SEASON_IDS[s]:s)||'spring',L=SEASON_LOOK[id]||SEASON_LOOK.spring,c=new THREE.Color(L.sakura);
-mats.forEach((m,i)=>{m.color.copy(base[i]).multiply(c);if(m.emissive)m.emissive.set(id==='winter'?'#6a6e74':'#000000');});
+mats.forEach((m,i)=>{
+if(id==='summer')m.color.setRGB(0.28,1.15,0.32);
+else m.color.copy(base[i]).multiply(c);
+if(m.emissive)m.emissive.set(id==='winter'?'#6a6e74':'#000000');
+});
 if(ground){ground.color.copy(gBase).multiply(new THREE.Color(GROUND[id]));if(id==='winter')ground.color.set('#eef2f5');}
 petals.visible=id==='spring'||id==='autumn';
 petals.material.color.set(id==='autumn'?'#d9762e':'#f6c3d0');

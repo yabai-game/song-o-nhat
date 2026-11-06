@@ -28,7 +28,7 @@ const BUTTONS=[
 {id:'drink',icon:'🥤',label:'Mua nước',jp:'自販機'},
 {id:'greet',icon:'🙋',label:'Chào',jp:'おはよう'},
 {id:'run',icon:'🏃',label:'Chạy',jp:'走る'},
-{id:'cert',icon:'📄',label:'Lấy 遅延証明書',jp:'遅延証明書'},
+{id:'cert',icon:'📄',label:'Giấy trễ tàu',jp:'遅延証明書'},
 {id:'board',icon:'🚃',label:'Lên tàu',jp:'乗る',main:true},
 ];
 const SHOW={

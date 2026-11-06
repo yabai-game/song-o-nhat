@@ -156,12 +156,12 @@ put(B(0.06,0.12,1.5),col('#6b4a30'),1.58,0.04,1.5);
 for(const[x,z,c]of[[1.9,1.15,'#2b2b30'],[2.12,1.15,'#2b2b30'],[1.95,1.85,'#f4f4f0'],[2.17,1.85,'#f4f4f0']])put(B(0.12,0.08,0.28),col(c),x,0.04,z);
 put(B(0.06,2.1,1.1),col('#7a5236'),2.58,1.05,1.5);
 put(new THREE.SphereGeometry(0.04,8,6),col('#d8c07a',{metalness:0.6}),2.53,1.0,1.1);
-for(const[txt,x,y,bg,fg]of[['5分前行動',1.3,1.65,'#fffdf4','#c0392b'],['ゴミは分別',0.7,1.65,'#fffdf4','#2f6fb0']]){
-const poster=new THREE.Mesh(new THREE.PlaneGeometry(0.52,0.32),new THREE.MeshStandardMaterial({map:signTexture(txt,256,160,bg,fg),roughness:0.9}));
+for(const[txt,x,y,bg,fg]of[['5分前行動',1.48,1.65,'#fffdf4','#c0392b'],['ゴミは分別',0.92,1.65,'#fffdf4','#2f6fb0']]){
+const poster=new THREE.Mesh(new THREE.PlaneGeometry(0.48,0.30),new THREE.MeshStandardMaterial({map:signTexture(txt,256,160,bg,fg),roughness:0.9}));
 poster.position.set(x,y,-2.19);scene.add(poster);
 }
 {
-const px=1.88,py=1.65,pz=-2.19;
+const px=2.02,py=1.65,pz=-2.19;
 const pTex=canvasTexture(220,310,(g)=>{
 g.fillStyle='#1e293b';g.fillRect(0,0,220,310);
 g.strokeStyle='#f5e2c0';g.lineWidth=6;g.strokeRect(8,8,204,294);

@@ -112,7 +112,13 @@ export function signTexture(text,w,h,bg,fg,font='"Zen Maru Gothic", "Yu Gothic",
 return canvasTexture(w,h,(g)=>{
 g.fillStyle=bg;g.fillRect(0,0,w,h);
 g.fillStyle=fg;g.textAlign='center';g.textBaseline='middle';
-g.font=`700 ${Math.round(h * 0.62)}px ${font}`;
+let px=Math.round(h*0.62);
+g.font=`700 ${px}px ${font}`;
+const mw=g.measureText(text).width;
+if(mw>w*0.88){
+px=Math.max(12,Math.floor(px*(w*0.88)/mw));
+g.font=`700 ${px}px ${font}`;
+}
 g.fillText(text,w/2,h/2+h*0.04);
 });
 }

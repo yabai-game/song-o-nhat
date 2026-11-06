@@ -175,6 +175,11 @@ tipBottom=Math.max(low,low+6+tip.offsetHeight);
 }
 if(vis(gust)){
 imp(gust,'top',Math.ceil(tipBottom+8)+'px');
+tipBottom=Math.max(tipBottom,tipBottom+8+gust.offsetHeight);
+}
+const place=$('sh-place');
+if(vis(place)){
+imp(place,'top',Math.ceil(tipBottom+6)+'px');
 }
 if(vis(bal)){
 const bl=$('bal-l'),br=$('bal-r'),meter=bal.querySelector('.bal-meter');

@@ -391,35 +391,19 @@ void h;
 }
 export function makeSanitaryCap(ch,color='#f4f6f3'){
 ch.holder.updateMatrixWorld(true);
-const a=new THREE.Vector3(),b=new THREE.Vector3(),hf=new THREE.Vector3();
+const a=new THREE.Vector3(),b=new THREE.Vector3();
 ch.head.getWorldPosition(a);ch.headTop.getWorldPosition(b);
-if(ch.headFront)ch.headFront.getWorldPosition(hf);else hf.set(a.x,a.y,a.z+0.19);
-const h=a.distanceTo(b)||0.52;
-const R=h*0.5;
-const capOrigin=a.clone().lerp(b,0.64);
-let maxFrontZ=Math.max(hf.z+R*0.18,a.z+R*0.96);
-let maxEarX=R*1.12;
-const posAttr=ch.skinGeo?.attributes?.position;
-if(posAttr){
-for(let i=0;i<posAttr.count;i++){
-const py=posAttr.getY(i),px=posAttr.getX(i),pz=posAttr.getZ(i);
-if(py>a.y-0.03&&py<b.y+0.05&&Math.abs(px-a.x)<0.35){
-if(pz>maxFrontZ)maxFrontZ=pz;
-const ax=Math.abs(px-a.x);
-if(ax>maxEarX)maxEarX=ax;
-}
-}
-}
-const frontRelZ=(maxFrontZ-capOrigin.z)/R;
-const earRelX=maxEarX/R;
+const h=Math.min(0.55,Math.max(0.28,a.distanceTo(b)||0.42));
+const R=h*0.44;
+const frontRelZ=0.96;
 const cloth=new THREE.MeshStandardMaterial({color,roughness:0.74,metalness:0.02,side:THREE.DoubleSide});
 const seamMat=new THREE.MeshStandardMaterial({color:'#e3e7e3',roughness:0.80,side:THREE.DoubleSide});
 const maskMat=new THREE.MeshStandardMaterial({color:'#fbfcfa',roughness:0.70,side:THREE.DoubleSide});
 const g=new THREE.Group();
-const cy=-0.46*R,cz=-0.02*R;
-const rx=Math.max(1.22,earRelX+0.07)*R;
-const ry=1.12*R;
-const rz=Math.max(1.14,frontRelZ+0.05)*R;
+const cy=-0.22*R,cz=-0.02*R;
+const rx=1.02*R;
+const ry=0.96*R;
+const rz=1.04*R;
 const crown=new THREE.Mesh(
 new THREE.SphereGeometry(1,28,16,0,Math.PI*2,0,Math.PI*0.48),
 cloth,
@@ -507,8 +491,13 @@ maskGroup.add(maskPanel,noseWire);
 maskGroup.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
 const maskParent=ch.headFront||ch.head;
 if(maskParent){
-const maskWorldPos=new THREE.Vector3(a.x,a.y+R*0.22,maxFrontZ+R*0.03);
-const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),ch.holder.rotation.y);
+const yaw=ch.holder.rotation.y||0;
+const maskWorldPos=new THREE.Vector3(
+a.x+Math.sin(yaw)*(R*0.92),
+a.y+R*0.18,
+a.z+Math.cos(yaw)*(R*0.92),
+);
+const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw);
 const maskWorld=new THREE.Matrix4().compose(maskWorldPos,q,new THREE.Vector3(1,1,1));
 const maskLocal=maskParent.matrixWorld.clone().invert().multiply(maskWorld);
 maskGroup.matrixAutoUpdate=true;
@@ -537,13 +526,17 @@ const gloveMat=new THREE.MeshStandardMaterial({color:'#7cc8f5',roughness:0.42,me
 const cuffMat=new THREE.MeshStandardMaterial({color:'#64b5e8',roughness:0.48});
 const steelMat=new THREE.MeshStandardMaterial({color:'#dce3e8',metalness:0.85,roughness:0.18});
 const parts=[];
+const _ws=new THREE.Vector3();
 for(const[hand,isRight]of[[ch.handL,false],[ch.handR,true]]){
 if(!hand)continue;
+hand.getWorldScale(_ws);
+const invS=1/(_ws.x||1);
 const g=new THREE.Group();
+g.scale.setScalar(invS);
 const wristCuff=new THREE.Mesh(new THREE.CylinderGeometry(0.056,0.060,0.065,12),cuffMat);
 wristCuff.position.set(0,0.015,0);
-const palm=new THREE.Mesh(new THREE.SphereGeometry(0.068,12,10),gloveMat);
-palm.scale.set(0.88,1.32,0.78);
+const palm=new THREE.Mesh(new THREE.SphereGeometry(0.072,12,10),gloveMat);
+palm.scale.set(0.92,1.38,0.84);
 palm.position.set(0,0.085,0);
 const thumb=new THREE.Mesh(new THREE.CapsuleGeometry(0.022,0.045,4,8),gloveMat);
 thumb.position.set(isRight?0.045:-0.045,0.068,0.025);
@@ -630,31 +623,32 @@ const strapMat=new THREE.MeshStandardMaterial({color:'#243322',roughness:0.7});
 const parts=[];
 const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),ch.holder.rotation.y);
 const s1=new THREE.Vector3(1,1,1);
+const _ws=new THREE.Vector3();
 for(const hand of[ch.handL,ch.handR]){
 if(!hand)continue;
+hand.getWorldScale(_ws);
+const invS=1/(_ws.x||1);
 const g=new THREE.Group();
-const mitt=new THREE.Mesh(new THREE.SphereGeometry(0.068,12,10),gloveMat);
-mitt.scale.set(0.9,1.15,0.85);
-const cuff=new THREE.Mesh(new THREE.CylinderGeometry(0.062,0.058,0.09,12),gloveMat);
-cuff.position.y=0.055;
-g.add(mitt,cuff);
+g.scale.setScalar(invS);
+const cuff=new THREE.Mesh(new THREE.CylinderGeometry(0.052,0.056,0.07,12),gloveMat);
+cuff.position.set(0,0.015,0);
+const mitt=new THREE.Mesh(new THREE.SphereGeometry(0.064,12,10),gloveMat);
+mitt.scale.set(0.9,1.28,0.85);
+mitt.position.set(0,0.08,0);
+g.add(cuff,mitt);
 g.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
-const pos=new THREE.Vector3();
-hand.getWorldPosition(pos);
-const local=hand.matrixWorld.clone().invert().multiply(new THREE.Matrix4().compose(pos,q,s1));
-local.decompose(g.position,g.quaternion,g.scale);
 hand.add(g);
 parts.push(g);
 }
 const spineBone=ch.chest||ch.spine1||ch.spine;
 if(spineBone){
 const bib=new THREE.Group();
-const front=new THREE.Mesh(new THREE.BoxGeometry(0.29,0.28,0.04),bibMat);
-front.position.set(0,-0.02,0.13);
-const sL=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.24,0.03),strapMat);
-sL.position.set(-0.09,0.14,0.11);
+const front=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.24,0.03),bibMat);
+front.position.set(0,-0.02,0.145);
+const sL=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.18,0.025),strapMat);
+sL.position.set(-0.08,0.10,0.135);
 const sR=sL.clone();
-sR.position.x=0.09;
+sR.position.x=0.08;
 bib.add(front,sL,sR);
 bib.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
 const pos=new THREE.Vector3();

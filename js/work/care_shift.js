@@ -15,7 +15,7 @@ const ACTIONS=[
 ];
 const WALK=1.9,NEAR_TAG=4.2,SEAT=0.52;
 const ANIM=1.6;
-const STAND=0.78;
+const STAND=0.96;
 const REPLY={
 feed:'おいしいねえ — Ngon quá cháu ạ',
 wipe:'さっぱりしたよ — Sạch sẽ rồi',
@@ -212,7 +212,12 @@ imp(el,'top',(bottom+6)+'px');
 if(el===chips)imp(el,'max-width',(vis(ticket)?W-2*L-ticket.offsetWidth-8:W-2*L)+'px');
 low=Math.max(low,bottom+6+el.offsetHeight);
 }
-if(vis(tip))imp(tip,'top',(low+6)+'px');
+if(vis(tip)){
+imp(tip,'top',(low+6)+'px');
+low=Math.max(low,low+6+tip.offsetHeight);
+}
+const place=$('sh-place');
+if(vis(place))imp(place,'top',(low+6)+'px');
 }
 clampOverhead(){
 if(!this.overhead||!this.overhead.items)return;
@@ -317,7 +322,7 @@ this.tip('ヒント','Hãy lại gần cụ đang cần giúp để xem gợi ý
 return;
 }
 useHint(s,i);
-const fState=s.folk[i],N=NEEDS[fState.need];
+const fState=s.folk[i],N=Object.values(NEEDS).find((n)=>n.phrases.includes(fState.jp))||NEEDS[fState.need];
 this.tip(fState.jp||N.jp,`💡 Gợi ý: “${N.vi}” (đã dùng gợi ý — mất ★ thứ 2)`,4);
 this.hud();
 return;
@@ -552,8 +557,9 @@ let txt='';
 if(isUrgent){
 txt=`🚨 「あっ…！」 (${Math.ceil(s.urgent.time)}s)\n🤲 Đỡ cụ ngay!`;
 }else if(f.need){
-const jpLine=f.jp||NEEDS[f.need].jp;
-const viLine=f.hintShown?`\n（${NEEDS[f.need].vi}）`:'';
+const N=Object.values(NEEDS).find((n)=>n.phrases.includes(f.jp))||NEEDS[f.need];
+const jpLine=f.jp||N.jp;
+const viLine=f.hintShown?`\n（${N.vi}）`:'';
 txt=i===focus?`${jpLine}${viLine}\n${pill}`:'❗';
 }else if(i===focus&&d<2.6){
 txt=pill;

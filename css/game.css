@@ -121,7 +121,7 @@ button:focus-visible { outline: 2.5px solid var(--sakura); outline-offset: 2px; 
 .acts { grid-template-columns: auto auto; align-items: end; }
 .act { appearance: none; width: 74px; height: 74px; border-radius: 50%; border: 2px solid rgba(255, 230, 190, .55); background: var(--hud); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   display: grid; align-content: center; justify-items: center; gap: 0; cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 10px rgba(40,25,15,.3); padding: 0; }
-.act .i { font-size: 28px; line-height: 32px; } .act .l { font-size: 11.5px; font-weight: 700; line-height: 1.15; max-width: 66px; text-align: center; } .act .j { font-family: var(--font-jp); font-size: 10px; color: var(--ink-dim); }
+.act .i { font-size: 28px; line-height: 32px; } .act .l { font-size: 11px; font-weight: 700; line-height: 1.1; max-width: 66px; text-align: center; } .act .j { font-family: var(--font-jp); font-size: 9px; color: var(--ink-dim); white-space: nowrap; }
 .act.main { width: 92px; height: 92px; grid-row: span 2; } .act.main .i { font-size: 36px; line-height: 40px; }
 .act.hot { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255,214,102,.35); }
 .act.on { background: var(--accent); border-color: var(--accent-ink); }
@@ -294,7 +294,7 @@ button.small { font-size: 13px; padding: 8px 12px; }
 .tcard .tc-back, .tcard .tc-face { position: absolute; inset: 0; border-radius: 7px; backface-visibility: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .tcard .tc-back { transform: rotateY(180deg); background: repeating-linear-gradient(45deg, #263a6b 0 6px, #1d2d55 6px 12px); color: #f5e2c0; font-size: 9px; font-weight: 800; border: 2px solid #f5e2c0; }
 .tcard .tc-face { background: #f7f3ea; color: #2a211b; border: 2px solid #b9b2a4; font-size: 9px; line-height: 1.15; padding: 2px; }
-.tcard .tc-face b { font-size: 9px; }
+.tcard .tc-face b { font-size: 8.5px; white-space: nowrap; }
 .tcard .tc-face small { font-size: 8px; opacity: 0.75; }
 .tcard .tc-face i { font-style: normal; font-weight: 800; font-size: 9px; margin-top: 2px; }
 .tc-ic { font-size: 22px; line-height: 1.1; }
@@ -345,7 +345,6 @@ button.small { font-size: 13px; padding: 8px 12px; }
 /* rows below the top bar are placed by layoutHud() in main.js (measured, fits any screen); the place name flashes
    mid-screen so it never covers the chores / tip; iOS must not inflate HUD text in landscape */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-#shifthud .place { top: 30% !important; }
 #shifthud .tip { width: min(380px, calc(100% - 32px)); }
 /* full screen (owner): Chrome / Firefox / Edge on iPhone draw their address bar over the top of the page and iOS
    has no fullscreen API, so the game frame starts below that bar there; the title shows how to install the app */
@@ -353,11 +352,20 @@ html.ios-tb #app { top: 44px; }
 html.ios-tb body { background: #1d2742; }
 .ios-home { color: var(--gold); line-height: 1.4; }
 
-/* S21 UI fixes: prevent #toast and #ach-toast from overlapping #modal .card or #dayhud .top, and compact cards on 812x375 landscape */
+/* S21/S27 UI fixes: prevent #toast and #ach-toast from overlapping #modal .card, #dayhud .top, or 3-row #acts.many, and compact cards on 812x375 landscape */
 #toast { box-sizing: border-box; z-index: 26; }
-#app:has(#modal:not([hidden])) #toast,
-#app:has(#talk:not([hidden])) #toast {
+#app:has(#acts.many:not([hidden])) #toast {
+  bottom: calc(272px + env(safe-area-inset-bottom, 0px));
+}
+#app:has(#modal:not([hidden])) #toast {
   top: calc(8px + env(safe-area-inset-top, 0px));
+  bottom: auto;
+  padding: 6px 12px;
+  font-size: 12px;
+  max-width: min(340px, calc(100vw - 24px));
+}
+#app:has(#talk:not([hidden])):not(:has(#modal:not([hidden]))) #toast {
+  top: calc(56px + env(safe-area-inset-top, 0px));
   bottom: auto;
   padding: 6px 12px;
   font-size: 12px;
@@ -371,8 +379,18 @@ html.ios-tb body { background: #1d2742; }
   bottom: auto;
   top: calc(212px + env(safe-area-inset-top, 0px));
 }
+.cal-nav b { font-size: 13.5px !important; white-space: nowrap; }
+.nb-list { max-height: none !important; overflow-y: visible !important; }
 
 @media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  #title.screen { align-items: center; padding-top: 8px; padding-bottom: 8px; }
+  .title-card { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 16px); padding: 10px 16px; gap: 6px; overflow-y: auto; }
+  .title-card .brand { width: 96px; margin-bottom: 0; }
+  .title-card h1 { font-size: 22px; }
+  .title-card .sub { font-size: 12.5px; }
+  .title-card .col { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .title-card .col > :first-child { grid-column: 1 / -1; }
+  .title-card .go, .title-card .ghost { padding: 7px 10px; font-size: 13px; }
   .acts { gap: 6px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
   #modal { padding: 8px 14px; box-sizing: border-box; }
   #modal .card { width: min(500px, calc(100vw - 280px)); max-height: calc(100vh - 16px); padding: 11px 14px; gap: 6px; }

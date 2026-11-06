@@ -181,11 +181,24 @@ const st=G.stages[id];
 if(!st)return;
 const cal=G.S?.cal;
 if(cal)st.setSeason?.(seasonOf(cal).id);
-if(G.stage===st)return;
+if(G.stage!==st){
 G.overhead.clear();
 G.player&&st.scene.add(G.player.holder);
 G.stage=st;G.stageId=id;
 G.camRig.init=false;
+}
+if(id==='dorm'&&G.player){
+const pos=G.player.holder.position;
+if(Math.abs(pos.x)>2.2||Math.abs(pos.z)>1.9||pos.y>0.5){
+G.player.unpinAll?.();
+G.player.holder.rotation.x=0;
+pos.set(0.2,0,0.8);
+G.player.yaw=0;
+}
+if(G.player.helmet)G.player.helmet.visible=false;
+if(G.player.cap)G.player.cap.visible=false;
+if(G.player.waders)G.player.waders.setVisible(false);
+}
 }
 async function setPlayer(){
 const d=G.draft;
@@ -195,9 +208,10 @@ const old=G.player;
 if(old){ch.holder.position.copy(old.holder.position);ch.yaw=old.yaw;old.holder.parent?.remove(old.holder);old.unpinAll();}
 else ch.holder.position.set(0,0,1.2);
 G.player=ch;G.own=ch;
-const h=makeHelmet(ch);wearHelmet(ch,h.group);ch.helmet=h.group;h.group.visible=G.stageId==='site';
-const c=makeSanitaryCap(ch);wearHelmet(ch,c.group);ch.cap=c.group;c.group.visible=G.stageId==='bento';
-ch.waders=wearWaders(ch);ch.waders.setVisible(G.stageId==='lotus');
+const atWork=G.mode==='shift'||(G.mode==='talk'&&G.talkCam==='deck');
+const h=makeHelmet(ch);wearHelmet(ch,h.group);ch.helmet=h.group;h.group.visible=G.stageId==='site'&&atWork;
+const c=makeSanitaryCap(ch);wearHelmet(ch,c.group);ch.cap=c.group;c.group.visible=G.stageId==='bento'&&G.mode==='shift';
+ch.waders=wearWaders(ch);ch.waders.setVisible(G.stageId==='lotus'&&G.mode==='shift');
 G.stage&&G.stage.scene.add(ch.holder);
 }
 async function npc(id,where){
@@ -327,7 +341,18 @@ imp(el,'top',(bottom+6)+'px');
 if(el===chips)imp(el,'max-width',(vis(ticket)?W-2*L-ticket.offsetWidth-8:W-2*L)+'px');
 low=Math.max(low,bottom+6+el.offsetHeight);
 }
-if(vis(tip))imp(tip,'top',(low+6)+'px');
+const mbar=hud.querySelector('.market-bar'),place=$('sh-place');
+if(vis(mbar)){
+imp(mbar,'top',(low+6)+'px');
+low=Math.max(low,low+6+mbar.offsetHeight);
+}
+if(vis(tip)){
+imp(tip,'top',(low+6)+'px');
+low=Math.max(low,low+6+tip.offsetHeight);
+}
+if(vis(place)){
+imp(place,'top',(low+6)+'px');
+}
 }
 $('sh-rank').style.pointerEvents='auto';
 $('sh-rank').addEventListener('click',()=>{if(G.S)calendarModal();});
@@ -442,7 +467,13 @@ if(!S.life)S.cal.day=S.story<DAYS?(S.story||0)+1:7;
 return S.cal;
 }
 const curDayKey=(S=G.S)=>(S?.life&&S?.cal?`${S.cal.year}-${S.cal.season}-${S.cal.day}`:(S?.story||0));
-const curWeather=(S=G.S)=>weatherOf(ensureCal(S),S?.seed||1);
+const curWeather=(S=G.S)=>{
+if(S&&!S.life){
+const d=daysOf(S.job||'site')[S.story||0];
+if(d&&(d.a?.rain||d.b?.rain))return'rain';
+}
+return weatherOf(ensureCal(S),S?.seed||1);
+};
 const curWeatherFx=(S=G.S)=>weatherFx(curWeather(S));
 const isRedPill=(cal)=>weekday(cal)===6||isRedDay(cal)||eventsOn(cal).some((e)=>e.kind==='off');
 function hudCalText(S=G.S,sub=''){
@@ -2532,7 +2563,8 @@ G.stages.lotus.setWeather({rain:!!fx.rain,snow:!!fx.snow,wind:!!fx.wind,cold:!!(
 G.stages.lotus.setSpray(false);
 P.holder.position.set(LOTUS_FIELD.talkPlayer.x,0,LOTUS_FIELD.talkPlayer.z);
 }else if(atWork){
-P.look({...G.S.look.colors,...WORK_COLORS});P.unpinAll();P.helmet.visible=true;
+const forgotHelmet=/Quên mũ bảo hộ/i.test(d.title||'');
+P.look({...G.S.look.colors,...WORK_COLORS});P.unpinAll();P.helmet.visible=!forgotHelmet;
 G.stages.site.setWeather({rain:!!fx.rain,snow:!!fx.snow,wind:!!fx.wind});G.stages.site.setTime('day');G.stages.site.ring.visible=false;
 await spawnWorkers();
 P.holder.position.set(-1.2,DECK_Y,1.9);
@@ -2990,7 +3022,11 @@ else vPos.set(vLook.x-1.2,a.y+2.3,vLook.z+(portrait?6.4:4.8));
 G.camRig.to(vPos,vLook,dt,4);
 }else if(G.mode==='talk'){
 const a=P.holder.position;
+if(G.stageId==='dorm'){
+vLook.set(a.x,a.y+0.65,a.z);vPos.set(a.x,a.y+2.0,a.z+3.8);
+}else{
 vLook.set(a.x,a.y+0.6,a.z);vPos.set(a.x,a.y+2.4,a.z+6);
+}
 G.camRig.to(vPos,vLook,dt,4);
 }
 if(G.mode==='shift')(G.activeShift||G.shift).update(dt,t);
