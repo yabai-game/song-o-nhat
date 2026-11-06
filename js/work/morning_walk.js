@@ -391,6 +391,7 @@ const P=this.who.player,stn=this.stages.station,s=this.st;
 this.carryingBag=false;P.unpinAll();
 if(this.stages.site&&this.stages.site.trashRing)this.stages.site.trashRing.visible=false;
 this.setStage('station');stn.sendTrain('reset');
+P.holder.rotation.x=0;P.holder.visible=true;
 P.holder.position.set(STATION.start.x,STATION.floor,STATION.start.z);P.yaw=STATION.start.yaw;P.play('idle');
 this.controls.reset({yaw:-Math.PI/2+0.5,pitch:0.3,groundY:STATION.floor,yawLimit:[-Infinity,Infinity]});
 this.controls.enabled=true;this.controls.target=null;

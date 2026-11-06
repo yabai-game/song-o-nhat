@@ -4,7 +4,8 @@
   --line: rgba(255, 226, 186, 0.3); --hud: rgba(70, 54, 44, 0.62); --accent: #e2574c; --accent-ink: #fff7f2; --sakura: #f2b8c6;
   --gold: #ffd666; --good: #7ed6a0; --bad: #ff8a7a; --sky: #cfe8f3;
   --font-ui: "Be Vietnam Pro", system-ui, "Segoe UI", sans-serif;
-  --font-jp: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
+  /* Be Vietnam Pro first: Zen Maru Gothic has no Vietnamese stacked marks (Lễ rendered as Lê + loose ~); kana/kanji fall through to Zen Maru */
+  --font-jp: "Be Vietnam Pro", "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
   color-scheme: dark;
 }
 html, body { height: 100%; }

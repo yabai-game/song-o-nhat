@@ -7,7 +7,7 @@ import{
 FESTIVALS,YATAI_ITEMS,visitFestival,buyYatai,goldfishRound,scoop,finishGoldfish,
 bonOdoriBeats,judgeBonBeat,scoreBonOdori,rentYukata,launchFirework,watchFireworks,
 doHalloween,doMomiji,eatToshikoshiSoba,ringJoyaBell,callNewYearEve,
-drinkAmazake,receiveNengajo,
+drinkAmazake,receiveNengajo,festivalSky,
 }from'../core/festival.js';
 import{clock}from'../core/morning.js';
 import{SEASONS,weatherOf,weatherFx}from'../core/calendar.js';
@@ -298,9 +298,10 @@ const festDef=this.festival?FESTIVALS[this.festival]:null;
 shrine.setWeather?.({rain:!!fx.rain,snow:!!fx.snow,wind:!!fx.wind});
 shrine.setSeason?.(SEASONS[cal?.season??0]?.id||'spring');
 shrine.setFestival?.(this.festival||null);
-shrine.setTime?.(festDef?festDef.time:'day');
+const sky=festDef?festivalSky(festDef.time):'day';
+shrine.setTime?.(sky);
 shrine.fireworks?.(this.festival==='natsumatsuri');
-if(festDef&&(festDef.time==='night'||festDef.time==='dusk')&&this.st.min<18*60+30){
+if(sky!=='day'&&this.st.min<18*60+30){
 this.st.min=19*60;
 }
 standUp(P);

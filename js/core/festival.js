@@ -133,6 +133,10 @@ fx:{mental:4,culture:2},
 desc:'Trò chơi vớt cá vàng truyền thống bằng chiếc vợt giấy mỏng ポイ.',
 },
 };
+export function festivalSky(time){
+if(time==='evening'||time==='night')return'night';
+return time==='dusk'?'dusk':'day';
+}
 export const FESTIVALS={
 hanami:{
 id:'hanami',
