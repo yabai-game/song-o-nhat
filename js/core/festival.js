@@ -808,7 +808,9 @@ if(cost>0&&(S.money||0)<cost){
 return{ok:false,why:'money',cost,deltas:[]};
 }
 const fx=buyGiri
-?{money:-cost,team:5,senpai:3,culture:3,mental:3}
+?(n>=3
+?{money:-cost,team:6,senpai:3,culture:3,mental:3}
+:{money:-cost,team:2*n,senpai:n,culture:3,mental:3})
 :{mental:1,culture:2};
 const deltas=applyFx(S,fx);
 if(buyGiri)f.giriChoco=true;

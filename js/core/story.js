@@ -62,6 +62,9 @@ let mm=W.maxMiss||3;
 if((S.ally||0)>=2)mm+=1;
 if((S.watch||0)>=2)mm-=1;
 o.maxMiss=Math.max(0,mm);
+if(o.vi&&W.maxMiss&&o.maxMiss!==W.maxMiss){
+o.vi=o.vi.replace(/((?:quá|tối đa|được sai)\s+)\d+(\s+lần)/g,`$1${o.maxMiss}$2`);
+}
 return o;
 }
 export function chooseTalk(S,c){

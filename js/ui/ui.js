@@ -56,23 +56,34 @@ update(dt){
 const W=canvas.clientWidth,H=canvas.clientHeight;
 let minTop=6;
 for(const el of document.querySelectorAll('#dayhud:not([hidden]) .top, #shifthud:not([hidden]) .top, #shifthud:not([hidden]) .place, #shifthud:not([hidden]) .rank, #shifthud:not([hidden]) .tip:not([hidden]), #shifthud:not([hidden]) .gust:not([hidden]), #shifthud:not([hidden]) .mini-bars:not([hidden])')){
+if(el.hidden||el.offsetParent===null)continue;
+const st=getComputedStyle(el);
+if(st.display==='none'||st.visibility==='hidden'||Number(st.opacity)===0)continue;
 const r=el.getBoundingClientRect();if(r.height)minTop=Math.max(minTop,r.bottom+6);
 }
 const placed=[];
+for(const el of document.querySelectorAll('#joy:not([hidden]), #acts:not([hidden])')){
+if(el.hidden||el.offsetParent===null)continue;
+const r=el.getBoundingClientRect();
+if(r.width&&r.height)placed.push({l:r.left,r:r.right,t:r.top,b:r.bottom});
+}
 for(let i=this.items.length-1;i>=0;i--){
 const it=this.items[i];
 if(it.kind==='bubble'){it.t-=dt;if(it.t<=0){it.el.remove();this.items.splice(i,1);continue;}}
+if(it.el.hidden||!it.el.textContent.trim()){it.el.style.visibility='hidden';continue;}
 const o=it.obj.holder||it.obj;
 o.getWorldPosition(_v);_v.y+=it.y;_v.project(camera);
 if(_v.z>1||!o.parent||!o.visible){it.el.style.visibility='hidden';continue;}
 const txt=it.el.textContent;
 if(!it.w||it.txt!==txt){it.txt=txt;it.w=it.el.offsetWidth;it.h=it.el.offsetHeight;}
 const x=(_v.x*0.5+0.5)*W,y=(-_v.y*0.5+0.5)*H;
-const left=Math.min(Math.max(x-it.w/2,8),W-it.w-8);
-let top=Math.max(y-it.h-(it.kind==='bubble'?8:0),minTop);
+const left=Math.min(Math.max(x-it.w/2,8),Math.max(8,W-it.w-8));
+const maxTop=Math.max(minTop,H-it.h-10);
+let top=Math.min(Math.max(y-it.h-(it.kind==='bubble'?8:0),minTop),maxTop);
 for(const r of placed){
 if(!(left<r.r+4&&left+it.w>r.l-4&&top<r.b+4&&top+it.h>r.t-4))continue;
-if(it.kind==='bubble'||r.t-it.h-6<minTop)top=r.b+6;else top=r.t-it.h-6;
+if(r.t-it.h-6>=minTop&&(it.kind!=='bubble'||r.b+6+it.h>H-10))top=r.t-it.h-6;
+else top=Math.min(r.b+6,maxTop);
 }
 placed.push({l:left,r:left+it.w,t:top,b:top+it.h});
 it.el.style.visibility='visible';

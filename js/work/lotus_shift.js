@@ -138,6 +138,7 @@ this.stage.syncSpots(this.st.spots,nearestSpot(this.st,P.holder.position.x,P.hol
 this.tags=(this.stage.spotGroups||[]).map((grp)=>{
 const it=this.overhead.tag(grp,'',false,0.55);
 it.el.classList.add('care');
+it.el.hidden=true;
 it.text='';
 return it;
 });
@@ -469,15 +470,15 @@ let txt='';
 if(sp.state<4){
 const isNear=!!(near&&near.i===i);
 if(isNear&&sp.seenT<=LOTUS.PREVIEW_TIME){
-txt=`${sp.state < 0 ? '🌿 ' : ''}${spotOrderText(sp)}`;
+txt=spotOrderText(sp);
 }else if(sp.state<0){
 txt='🌿';
 }
 }
+if(it.el.hidden!==!txt)it.el.hidden=!txt;
 if(it.text!==txt){
 it.text=txt;
 it.el.textContent=txt;
-it.el.hidden=!txt;
 it.w=0;
 }
 }

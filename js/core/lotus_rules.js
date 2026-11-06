@@ -35,7 +35,7 @@ return sp.state<0?'cut':STEP_KEYS[sp.state];
 }
 export const nextStepId=wantStepOf;
 export function spotOrderText(sp){
-return sp&&sp.weedy
+return sp&&(sp.state<0||(sp.state===undefined&&sp.weedy))
 ?'🌿 刈る → 掘る → 洗う → 抜く → 拾う'
 :'掘る → 洗う → 抜く → 拾う';
 }

@@ -1,10 +1,11 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import*as THREE from'three';
 import{GLTFLoader}from'three/addons/loaders/GLTFLoader.js';
-export const MODEL_V='20';
+export const MODEL_V='21';
 export const canvas=document.getElementById('c');
+export const LOW_MEM=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
 export const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,LOW_MEM?1.5:2));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.05;
