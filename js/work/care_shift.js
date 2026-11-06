@@ -63,6 +63,18 @@ osc.start(now+t0);osc.stop(now+t0+0.1);
 }
 }catch{}
 }
+function hookOverhead(overhead,fn){
+if(!overhead)return;
+if(!overhead._postHooks){
+overhead._postHooks=[];
+const orig=overhead.update.bind(overhead);
+overhead.update=(dt)=>{
+orig(dt);
+for(const h of overhead._postHooks)h(dt);
+};
+}
+overhead._postHooks.push(fn);
+}
 export class CareShift{
 constructor({stage,controls,overhead,camRig}){
 Object.assign(this,{stage,controls,overhead,camRig});
@@ -86,6 +98,8 @@ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:heartTexture(),transpare
 sp.scale.setScalar(0.16);sp.visible=false;this.hearts.push(sp);
 }
 $('sh-quit').addEventListener('click',()=>this.active&&this.askQuit());
+addEventListener('resize',()=>{if(this.active)this.placeHud();});
+hookOverhead(this.overhead,()=>{if(this.active)this.clampOverhead();});
 addEventListener('keydown',(e)=>{
 if(!this.active)return;
 const k={
@@ -140,13 +154,15 @@ this.who.player.reachTo=0;
 tip(jp,vi,sec=6.5){
 const t=$('sh-tip');t.querySelector('b').textContent=jp;t.querySelector('span').textContent=vi;
 t.hidden=false;clearTimeout(this.tipT);this.tipT=setTimeout(()=>{t.hidden=true;},sec*1000);
+this.placeHud();
 }
 hud(){
 const s=this.st;
-let txt=`👵 ${s.count}/${s.goal} ${this.meta.unit}`;
-if(s.limit)txt+=` · ⏱ ${Math.ceil(s.time)}s`;
-if(s.maxMiss)txt+=` · ❌ ${s.miss}/${s.maxMiss}`;else if(s.miss)txt+=` · ❌ ${s.miss}`;
-if(s.urgent)txt+=` · 🚨 ${Math.ceil(s.urgent.time)}s`;
+const sep=s.urgent?' ·':' · ';
+let txt=s.urgent?`👵 ${s.count}/${s.goal}`:`👵 ${s.count}/${s.goal} lượt`;
+if(s.limit)txt+=`${sep}⏱${Math.ceil(s.time)}s`;
+if(s.maxMiss)txt+=`${sep}❌${s.miss}/${s.maxMiss}`;else if(s.miss)txt+=`${sep}❌${s.miss}`;
+if(s.urgent)txt+=`${sep}🚨${Math.ceil(s.urgent.time)}s`;
 const g=$('sh-goal');if(g.textContent!==txt)g.textContent=txt;
 g.classList.toggle('warn',!!(s.urgent||(s.limit&&s.time<10)));
 const showSupport=!!(s.urgent||s.urgentMax>0);
@@ -155,6 +171,139 @@ this.btn.support.hidden=!showSupport;
 this.btn.support.classList.toggle('hot',!!s.urgent);
 this.btn.hint.hidden=!showHint;
 $('acts').classList.toggle('many',showSupport||showHint);
+this.placeHud();
+}
+placeHud(){
+const hud=$('shifthud');
+if(!hud||hud.hidden)return;
+const H=hud.getBoundingClientRect();
+if(!H.width)return;
+const imp=(el,k,v)=>{if(el&&el.style.getPropertyValue(k)!==v)el.style.setProperty(k,v,'important');};
+const vis=(el)=>el&&!el.hidden&&getComputedStyle(el).display!=='none';
+const rank=$('sh-rank'),bars=$('sh-bars'),chips=$('sh-chips'),ticket=$('sh-ticket'),tip=$('sh-tip');
+const L=Math.max(12,rank?(rank.getBoundingClientRect().left-H.left||12):12);
+let y=0;
+for(const el of[hud.querySelector('.top'),$('btn-menu'),$('btn-phone')]){
+if(!el||el.hidden)continue;
+const r=el.getBoundingClientRect();
+if(r.height)y=Math.max(y,r.bottom-H.top);
+}
+y=Math.round(y+6);
+const W=H.width,rankOn=vis(rank)&&rank.textContent.trim(),barsOn=vis(bars);
+const rw=rankOn?rank.scrollWidth:0,bw=barsOn?bars.offsetWidth:0;
+const inline=!rankOn||!barsOn||L+rw+8+bw+L<=W;
+let bottom=y;
+if(rankOn){
+imp(rank,'top',y+'px');
+imp(rank,'max-width',(inline&&barsOn?W-2*L-bw-8:W-2*L)+'px');
+bottom=Math.max(bottom,y+rank.offsetHeight);
+}
+if(barsOn){
+const by=inline?y:bottom+5;
+imp(bars,'top',by+'px');
+if(inline){imp(bars,'left','auto');imp(bars,'right',L+'px');}
+else{imp(bars,'right','auto');imp(bars,'left',L+'px');}
+bottom=Math.max(bottom,by+bars.offsetHeight);
+}
+let low=bottom;
+for(const el of[chips,ticket]){
+if(!vis(el))continue;
+imp(el,'top',(bottom+6)+'px');
+if(el===chips)imp(el,'max-width',(vis(ticket)?W-2*L-ticket.offsetWidth-8:W-2*L)+'px');
+low=Math.max(low,bottom+6+el.offsetHeight);
+}
+if(vis(tip))imp(tip,'top',(low+6)+'px');
+}
+clampOverhead(){
+if(!this.overhead||!this.overhead.items)return;
+const W=window.innerWidth,H=window.innerHeight;
+if(!W||!H)return;
+const vis=(el)=>el&&!el.hidden&&getComputedStyle(el).display!=='none';
+const obstacles=[];
+let minY=10;
+for(const el of[document.querySelector('#shifthud .top'),$('btn-menu'),$('btn-phone')]){
+if(!vis(el))continue;
+const r=el.getBoundingClientRect();
+if(r.width&&r.height){
+minY=Math.max(minY,Math.ceil(r.bottom+6));
+obstacles.push({l:r.left,t:r.top,r:r.right,b:r.bottom});
+}
+}
+for(const el of[$('sh-rank'),$('sh-bars'),$('sh-tip'),$('joy'),$('acts'),$('toast')]){
+if(!vis(el))continue;
+const r=el.getBoundingClientRect();
+if(r.width&&r.height)obstacles.push({l:r.left,t:r.top,r:r.right,b:r.bottom});
+}
+const placed=[];
+const hits=(l,t,r,b,pad=4)=>{
+for(const o of obstacles){
+if(r+pad>o.l&&l-pad<o.r&&b+pad>o.t&&t-pad<o.b)return true;
+}
+for(const p of placed){
+if(r+pad>p.l&&l-pad<p.r&&b+pad>p.t&&t-pad<p.b)return true;
+}
+return false;
+};
+const overlapArea=(l,t,r,b)=>{
+let area=0;
+for(const o of obstacles){
+const ox=Math.max(0,Math.min(r,o.r)-Math.max(l,o.l));
+const oy=Math.max(0,Math.min(b,o.b)-Math.max(t,o.t));
+area+=ox*oy;
+}
+for(const p of placed){
+const ox=Math.max(0,Math.min(r,p.r)-Math.max(l,p.l));
+const oy=Math.max(0,Math.min(b,p.b)-Math.max(t,p.t));
+area+=ox*oy*2;
+}
+return area;
+};
+const visItems=[];
+for(let i=this.overhead.items.length-1;i>=0;i--){
+const it=this.overhead.items[i];
+if(!it||!it.el||it.el.hidden||getComputedStyle(it.el).display==='none')continue;
+visItems.push(it);
+}
+visItems.sort((a,b)=>{
+const pa=a.el.classList.contains('urgent')?0:a.kind==='bubble'?1:(a.text&&a.text.length>4)?2:3;
+const pb=b.el.classList.contains('urgent')?0:b.kind==='bubble'?1:(b.text&&b.text.length>4)?2:3;
+return pa-pb;
+});
+for(const it of visItems){
+const rect=it.el.getBoundingClientRect();
+if(!rect.width||!rect.height)continue;
+const w=Math.ceil(rect.width),h=Math.ceil(rect.height);
+const maxX=Math.max(10,Math.floor(W-w-10));
+const maxY=Math.max(minY,Math.floor(H-h-10));
+const clampX=(v)=>Math.max(10,Math.min(maxX,Math.round(v)));
+const clampY=(v)=>Math.max(minY,Math.min(maxY,Math.round(v)));
+let bestX=clampX(rect.left),bestY=clampY(rect.top);
+if(hits(bestX,bestY,bestX+w,bestY+h)){
+const xs=new Set([bestX,10,Math.round((W-w)*0.5),maxX]);
+const ys=new Set([bestY,minY,Math.round((minY+maxY)*0.5),maxY]);
+for(const o of[...obstacles,...placed]){
+xs.add(clampX(o.l-w-6));
+xs.add(clampX(o.r+6));
+ys.add(clampY(o.t-h-6));
+ys.add(clampY(o.b+6));
+}
+let bestScore=Infinity;
+for(const cy of ys){
+for(const cx of xs){
+const area=hits(cx,cy,cx+w,cy+h)?overlapArea(cx,cy,cx+w,cy+h)+1e6:0;
+const dist=(cx-bestX)*(cx-bestX)+(cy-bestY)*(cy-bestY);
+const score=area*1000+dist;
+if(score<bestScore){
+bestScore=score;
+bestX=cx;
+bestY=cy;
+}
+}
+}
+}
+it.el.style.transform=`translate3d(${bestX}px, ${bestY}px, 0)`;
+placed.push({l:bestX,t:bestY,r:bestX+w,b:bestY+h});
+}
 }
 action(id){
 if(!this.active||this.paused||this.intro>0||this.st.over)return;
@@ -318,15 +467,23 @@ update(dt){
 if(!this.active)return;
 const s=this.st,P=this.who.player,pos=P.holder.position,c=this.controls,portrait=isPortrait();
 let speed=0;
+if(this.anim&&s.urgent&&s.busy<=0)this.endAnim();
 if(this.anim&&!this.paused)this.runAnim(dt);
 else if(!this.paused&&this.intro<=0&&!s.over&&s.busy<=0){
 let mag=c.input(this.dir);
 if(mag<0.05&&c.target){
+if(this.lastTx!==c.target.x||this.lastTz!==c.target.z){
+this.lastTx=c.target.x;this.lastTz=c.target.z;
+this.bestD=Infinity;this.stuckT=0;
+}
 this.dir.set(c.target.x-pos.x,0,c.target.z-pos.z);
 const d=this.dir.length();
-if(d<this.bestD-0.02){this.bestD=d;this.stuckT=0;}else this.stuckT+=dt;
-if(d<0.1||this.stuckT>0.4){c.target=null;mag=0;this.bestD=Infinity;this.stuckT=0;}else{this.dir.multiplyScalar(1/d);mag=1;}
-}else if(mag>=0.05)this.dir.multiplyScalar(1/Math.max(mag,1e-4));
+if(d<this.bestD-0.01){this.bestD=d;this.stuckT=0;}else this.stuckT+=dt;
+if(d<0.1||this.stuckT>0.6){c.target=null;mag=0;this.bestD=Infinity;this.stuckT=0;}else{this.dir.multiplyScalar(1/d);mag=1;}
+}else{
+this.bestD=Infinity;this.stuckT=0;
+if(mag>=0.05)this.dir.multiplyScalar(1/Math.max(mag,1e-4));
+}
 if(mag>=0.05){
 const ox=pos.x,oz=pos.z;
 const sp=WALK*mag*dt;
@@ -349,8 +506,7 @@ else{
 for(const[ev,idx]of step(s,dt)){
 if(ev==='urgent'){
 alertUrgent();
-if(this.who.folk[idx])this.overhead.say(this.who.folk[idx],'🚨 あっ…！',3);
-this.tip('🚨 あっ…！','Có cụ đứng dậy loạng choạng! Mau chạy tới bấm 🤲 Đỡ cụ trong 6 giây!',5);
+this.tip('🚨 あっ…！','Có cụ đứng dậy loạng choạng! Mau chạy tới bấm 🤲 Đỡ cụ ngay!',5);
 }
 if(ev==='urgent_fail'){
 seatFolk(this.who.folk);

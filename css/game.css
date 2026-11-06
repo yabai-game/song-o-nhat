@@ -112,8 +112,8 @@ button:focus-visible { outline: 2.5px solid var(--sakura); outline-offset: 2px; 
 #shifthud .rank { position: absolute; top: calc(52px + env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); font-size: 12px; }
 .tip { position: absolute; left: 50%; transform: translateX(-50%); top: calc(92px + env(safe-area-inset-top, 0px)); width: min(360px, calc(100% - 32px)); background: rgba(255,253,249,.96); color: #2b2118; border-radius: 12px; padding: 8px 12px; display: grid; gap: 2px; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
 .tip b { font-family: var(--font-jp); font-size: 16px; } .tip span { font-size: 13px; }
-.gust { position: absolute; left: 50%; top: calc(224px + env(safe-area-inset-top, 0px)); transform: translate(-50%, -50%); background: rgba(40, 90, 140, .92); color: #fff; font-weight: 800; font-size: 18px; padding: 12px 18px; border-radius: 14px; white-space: nowrap; animation: gust .5s ease-in-out infinite alternate; }
-@keyframes gust { from { transform: translate(-50%, -50%) rotate(-1.5deg); } to { transform: translate(-50%, -50%) rotate(1.5deg); } }
+.gust { position: absolute; left: 50%; top: calc(188px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); background: rgba(40, 90, 140, .92); color: #fff; font-weight: 800; font-size: 15px; padding: 7px 14px; border-radius: 12px; white-space: nowrap; box-sizing: border-box; max-width: calc(100vw - 24px); animation: gust .5s ease-in-out infinite alternate; }
+@keyframes gust { from { transform: translateX(-50%) rotate(-1.2deg); } to { transform: translateX(-50%) rotate(1.2deg); } }
 .joy { pointer-events: auto; position: absolute; left: max(22px, calc(env(safe-area-inset-left, 0px) + 16px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); width: 128px; height: 128px; border-radius: 50%; background: rgba(70,54,44,.4); border: 2px solid rgba(255,230,190,.45); touch-action: none; box-shadow: inset 0 2px 10px rgba(0,0,0,.15); }
 .joy i { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 3px 10px rgba(0,0,0,.3); }
 .acts { pointer-events: auto; position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 10px; justify-items: end; }
@@ -147,11 +147,11 @@ button:focus-visible { outline: 2.5px solid var(--sakura); outline-offset: 2px; 
 .tag { position: absolute; left: 0; top: 0; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.92); color: #2b2118; white-space: nowrap; }
 .tag.me { background: var(--accent); color: var(--accent-ink); }
 /* care home residents: Japanese line + satisfaction on two lines */
-.tag.care { white-space: pre-line; text-align: center; font-size: 12.5px; line-height: 1.35; padding: 4px 10px; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,.18); }
-.bubble { position: absolute; left: 0; top: 0; max-width: min(230px, 66vw); background: #fffdf9; color: #2b2118; font-size: 14px; line-height: 1.4; padding: 7px 11px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,.25); white-space: pre-line; }
+.tag.care { white-space: pre-line; text-align: center; font-size: 12px; line-height: 1.3; padding: 4px 9px; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,.18); box-sizing: border-box; max-width: min(220px, calc(100vw - 24px)); }
+.bubble { position: absolute; left: 0; top: 0; max-width: min(230px, 66vw); background: #fffdf9; color: #2b2118; font-size: 14px; line-height: 1.4; padding: 7px 11px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,.25); white-space: pre-line; box-sizing: border-box; }
 .bubble .jp { font-family: var(--font-jp); font-weight: 700; }
 /* lighter bubbles: the Vietnamese line small and soft under the Japanese */
-.bubble { font-size: 13px; line-height: 1.35; padding: 6px 10px; max-width: min(210px, 60vw); white-space: normal; }
+.bubble { font-size: 12.5px; line-height: 1.32; padding: 5px 9px; max-width: min(204px, 58vw); white-space: normal; }
 .bubble .jp, .bubble .vi { display: block; } .bubble .vi { font-size: 11.5px; color: #6b5a4c; margin-top: 1px; }
 .bubble::after { content: ""; position: absolute; left: var(--tail, 50%); bottom: -7px; transform: translateX(-50%); border: 7px solid transparent; border-bottom: 0; border-top-color: #fffdf9; }
 @media (prefers-reduced-motion: reduce) { .gust { animation: none; } }
@@ -167,7 +167,7 @@ button:focus-visible { outline: 2.5px solid var(--sakura); outline-offset: 2px; 
   .place { top: calc(10px + env(safe-area-inset-top, 0px)); }
   #shifthud .rank { top: calc(52px + env(safe-area-inset-top, 0px)); }
   .tip { top: calc(52px + env(safe-area-inset-top, 0px)); width: min(360px, calc(100% - 400px)); }
-  .gust { top: calc(150px + env(safe-area-inset-top, 0px)); }
+  .gust { top: calc(184px + env(safe-area-inset-top, 0px)); font-size: 13.5px; padding: 5px 12px; }
   #toast { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); max-width: min(340px, calc(100% - 400px)); }
 }
 
@@ -226,11 +226,11 @@ button.small { font-size: 13px; padding: 8px 12px; }
 #shifthud .ticket { position: absolute; top: calc(98px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); font-size: 12.5px; border-color: var(--gold); }
 .bal-hud { position: absolute; inset: 0; pointer-events: none; }
 .bal-hud[hidden], .lotus-gauge[hidden], #shifthud .ticket[hidden] { display: none !important; }
-.bal-btn { pointer-events: auto; appearance: none; position: absolute; bottom: calc(168px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; border-radius: 16px; border: 2px solid var(--gold); background: var(--panel); color: var(--gold); font-size: 26px; font-weight: 900; display: grid; place-items: center; cursor: pointer; touch-action: manipulation; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+.bal-btn { pointer-events: auto; appearance: none; position: absolute; bottom: calc(208px + env(safe-area-inset-bottom, 0px)); width: 52px; height: 52px; box-sizing: border-box; border-radius: 14px; border: 2px solid var(--gold); background: var(--panel); color: var(--gold); font-size: 22px; font-weight: 900; display: grid; place-items: center; cursor: pointer; touch-action: manipulation; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
 .bal-btn.left { left: max(16px, env(safe-area-inset-left, 0px)); }
-.bal-btn.right { right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(184px + env(safe-area-inset-bottom, 0px)); }
+.bal-btn.right { right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(208px + env(safe-area-inset-bottom, 0px)); }
 .bal-btn:active { transform: scale(0.94); background: var(--accent); color: #fff; }
-.bal-meter { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(174px + env(safe-area-inset-bottom, 0px)); width: min(190px, 48vw); background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px; padding: 6px 10px 8px; display: grid; gap: 4px; text-align: center; }
+.bal-meter { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(208px + env(safe-area-inset-bottom, 0px)); width: min(190px, 48vw); box-sizing: border-box; background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px; padding: 6px 10px 8px; display: grid; gap: 4px; text-align: center; }
 .bal-lbl { font-size: 11px; font-weight: 700; color: var(--ink-dim); white-space: nowrap; }
 .bal-track { position: relative; height: 12px; border-radius: 6px; background: rgba(255, 138, 122, .32); border: 1px solid var(--line); overflow: hidden; }
 .bal-safe { position: absolute; left: 25%; width: 50%; top: 0; bottom: 0; background: rgba(126, 214, 160, .42); }
@@ -249,9 +249,9 @@ button.small { font-size: 13px; padding: 8px 12px; }
   .acts.many { grid-template-columns: repeat(3, auto); gap: 8px; }
   .acts.many .act { width: 66px; height: 66px; }
   #shifthud .ticket { top: calc(52px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); }
-  .bal-meter { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: min(190px, 32vw); }
-  .bal-btn.left { bottom: calc(164px + env(safe-area-inset-bottom, 0px)); }
-  .bal-btn.right { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+  .bal-meter { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: min(180px, 28vw); }
+  .bal-btn.left { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .bal-btn.right { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
   .lotus-gauge { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: min(280px, calc(100vw - 32px)); }
 }
 /* care home: cream round action buttons (owner's reference image) and floating +/- satisfaction */

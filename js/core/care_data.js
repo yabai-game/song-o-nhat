@@ -36,14 +36,14 @@ choices:[
 {t:'Ngồi xuống cạnh cụ: 「そうなんですね。お子さんのこと、聞かせてください」',fx:{mental:5,culture:5,boss:4},r:'Cụ kể về con say sưa rồi bình tĩnh lại.',lesson:'受容 (juyou): đón nhận cảm xúc của cụ trước, không cãi lại.'},
 {t:'Giải thích: 「違いますよ、ここが家です」',fx:{mental:-4,boss:-2},r:'Cụ càng hoảng, khóc mãi không thôi.'},
 ],after:'Bạn nhớ tên từng cụ rồi.'},
-a:{goal:4,hintDelay:3,decay:1.4,urgent:1,waitMin:4.5,waitRand:3.5,label:'Ca sáng: tắm và ăn sáng'},
+a:{goal:4,hintDelay:3,decay:1.0,urgent:1,waitMin:5.8,waitRand:4.5,label:'Ca sáng: tắm và ăn sáng'},
 drama:{title:'Lời nói sau lưng',who:'sato',jp:'「外国人って、言葉も分からないのにね。」',text:'Bạn nghe thấy một đồng nghiệp nói sau lưng mình.',
 choices:[
 {t:'Ghi lại từ chưa hiểu, nhờ người khác dạy thêm, cho thấy bằng việc làm',fx:{jp:4,mental:2},ally:true,r:'Vài tuần sau, chính người đó nhờ bạn giúp một việc khó.',lesson:'ハラスメント: nếu lời nói làm bạn tổn thương kéo dài, hãy báo quản lý hoặc nghiệp đoàn.'},
 {t:'Đáp trả ngay trước mặt các cụ',fx:{team:-6,boss:-4},watch:true,r:'Các cụ sợ hãi. Quản lý gọi cả hai lên.'},
 {t:'Trốn vào nhà vệ sinh khóc',fx:{mental:-6},r:'Bạn thấy nặng lòng cả buổi chiều.'},
 ]},
-b:{goal:5,limit:55,maxMiss:2,hintDelay:3,decay:1.4,urgent:1,waitMin:4.5,waitRand:3.5,label:'Ca chiều: phải vững tâm',jp:'「落ち着いて」',vi:'Giữ bình tĩnh: 5 lượt, ưu tiên cụ đang tụt hài lòng trước'},
+b:{goal:5,limit:55,maxMiss:2,hintDelay:3,decay:1.0,urgent:1,waitMin:5.8,waitRand:4.5,label:'Ca chiều: phải vững tâm',jp:'「落ち着いて」',vi:'Giữ bình tĩnh: 5 lượt, ưu tiên cụ đang tụt hài lòng trước'},
 },
 {
 story:{title:'Trực sáng thiếu người',who:'tanaka',jp:'「今日は二人休みなの。お願いできる？」',text:'Hai người nghỉ ốm, quản lý nhờ bạn làm thêm việc.',
@@ -51,13 +51,13 @@ choices:[
 {t:'「はい、頑張ります。分からないことは聞きます」',fx:{boss:6,mental:-2},r:'「ありがとう、助かる！」'},
 {t:'Im lặng rồi làm hết theo ý mình',fx:{boss:-3},r:'Bạn làm nhầm thứ tự bữa ăn của hai cụ.'},
 ],after:'Một ngày dài nữa đã qua.'},
-a:{goal:4,hintDelay:-1,decay:1.7,urgent:1,waitMin:4.0,waitRand:3.0,label:'Ca sáng: thiếu hai người'},
+a:{goal:4,hintDelay:-1,decay:1.2,urgent:1,waitMin:5.2,waitRand:3.9,label:'Ca sáng: thiếu hai người'},
 drama:{title:'Giường trống của cụ Kimura',who:'tanaka',jp:'「木村さん、昨夜、病院に運ばれました。」',text:'Sáng nay giường cụ Kimura trống.',
 choices:[
 {t:'Cho phép mình buồn, rồi hỏi quản lý cách viết thư thăm',fx:{mental:4,culture:5},ally:true,r:'「優しいね。一緒に書こう。」 Quản lý ngồi viết cùng bạn.'},
 {t:'Cố không nghĩ tới, làm cho xong việc',fx:{mental:-5},r:'Đến tối bạn mới thấy mệt rã rời.'},
 ]},
-b:{goal:6,limit:70,maxMiss:3,hintDelay:-1,decay:1.7,urgent:2,waitMin:4.0,waitRand:3.0,label:'Ca chiều: thiếu người, nhiều việc',jp:'「人手が足りません！」',vi:'Một mình lo 6 lượt, không tự hiện nghĩa tiếng Việt'},
+b:{goal:6,limit:70,maxMiss:3,hintDelay:-1,decay:1.2,urgent:2,waitMin:5.2,waitRand:3.9,label:'Ca chiều: thiếu người, nhiều việc',jp:'「人手が足りません！」',vi:'Một mình lo 6 lượt, không tự hiện nghĩa tiếng Việt'},
 },
 {
 story:{title:'Đoàn kiểm tra đến thăm',who:'tanaka',jp:'「今日は監査が来ます。いつも通りにね。」',text:'Đoàn kiểm tra sẽ xem sổ sách và cách chăm sóc các cụ.',
@@ -65,12 +65,12 @@ choices:[
 {t:'Làm đúng như thường ngày, ghi sổ đầy đủ',fx:{boss:6,culture:4},r:'Đoàn kiểm tra khen sổ ghi chép rõ ràng.',lesson:'記録 (kiroku): ghi chép đúng giờ, đúng sự thật là một phần của chăm sóc.'},
 {t:'Điền bù sổ cho những việc hôm qua quên ghi',fx:{boss:-5,mental:-4},r:'Giờ ghi lệch nhau, đoàn kiểm tra hỏi lại rất lâu.'},
 ],after:'Một tuần ở viện dưỡng lão đã qua.'},
-a:{goal:4,hintDelay:-1,decay:2.0,urgent:1,waitMin:3.5,waitRand:3.0,label:'Ca sáng: chuẩn bị đoàn kiểm tra'},
+a:{goal:4,hintDelay:-1,decay:1.4,urgent:1,waitMin:4.55,waitRand:3.9,label:'Ca sáng: chuẩn bị đoàn kiểm tra'},
 drama:{title:'Cụ đi lạc lúc kiểm tra',who:'sato',jp:'「鈴木さんがいない！」',text:'Đoàn kiểm tra đang ở đây thì không thấy cụ Suzuki đâu.',
 choices:[
 {t:'Báo ngay, chia nhau tìm theo khu vực',fx:{boss:8,team:5},ally:true,r:'Năm phút sau cả nhóm tìm thấy cụ ở vườn sau.',lesson:'離設 (risetsu): cụ rời viện không báo — báo ngay và chia nhau tìm theo khu vực.'},
 {t:'Tự đi tìm không báo ai, sợ làm viện mất mặt',fx:{boss:-6,mental:-4},r:'Mất 30 phút mới tìm thấy cụ, mọi người rất lo.'},
 ]},
-b:{goal:7,limit:75,maxMiss:2,hintDelay:-1,decay:2.0,urgent:2,waitMin:3.5,waitRand:3.0,label:'Thử thách cuối tuần: đoàn kiểm tra',jp:'「監査中です！」',vi:'7 lượt chuẩn xác trước đoàn kiểm tra, có 2 sự cố khẩn'},
+b:{goal:7,limit:75,maxMiss:2,hintDelay:-1,decay:1.4,urgent:2,waitMin:4.55,waitRand:3.9,label:'Thử thách cuối tuần: đoàn kiểm tra',jp:'「監査中です！」',vi:'7 lượt chuẩn xác trước đoàn kiểm tra, có 2 sự cố khẩn'},
 },
 ];

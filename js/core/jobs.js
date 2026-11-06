@@ -80,13 +80,13 @@ choices:[
 {t:'Hỏi lại: 「風が強いときは、止まればいいですか」',fx:{boss:5,culture:3},r:'「そうだ。迷ったら止まれ。」'},
 {t:'“Có gió tí thôi, làm luôn cho xong”',fx:{boss:-4},r:'「お前、命いらないのか！」'},
 ],after:'Một ngày dài nữa đã qua.'},
-a:{goal:3,drift:0.68,pipeKinds:3,label:'Ca sáng: chuẩn bị chằng buộc'},
+a:{goal:3,drift:0.58,pipeKinds:3,label:'Ca sáng: chuẩn bị chằng buộc'},
 drama:{title:'Đồng đội bị thương',who:'sato',jp:'「痛っ！指が…」',text:'Chị Satō kẹp tay vào khóa giàn giáo, ngón tay sưng tím.',
 choices:[
 {t:'Vẫn báo Quản lý: 「すぐ報告します」',fx:{boss:7,culture:5},ally:true,r:'Chị được đưa đi khám, tiền khám do bảo hiểm lao động trả.',lesson:'労災隠し: giấu tai nạn lao động là phạm luật. Bị thương khi làm việc thì 労災 chi trả.'},
 {t:'Giúp băng và im lặng',fx:{boss:-4,mental:-4},r:'Tối đó tay chị sưng to hơn, và không ai biết để giúp.'},
 ]},
-b:{goal:4,limit:70,wind:true,maxMiss:2,drift:0.68,pipeKinds:3,label:'Ca chiều: gió giật',jp:'「突風注意！」',vi:'Có cảnh báo gió thì đứng yên đừng đi. Nhớ nhìn phiếu 3 cỡ ống!'},
+b:{goal:4,limit:70,wind:true,maxMiss:2,drift:0.58,pipeKinds:3,label:'Ca chiều: gió giật',jp:'「突風注意！」',vi:'Có cảnh báo gió thì đứng yên đừng đi. Nhớ nhìn phiếu 3 cỡ ống!'},
 },
 {
 story:{title:'Đoàn kiểm tra an toàn',who:'tanaka',jp:'「今日は安全パトロールだ。全員、気を引き締めろ！」',text:'Đoàn tuần tra an toàn đến thăm công trường.',
@@ -94,13 +94,13 @@ choices:[
 {t:'Kiểm tra lại dây, mũ, giày cho cả nhóm',fx:{boss:6,team:5},r:'Cả nhóm qua kiểm tra không lỗi nào.',lesson:'声かけ: nhắc nhau an toàn là văn hóa ở công trường Nhật.'},
 {t:'Lo phần mình thôi',fx:{team:-3},r:'Một bạn trong nhóm bị nhắc vì quên khóa dây.'},
 ],after:'Một ngày dài nữa đã qua.'},
-a:{goal:3,drift:0.80,pipeKinds:3,label:'Ca sáng: kiểm tra và dọn sàn'},
+a:{goal:3,drift:0.65,pipeKinds:3,label:'Ca sáng: kiểm tra và dọn sàn'},
 drama:{title:'Ống rơi trong lúc tuần tra',who:'tanaka',jp:'「今の音は何だ！」',text:'Một ống thép tuột khỏi tay bạn, rơi xuống sàn kêu rất to.',
 choices:[
 {t:'Dừng lại, báo ngay: 「すみません、私です。怪我はありません」',fx:{boss:7,culture:4},ally:true,r:'Đoàn kiểm tra gật đầu: báo ngay là đúng cách.'},
 {t:'Coi như không có gì',fx:{boss:-6},watch:true,r:'Quản lý nhìn bạn rất lâu.'},
 ]},
-b:{goal:5,limit:85,wind:true,maxMiss:1,drift:0.80,pipeKinds:3,label:'Thử thách cuối tuần: tuần tra an toàn',jp:'「パトロール中だ！」',vi:'5 bó, 3 cỡ ống, có gió, chỉ được sai 1 lần'},
+b:{goal:5,limit:85,wind:true,maxMiss:1,drift:0.65,pipeKinds:3,label:'Thử thách cuối tuần: tuần tra an toàn',jp:'「パトロール中だ！」',vi:'5 bó, 3 cỡ ống, có gió, chỉ được sai 1 lần'},
 },
 ];
 export const EVENINGS=[

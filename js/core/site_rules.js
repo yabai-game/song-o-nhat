@@ -30,11 +30,11 @@ REACH:2.7,
 SLOT_REACH:1.55,
 HOLD_TIME:0.6,
 DRIFT0:0.35,
-BAL_GUST_MUL:1.6,
+BAL_GUST_MUL:1.35,
 BAL_RUN_MUL:1.4,
 BAL_RECOVER:0.55,
-BAL_STEP:0.34,
-GUST_FIRST:7,GUST_MIN:6,GUST_RANGE:4,GUST_LEN:2,GUST_GRACE:0.5,
+BAL_STEP:0.36,
+GUST_FIRST:7,GUST_MIN:6,GUST_RANGE:4,GUST_LEN:2,GUST_GRACE:0.7,
 WALK:3.4,RUN_MUL:1.7,
 WIN_DELAY:0.5,
 };
@@ -74,6 +74,7 @@ balDir:initDir||1,
 balSwitchT:0.9,
 gustT:SITE.GUST_FIRST,
 gust:0,
+gustGrace:SITE.GUST_GRACE,
 busy:0,
 busyDo:null,
 over:null,
@@ -183,6 +184,7 @@ if(st.winT<=0){st.over='won';ev.push('win');}
 return ev;
 }
 st.elapsed+=dt;
+const wasBusy=st.busy>0;
 if(st.busy>0){
 st.busy-=dt;
 if(st.busy<=0){
@@ -192,6 +194,7 @@ st.carry=true;
 st.bal=0;
 st.balDir=st.rng()<0.5?-1:1;
 st.balSwitchT=0.8+st.rng()*0.8;
+st.gustGrace=SITE.GUST_GRACE;
 ev.push('pick');
 }else if(st.busyDo==='place'){
 st.carry=false;
@@ -213,10 +216,13 @@ st.busyDo=null;
 if(st.wind&&!st.over){
 if(st.gust>0){
 st.gust-=dt;
+if(st.carry&&!wasBusy){
+st.gustGrace=Math.max(0,(st.gustGrace!==undefined?st.gustGrace:SITE.GUST_GRACE)-dt);
+}
 if(st.gust<=0){
 st.gust=0;
 ev.push('gust-end');
-}else if(st.carry&&moving&&st.gust<SITE.GUST_LEN-SITE.GUST_GRACE){
+}else if(st.carry&&moving&&st.gust<SITE.GUST_LEN-SITE.GUST_GRACE&&st.gustGrace<=1e-6){
 st.gust=0;
 ev.push('gust-end');
 drop(st,ev,'drop-gust');
@@ -226,6 +232,7 @@ st.gustT-=dt;
 if(st.gustT<=0){
 st.gustT=SITE.GUST_MIN+st.rng()*SITE.GUST_RANGE;
 st.gust=SITE.GUST_LEN;
+st.gustGrace=SITE.GUST_GRACE;
 ev.push('gust-start');
 }
 }

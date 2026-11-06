@@ -18,6 +18,18 @@ function starBoxHtml(info){
 const rows=info.lines.map((l)=>`<div class="star-line${l.ok ? ' ok' : ''}">${esc(l.text)}</div>`).join('');
 return`<div class="stars-box"><div class="stars-row">${info.starsText}</div><div class="stars-lines">${rows}</div></div>`;
 }
+function hookOverhead(overhead,fn){
+if(!overhead)return;
+if(!overhead._postHooks){
+overhead._postHooks=[];
+const orig=overhead.update.bind(overhead);
+overhead.update=(dt)=>{
+orig(dt);
+for(const h of overhead._postHooks)h(dt);
+};
+}
+overhead._postHooks.push(fn);
+}
 export class SiteShift{
 constructor({site,controls,overhead,camRig}){
 Object.assign(this,{site,controls,overhead,camRig});
@@ -27,6 +39,8 @@ this.tippedBal=false;
 this.tippedTicket=false;
 this._buildActions();
 $('sh-quit').addEventListener('click',()=>this.askQuit());
+addEventListener('resize',()=>{if(this.active)this.placeHud();});
+hookOverhead(this.overhead,()=>{if(this.active)this.clampOverhead();});
 }
 _buildActions(){
 const box=$('acts');box.textContent='';
@@ -76,7 +90,7 @@ $('sh-place').querySelector('span').textContent='Công trường Saitama';
 $('sh-rank').textContent=meta.rankLabel;
 if(this.st.pipeKinds>=2&&!this.tippedTicket){
 this.tippedTicket=true;
-this.tip('指示書を確認！',`Phiếu mới: nhấc đúng cỡ ống (${this.st.ticket.text}) và đặt đúng ô trên giá!`,6.5);
+this.tip('指示書を確認！',`Nhấc đúng cỡ ống (${this.st.ticket.text}) và đặt đúng ô!`,6.5);
 }else{
 this.tip(opts.jp?opts.jp.replace(/[「」]/g,''):'持つ (motsu)',opts.vi||'Đi tới đống ống thép bên trái, nhấc đúng cỡ trên phiếu rồi vác sang giá bên phải');
 }
@@ -91,14 +105,16 @@ this.bundle.visible=false;this.who.player.unpinAll();this.who.player.shoulderTo=
 tip(jp,vi,sec=6.5){
 const t=$('sh-tip');t.querySelector('b').textContent=jp;t.querySelector('span').textContent=vi;
 t.hidden=false;clearTimeout(this.tipT);this.tipT=setTimeout(()=>{t.hidden=true;},sec*1000);
+this.placeHud();
 }
 hud(){
 const s=this.st;
-let txt=`👷 ${s.count}/${s.goal} bó ống thép`;
-if(s.limit)txt+=` · ⏱ ${Math.ceil(s.time)}s`;
-if(s.maxMiss)txt+=` · ❌ ${s.miss}/${s.maxMiss}`;
-else if(s.miss)txt+=` · ❌ ${s.miss}`;
-const g=$('sh-goal');g.textContent=txt;g.classList.toggle('warn',!!(s.limit&&s.time<10));
+let txt=`👷 ${s.count}/${s.goal} bó`;
+if(s.limit)txt+=` · ⏱${Math.ceil(s.time)}s`;
+if(s.maxMiss)txt+=` · ❌${s.miss}/${s.maxMiss}`;
+else if(s.miss)txt+=` · ❌${s.miss}`;
+const g=$('sh-goal');if(g.textContent!==txt)g.textContent=txt;
+g.classList.toggle('warn',!!(s.limit&&s.time<10));
 const tk=$('sh-ticket');
 if(tk){
 const tTxt=`📋 Phiếu: ${s.ticket.text}`;
@@ -110,6 +126,175 @@ const needle=$('bal-needle');
 if(needle)needle.style.left=`${Math.max(2, Math.min(98, (s.bal * 0.5 + 0.5) * 100)).toFixed(1)}%`;
 const meter=document.querySelector('#sh-bal .bal-meter');
 if(meter)meter.classList.toggle('danger',Math.abs(s.bal)>=0.65);
+}
+this.placeHud();
+}
+placeHud(){
+const hud=$('shifthud');
+if(!hud||hud.hidden)return;
+const H=hud.getBoundingClientRect();
+if(!H.width)return;
+const imp=(el,k,v)=>{if(el&&el.style.getPropertyValue(k)!==v)el.style.setProperty(k,v,'important');};
+const vis=(el)=>el&&!el.hidden&&getComputedStyle(el).display!=='none';
+const rank=$('sh-rank'),bars=$('sh-bars'),chips=$('sh-chips'),ticket=$('sh-ticket'),tip=$('sh-tip'),gust=$('sh-gust'),bal=$('sh-bal');
+const L=Math.max(12,rank?(rank.getBoundingClientRect().left-H.left||12):12);
+let y=0;
+for(const el of[hud.querySelector('.top'),$('btn-menu'),$('btn-phone')]){
+if(!el||el.hidden)continue;
+const r=el.getBoundingClientRect();
+if(r.height)y=Math.max(y,r.bottom-H.top);
+}
+y=Math.round(y+6);
+const W=H.width,rankOn=vis(rank)&&rank.textContent.trim(),barsOn=vis(bars);
+const rw=rankOn?rank.scrollWidth:0,bw=barsOn?bars.offsetWidth:0;
+const inline=!rankOn||!barsOn||L+rw+8+bw+L<=W;
+let bottom=y;
+if(rankOn){
+imp(rank,'top',y+'px');
+imp(rank,'max-width',(inline&&barsOn?W-2*L-bw-8:W-2*L)+'px');
+bottom=Math.max(bottom,y+rank.offsetHeight);
+}
+if(barsOn){
+const by=inline?y:bottom+5;
+imp(bars,'top',by+'px');
+if(inline){imp(bars,'left','auto');imp(bars,'right',L+'px');}
+else{imp(bars,'right','auto');imp(bars,'left',L+'px');}
+bottom=Math.max(bottom,by+bars.offsetHeight);
+}
+let low=bottom;
+for(const el of[chips,ticket]){
+if(!vis(el))continue;
+imp(el,'top',(bottom+6)+'px');
+if(el===chips)imp(el,'max-width',(vis(ticket)?W-2*L-ticket.offsetWidth-8:W-2*L)+'px');
+low=Math.max(low,bottom+6+el.offsetHeight);
+}
+let tipBottom=low;
+if(vis(tip)){
+imp(tip,'top',(low+6)+'px');
+tipBottom=Math.max(low,low+6+tip.offsetHeight);
+}
+if(vis(gust)){
+imp(gust,'top',Math.ceil(tipBottom+8)+'px');
+}
+if(vis(bal)){
+const bl=$('bal-l'),br=$('bal-r'),meter=bal.querySelector('.bal-meter');
+const acts=$('acts'),joy=$('joy');
+const ar=acts?acts.getBoundingClientRect():null;
+const jr=joy?joy.getBoundingClientRect():null;
+const gapL=jr&&jr.width?jr.right-H.left:150;
+const gapR=ar&&ar.width?ar.left-H.left:W-160;
+const gap=gapR-gapL;
+const btnSize=52;
+if(W>H.height&&gap>=300){
+const cx=(gapL+gapR)*0.5;
+const meterW=Math.min(184,Math.max(120,Math.floor(gap-136)));
+const meterLeft=Math.round(cx-meterW*0.5);
+const blLeft=Math.round(meterLeft-10-btnSize);
+const brLeft=Math.round(meterLeft+meterW+10);
+if(bl){imp(bl,'left',blLeft+'px');imp(bl,'right','auto');imp(bl,'bottom','14px');imp(bl,'width',btnSize+'px');imp(bl,'height',btnSize+'px');}
+if(meter){imp(meter,'left',meterLeft+'px');imp(meter,'transform','none');imp(meter,'bottom','14px');imp(meter,'width',meterW+'px');}
+if(br){imp(br,'left',brLeft+'px');imp(br,'right','auto');imp(br,'bottom','14px');imp(br,'width',btnSize+'px');imp(br,'height',btnSize+'px');}
+}else{
+const minControlTop=Math.min(
+ar&&ar.height?ar.top-H.top:H.height,
+jr&&jr.height?jr.top-H.top:H.height,
+);
+const bottomPx=Math.max(198,Math.round(H.height-minControlTop+10));
+const meterW=Math.min(192,Math.max(120,Math.floor(W-152)));
+const meterLeft=Math.round((W-meterW)*0.5);
+if(bl){imp(bl,'left','16px');imp(bl,'right','auto');imp(bl,'bottom',bottomPx+'px');imp(bl,'width',btnSize+'px');imp(bl,'height',btnSize+'px');}
+if(meter){imp(meter,'left',meterLeft+'px');imp(meter,'transform','none');imp(meter,'bottom',bottomPx+'px');imp(meter,'width',meterW+'px');}
+if(br){imp(br,'left',Math.round(W-16-btnSize)+'px');imp(br,'right','auto');imp(br,'bottom',bottomPx+'px');imp(br,'width',btnSize+'px');imp(br,'height',btnSize+'px');}
+}
+}
+}
+clampOverhead(){
+if(!this.overhead||!this.overhead.items)return;
+const W=window.innerWidth,H=window.innerHeight;
+if(!W||!H)return;
+const vis=(el)=>el&&!el.hidden&&getComputedStyle(el).display!=='none';
+const obstacles=[];
+let minY=10;
+for(const el of[document.querySelector('#shifthud .top'),$('btn-menu'),$('btn-phone')]){
+if(!vis(el))continue;
+const r=el.getBoundingClientRect();
+if(r.width&&r.height){
+minY=Math.max(minY,Math.ceil(r.bottom+6));
+obstacles.push({l:r.left,t:r.top,r:r.right,b:r.bottom});
+}
+}
+const hudEls=[
+$('sh-rank'),$('sh-bars'),$('sh-ticket'),$('sh-tip'),$('sh-gust'),
+$('joy'),$('acts'),$('toast'),
+];
+if(vis($('sh-bal'))){
+hudEls.push($('bal-l'),document.querySelector('#sh-bal .bal-meter'),$('bal-r'));
+}
+for(const el of hudEls){
+if(!vis(el))continue;
+const r=el.getBoundingClientRect();
+if(r.width&&r.height)obstacles.push({l:r.left,t:r.top,r:r.right,b:r.bottom});
+}
+const placed=[];
+const hits=(l,t,r,b,pad=4)=>{
+for(const o of obstacles){
+if(r+pad>o.l&&l-pad<o.r&&b+pad>o.t&&t-pad<o.b)return true;
+}
+for(const p of placed){
+if(r+pad>p.l&&l-pad<p.r&&b+pad>p.t&&t-pad<p.b)return true;
+}
+return false;
+};
+const overlapArea=(l,t,r,b)=>{
+let area=0;
+for(const o of obstacles){
+const ox=Math.max(0,Math.min(r,o.r)-Math.max(l,o.l));
+const oy=Math.max(0,Math.min(b,o.b)-Math.max(t,o.t));
+area+=ox*oy;
+}
+for(const p of placed){
+const ox=Math.max(0,Math.min(r,p.r)-Math.max(l,p.l));
+const oy=Math.max(0,Math.min(b,p.b)-Math.max(t,p.t));
+area+=ox*oy*2;
+}
+return area;
+};
+for(let i=this.overhead.items.length-1;i>=0;i--){
+const it=this.overhead.items[i];
+if(!it||!it.el||it.el.hidden||getComputedStyle(it.el).display==='none')continue;
+const rect=it.el.getBoundingClientRect();
+if(!rect.width||!rect.height)continue;
+const w=Math.ceil(rect.width),h=Math.ceil(rect.height);
+const maxX=Math.max(10,Math.floor(W-w-10));
+const maxY=Math.max(minY,Math.floor(H-h-10));
+const clampX=(v)=>Math.max(10,Math.min(maxX,Math.round(v)));
+const clampY=(v)=>Math.max(minY,Math.min(maxY,Math.round(v)));
+let bestX=clampX(rect.left),bestY=clampY(rect.top);
+if(hits(bestX,bestY,bestX+w,bestY+h)){
+const xs=new Set([bestX,10,Math.round((W-w)*0.5),maxX]);
+const ys=new Set([bestY,minY,Math.round((minY+maxY)*0.5),maxY]);
+for(const o of[...obstacles,...placed]){
+xs.add(clampX(o.l-w-6));
+xs.add(clampX(o.r+6));
+ys.add(clampY(o.t-h-6));
+ys.add(clampY(o.b+6));
+}
+let bestScore=Infinity;
+for(const cy of ys){
+for(const cx of xs){
+const area=hits(cx,cy,cx+w,cy+h)?overlapArea(cx,cy,cx+w,cy+h)+1e6:0;
+const dist=(cx-bestX)*(cx-bestX)+(cy-bestY)*(cy-bestY);
+const score=area*1000+dist;
+if(score<bestScore){
+bestScore=score;
+bestX=cx;
+bestY=cy;
+}
+}
+}
+}
+it.el.style.transform=`translate3d(${bestX}px, ${bestY}px, 0)`;
+placed.push({l:bestX,t:bestY,r:bestX+w,b:bestY+h});
 }
 }
 action(id){
@@ -292,8 +477,8 @@ this.tip('止まれ！','“Dừng lại!” — gió giật làm rơi ống',4)
 this.overhead.say(who.foreman,'バランス崩したぞ！ — Mất thăng bằng kìa!',4);
 this.tip('危ない！','Mất thăng bằng làm rơi ống — nhớ bấm ◀ ▶ (A/D) giữ kim ở giữa!',4.5);
 }
-}else if(e==='gust-start')show('sh-gust',true);
-else if(e==='gust-end')show('sh-gust',false);
+}else if(e==='gust-start'){show('sh-gust',true);this.placeHud();}
+else if(e==='gust-end'){show('sh-gust',false);this.placeHud();}
 else if(e==='lose')this.lose();
 else if(e==='win')this.win();
 }

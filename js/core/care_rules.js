@@ -7,7 +7,7 @@ BAD:8,
 WAIT_MIN:7,
 WAIT_RAND:5,
 SAT0:55,SAT_STEP:6,
-URGENT_TIME:6.0,
+URGENT_TIME:7.5,
 URGENT_FIRST:11.0,
 URGENT_GAP:15.0,
 };
@@ -131,6 +131,9 @@ if(!st.urgent||st.urgent.i!==i)return'none';
 const uf=st.folk[i];
 st.urgent=null;
 if(uf)uf.sat=Math.min(100,Math.round(uf.sat+CARE.GOOD));
+for(const f of st.folk){
+if(!f.need)f.wait=Math.max(f.wait,st.waitMin||CARE.WAIT_MIN);
+}
 st.busy=0.8;
 return'saved';
 }
@@ -174,7 +177,7 @@ st.folk.forEach((f,i)=>{
 if(f.need){
 f.needAge=(f.needAge||0)+dt;
 if(st.hintDelay>=0&&f.needAge>=st.hintDelay)f.hintShown=true;
-if(st.decay>0){
+if(st.decay>0&&!st.urgent){
 f.sat=Math.max(0,f.sat-st.decay*dt);
 if(f.sat<st.minSat)st.minSat=f.sat;
 if(f.sat<=0){
@@ -199,6 +202,7 @@ ev.push(['lose']);
 }
 return;
 }
+if(st.urgent)return;
 f.wait-=dt;
 if(f.wait<=0){
 const nk=KEYS[Math.floor(rng()*KEYS.length)%KEYS.length];
