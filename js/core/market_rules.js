@@ -1,7 +1,9 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import{applyFx}from'./state.js';
+import{ateDinner,markDinner,mealDayOf}from'./wellbeing.js';
 export const BAG_FEE=5;
 export const KONBINI_MEAL=600;
+export const KONBINI_BENTO_FX={health:9,mental:1};
 export const SPOIL_DAYS=3;
 export const DISCOUNT_20_MIN=19*60+30;
 export const DISCOUNT_50_MIN=20*60;
@@ -24,7 +26,7 @@ vi:'Trứng chiên cà tím',
 jp:'なすと卵の炒め物',
 items:['eggs','eggplant'],
 stove:true,
-fx:{health:6,mental:4},
+fx:{health:12,mental:4},
 },
 {
 id:'pork_cucumber',
@@ -33,7 +35,7 @@ vi:'Thịt heo xào dưa chuột',
 jp:'豚肉ときゅうりの炒め物',
 items:['meat','cucumber'],
 stove:true,
-fx:{health:6,mental:4},
+fx:{health:12,mental:4},
 },
 {
 id:'fruit_bowl',
@@ -42,7 +44,7 @@ vi:'Bữa sáng hoa quả',
 jp:'フルーツ盛り',
 items:['banana','apple'],
 stove:false,
-fx:{health:3,mental:2},
+fx:{health:6,mental:2},
 },
 ];
 export const COOK_STEPS=[
@@ -207,8 +209,19 @@ return KONBINI_MEAL-recipeCost(r);
 }
 export function canCookTonight(S){
 if(!S)return false;
-if(S.flags&&S.flags.cooked===(S.story??0))return false;
+if(ateDinner(S))return false;
+if(S.flags&&S.flags.cooked===mealDayOf(S))return false;
 return cookable(S.pantry).length>0;
+}
+export function eatKonbiniBento(S){
+if(!S)return{ok:false,why:'invalid'};
+if(ateDinner(S))return{ok:false,why:'done'};
+if((S.money||0)<KONBINI_MEAL){
+return{ok:false,why:'money',cost:KONBINI_MEAL};
+}
+const delta=applyFx(S,{money:-KONBINI_MEAL,...KONBINI_BENTO_FX});
+markDinner(S);
+return{ok:true,cost:KONBINI_MEAL,fx:KONBINI_BENTO_FX,delta};
 }
 export function cook(S,pantry,recipeId){
 if(typeof pantry==='string'&&recipeId===undefined){
@@ -229,7 +242,8 @@ if(syncDays&&idx<S.pantryDays.length)S.pantryDays.splice(idx,1);
 }
 }
 S.flags=S.flags||{};
-S.flags.cooked=S.story??0;
+S.flags.cooked=mealDayOf(S);
+markDinner(S);
 const delta=applyFx(S,recipe.fx);
 const cost=recipeCost(recipe);
 const saved=KONBINI_MEAL-cost;

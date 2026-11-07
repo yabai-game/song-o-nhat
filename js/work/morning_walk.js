@@ -110,7 +110,7 @@ this.platT=0;this.rideT=-1;this.boarding=false;this.warned=false;this.greetT=-1;
 this.sorted=false;this.carryingBag=false;this.trashSt=null;this.pendingDrop=false;
 this.ridingBike=false;this.policeChecked=false;
 this.curTrain=null;this.doorCloseT=-1;this.arrivedSent=false;this.melodyShown=false;
-this.hurryWarned=false;this.delayGateTipShown=false;
+this.hurryWarned=false;this.delayGateTipShown=false;this.hungryCardShown=false;
 if(this.stages.site){
 if(this.stages.site.trashRing)this.stages.site.trashRing.visible=false;
 if(this.stages.site.setTrashDropped)this.stages.site.setTrashDropped(false);
@@ -762,6 +762,14 @@ this.rise=-1;P.holder.rotation.x=0;P.holder.position.y=0;P.yaw=Math.PI/2;
 this.controls.enabled=true;
 this.controls.onTap=(pt)=>{if(Math.hypot(pt.x-DORM.door.x,pt.z-DORM.door.z)<1)this.pendingOut=true;};
 this.tip('朝ご飯は？','Ăn sáng (🍙), phân loại rác (🗑️) hoặc ra cửa đi làm (🚪)',5);
+if((this.S?.hungry||0)>=1&&!this.hungryCardShown&&!this.demoTrash){
+this.hungryCardShown=true;
+this.paused=true;
+card(`<div class="big">😵</div><h2>😵 Đói bụng</h2>
+            <p>Tối qua chưa ăn — hôm nay mệt nhanh hơn và dễ ốm. Ăn sáng 🍙 rồi tối nhớ ăn cơm!</p>`,[
+{label:'Đã hiểu →',on:()=>{show('modal',false);this.paused=false;}},
+]);
+}
 }
 }
 let moving=false,speed=0;

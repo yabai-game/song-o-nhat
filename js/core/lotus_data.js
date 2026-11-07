@@ -23,7 +23,7 @@ choices:[
 ],
 after:'Lần đầu tự tay đào được củ sen. Người đau ê ẩm, nhưng cũng vui.',
 },
-a:{goal:2,pullPeriod:2.4,pullZone:0.38,weeds:false,label:'Ca sáng: đào 2 củ'},
+a:{goal:2,pullPeriod:2.7,pullZone:0.45,weeds:false,label:'Ca sáng: đào 2 củ'},
 drama:{
 title:'Máy bơm nghẹt',who:'sato',
 jp:'「ポンプが止まった！」',
@@ -33,7 +33,7 @@ choices:[
 {t:'Đứng chờ, coi như giờ nghỉ',fx:{team:-3,boss:-2},r:'Quản lý đi ngang qua nhìn thấy bạn đứng không.',lesson:'指示待ち (chờ sai mới làm): ở Nhật rất quý người chủ động hỏi 「何か手伝いましょうか」.'},
 ],
 },
-b:{goal:3,limit:50,pullPeriod:2.4,pullZone:0.38,weeds:false,label:'Ca chiều: kịp xe chở hàng',jp:'「トラックが来るぞ！」',vi:'Xe chở hàng sắp tới, đào xong 3 củ trước khi hết giờ'},
+b:{goal:3,limit:60,pullPeriod:2.7,pullZone:0.45,weeds:false,label:'Ca chiều: kịp xe chở hàng',jp:'「トラックが来るぞ！」',vi:'Xe chở hàng sắp tới, đào xong 3 củ trước khi hết giờ'},
 },
 {
 story:{
@@ -46,7 +46,7 @@ choices:[
 ],
 after:'Lần này bạn xịt nước kỹ hơn. Không củ nào gãy.',
 },
-a:{goal:3,pullPeriod:2.3,pullZone:0.35,weeds:false,label:'Ca sáng: đào 3 củ'},
+a:{goal:3,pullPeriod:2.6,pullZone:0.42,weeds:false,label:'Ca sáng: đào 3 củ'},
 drama:{
 title:'Ai lấy củ của tôi?',who:'hung',
 jp:'「これ、俺の分にしとくわ。」',
@@ -57,7 +57,7 @@ choices:[
 {t:'Mắng thẳng trước mọi người',fx:{team:-5,boss:-3},watch:true,r:'Cả ruộng im bặt. Quản lý nhắc cả hai giữ trật tự.'},
 ],
 },
-b:{goal:4,limit:60,maxMiss:2,pullPeriod:2.3,pullZone:0.35,weeds:false,label:'Ca chiều: không được sai bước',jp:'「順番を守れ！」',vi:'Canh chuẩn thanh lực nhổ: sai quá 2 lần là hỏng củ!'},
+b:{goal:4,limit:75,maxMiss:3,pullPeriod:2.6,pullZone:0.42,weeds:false,label:'Ca chiều: không được sai bước',jp:'「順番を守れ！」',vi:'Canh chuẩn thanh lực nhổ: sai quá 3 lần là hỏng củ!'},
 },
 {
 story:{
@@ -70,7 +70,7 @@ choices:[
 ],
 after:'Bạn bắt đầu quen với bùn rồi.',
 },
-a:{goal:3,walk:0.85,pullPeriod:2.2,pullZone:0.32,weeds:true,label:'Ca sáng: đào trong gió lạnh'},
+a:{goal:3,walk:0.85,pullPeriod:2.5,pullZone:0.39,weeds:true,label:'Ca sáng: đào trong gió lạnh'},
 drama:{
 title:'Bạn cùng phòng ốm',who:'hung',
 jp:'「熱があるみたいだ…」',
@@ -80,7 +80,7 @@ choices:[
 {t:'Làm hộ phần của anh, không nói ai',fx:{health:-6,team:3},r:'Bạn kiệt sức, còn anh Hùng ở nhà sốt cao hơn.'},
 ],
 },
-b:{goal:4,limit:55,rain:true,walk:0.75,pullPeriod:2.2,pullZone:0.32,weeds:true,label:'Ca chiều: mưa lớn',jp:'「雨が強くなってきた！」',vi:'Mưa lớn, gốc có cỏ dại 🌿 phải cắt cỏ trước khi đào!'},
+b:{goal:4,limit:70,rain:true,walk:0.75,pullPeriod:2.5,pullZone:0.39,weeds:true,label:'Ca chiều: mưa lớn',jp:'「雨が強くなってきた！」',vi:'Mưa lớn, gốc có cỏ dại 🌿 phải cắt cỏ trước khi đào!'},
 },
 {
 story:{
@@ -93,7 +93,7 @@ choices:[
 ],
 after:'Một ngày dài nữa đã qua.',
 },
-a:{goal:3,pullPeriod:2.0,pullZone:0.30,weeds:true,label:'Ca sáng: phân loại, đào tiếp'},
+a:{goal:3,pullPeriod:2.3,pullZone:0.37,weeds:true,label:'Ca sáng: phân loại, đào tiếp'},
 drama:{
 title:'Lương thiếu tiền',who:'hoa',
 jp:'「給与明細、見ましたか？」',
@@ -103,7 +103,7 @@ choices:[
 {t:'Bỏ qua cho yên chuyện',fx:{mental:-4},r:'12 giờ công mất trắng.'},
 ],
 },
-b:{goal:5,limit:65,maxMiss:2,pullPeriod:2.0,pullZone:0.30,weeds:true,label:'Ca chiều: bù giờ đã mất',jp:'「遅れを取り戻すぞ！」',vi:'Bù lại tiến độ: 5 củ, cắt cỏ + canh lực nhổ thật chuẩn'},
+b:{goal:5,limit:80,maxMiss:3,pullPeriod:2.3,pullZone:0.37,weeds:true,label:'Ca chiều: bù giờ đã mất',jp:'「遅れを取り戻すぞ！」',vi:'Bù lại tiến độ: 5 củ, cắt cỏ + canh lực nhổ thật chuẩn'},
 },
 {
 story:{
@@ -116,7 +116,7 @@ choices:[
 ],
 after:'Một ngày dài nữa đã qua.',
 },
-a:{goal:4,pullPeriod:1.9,pullZone:0.28,weeds:true,label:'Ca sáng: đơn hàng đợt 1'},
+a:{goal:4,pullPeriod:2.2,pullZone:0.35,weeds:true,label:'Ca sáng: đơn hàng đợt 1'},
 drama:{
 title:'Một giỏ bị trả về',who:'tanaka',
 jp:'「お客さんから返品だ。傷がある。」',
@@ -126,6 +126,6 @@ choices:[
 {t:'“Không phải giỏ của em”',fx:{boss:-4,team:-4},r:'Không khí cả tổ nặng nề.'},
 ],
 },
-b:{goal:6,limit:75,maxMiss:2,rain:true,walk:0.85,pullPeriod:1.9,pullZone:0.28,weeds:true,label:'Thử thách cuối tuần: 6 củ trong mưa',jp:'「今日は勝負だ！」',vi:'Trận cuối tuần: 6 củ, mưa, vùng lực nhổ hẹp 28%'},
+b:{goal:6,limit:90,maxMiss:3,rain:true,walk:0.85,pullPeriod:2.2,pullZone:0.35,weeds:true,label:'Thử thách cuối tuần: 6 củ trong mưa',jp:'「今日は勝負だ！」',vi:'Trận cuối tuần: 6 củ, mưa, vùng lực nhổ hẹp 35%'},
 },
 ];

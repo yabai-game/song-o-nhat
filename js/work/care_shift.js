@@ -1,6 +1,7 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import*as THREE from'three';
 import{CARE,NEEDS,createCare,nearestNeed,act,useHint,step,careFraction,careExtra}from'../core/care_rules.js';
+import{careCamera}from'../core/care_view.js';
 import{starDetails}from'../core/stars.js';
 import{CARE_ROOM}from'../gfx/care.js';
 import{camera,isPortrait}from'../gfx/stage.js';
@@ -121,11 +122,11 @@ const box=$('acts');if(!this.saved)this.saved=[...box.children];box.replaceChild
 show('dayhud',false);show('shifthud');show('sh-gust',false);show('sh-ticket',false);show('sh-bal',false);show('sh-gauge',false);
 $('sh-place').querySelector('span').textContent='Viện dưỡng lão · 食堂';
 $('sh-rank').textContent=meta.rankLabel;
-this.tags=who.folk.map((f)=>{const it=this.overhead.tag(f,'',false,2.15);it.el.classList.add('care');it.text='';return it;});
-this.controls.reset({yaw:0,pitch:0.42,groundY:0,yawLimit:[-1.2,1.2]});
+this.tags=who.folk.map((f)=>{const it=this.overhead.tag(f,'',false,1.35);it.el.classList.add('care');it.text='';return it;});
+this.controls.reset({yaw:0,pitch:0.42,groundY:0,yawLimit:[0,0]});
 this.controls.enabled=true;this.controls.onTap=null;
 this.intro=2.6;this.active=true;this.paused=false;this.bestD=Infinity;this.stuckT=0;this.endT=-1;
-this.anim=null;this.floats=[];this.close=0;
+this.anim=null;this.floats=[];
 for(const h of this.hearts){if(!h.parent)this.stage.scene.add(h);h.visible=false;}
 const hintMsg=this.st.hintDelay<0
 ?'Chỉ hiện câu tiếng Nhật — bấm 💡 Gợi ý nếu cần dịch (mất ★ thứ 2)'
@@ -223,7 +224,11 @@ clampOverhead(){
 if(!this.overhead||!this.overhead.items)return;
 const W=window.innerWidth,H=window.innerHeight;
 if(!W||!H)return;
-const vis=(el)=>el&&!el.hidden&&getComputedStyle(el).display!=='none';
+const vis=(el)=>{
+if(!el||el.hidden)return false;
+const st=getComputedStyle(el);
+return st.display!=='none'&&st.visibility!=='hidden'&&Number(st.opacity)>0.05;
+};
 const obstacles=[];
 let minY=10;
 for(const el of[document.querySelector('#shifthud .top'),$('btn-menu'),$('btn-phone')]){
@@ -234,7 +239,7 @@ minY=Math.max(minY,Math.ceil(r.bottom+6));
 obstacles.push({l:r.left,t:r.top,r:r.right,b:r.bottom});
 }
 }
-for(const el of[$('sh-rank'),$('sh-bars'),$('sh-tip'),$('joy'),$('acts'),$('toast')]){
+for(const el of[$('sh-rank'),$('sh-bars'),$('sh-chips'),$('sh-place'),$('sh-tip'),$('joy'),$('acts'),$('toast')]){
 if(!vis(el))continue;
 const r=el.getBoundingClientRect();
 if(r.width&&r.height)obstacles.push({l:r.left,t:r.top,r:r.right,b:r.bottom});
@@ -266,7 +271,7 @@ return area;
 const visItems=[];
 for(let i=this.overhead.items.length-1;i>=0;i--){
 const it=this.overhead.items[i];
-if(!it||!it.el||it.el.hidden||getComputedStyle(it.el).display==='none')continue;
+if(!it||!it.el||it.el.hidden||getComputedStyle(it.el).display==='none'||getComputedStyle(it.el).visibility==='hidden')continue;
 visItems.push(it);
 }
 visItems.sort((a,b)=>{
@@ -282,7 +287,18 @@ const maxX=Math.max(10,Math.floor(W-w-10));
 const maxY=Math.max(minY,Math.floor(H-h-10));
 const clampX=(v)=>Math.max(10,Math.min(maxX,Math.round(v)));
 const clampY=(v)=>Math.max(minY,Math.min(maxY,Math.round(v)));
-let bestX=clampX(rect.left),bestY=clampY(rect.top);
+let anchorX=rect.left,anchorY=rect.top;
+const o3d=it.obj?.holder||it.obj;
+if(o3d&&o3d.getWorldPosition){
+o3d.getWorldPosition(_a);
+_a.y+=it.y||1.35;
+_a.project(camera);
+if(_a.z<=1){
+anchorX=(_a.x*0.5+0.5)*W-w*0.5;
+anchorY=(-_a.y*0.5+0.5)*H-h-(it.kind==='bubble'?8:2);
+}
+}
+let bestX=clampX(anchorX),bestY=clampY(anchorY);
 if(hits(bestX,bestY,bestX+w,bestY+h)){
 const xs=new Set([bestX,10,Math.round((W-w)*0.5),maxX]);
 const ys=new Set([bestY,minY,Math.round((minY+maxY)*0.5),maxY]);
@@ -296,7 +312,7 @@ let bestScore=Infinity;
 for(const cy of ys){
 for(const cx of xs){
 const area=hits(cx,cy,cx+w,cy+h)?overlapArea(cx,cy,cx+w,cy+h)+1e6:0;
-const dist=(cx-bestX)*(cx-bestX)+(cy-bestY)*(cy-bestY);
+const dist=(cx-anchorX)*(cx-anchorX)+(cy-anchorY)*(cy-anchorY);
 const score=area*1000+dist;
 if(score<bestScore){
 bestScore=score;
@@ -567,6 +583,7 @@ txt=pill;
 if(this.intro>0&&!isUrgent)txt='';
 const it=this.tags[i];
 if(it){
+it.y=isUrgent?1.85:1.35;
 it.el.classList.toggle('urgent',isUrgent);
 if(it.text!==txt){it.text=txt;it.el.textContent=txt;it.w=0;}
 if(it.el.hidden!==!txt)it.el.hidden=!txt;
@@ -576,29 +593,17 @@ for(let n=this.floats.length-1;n>=0;n--){
 const fl=this.floats[n];fl.t+=dt;fl.it.y=2.0+fl.t*0.5;fl.it.el.style.opacity=String(Math.max(0,1-fl.t/1.1));
 if(fl.t>1.1){this.dropFloat(fl);this.floats.splice(n,1);}
 }
-let near=-1,nd=Infinity;
-this.spots.forEach((sp,n)=>{const d=Math.hypot(pos.x-sp.x,pos.z-sp.z);if(d<nd){nd=d;near=n;}});
-const closeOn=this.intro<=0&&(!!this.anim||nd<CARE.REACH);
-this.close+=((closeOn?1:0)-this.close)*Math.min(1,dt*3);
-camera.fov=THREE.MathUtils.lerp(portrait?58:46,portrait?50:40,this.close);camera.updateProjectionMatrix();
 if(this.intro>0){
+camera.fov=portrait?58:46;camera.updateProjectionMatrix();
 this.tmp.set(...CARE_ROOM.showcase.look);
 this.camPos.set(...CARE_ROOM.showcase.pos);
 this.camRig.to(this.camPos,this.tmp,dt,3);
-}else if(closeOn){
-const i=this.anim?this.anim.i:near,sp=this.spots[i],f=this.who.folk[i];
-let ux=pos.x-sp.x,uz=pos.z-sp.z;const ul=Math.hypot(ux,uz)||1;ux/=ul;uz/=ul;
-const rx=-uz,rz=ux;
-this.camPos.set(pos.x+ux*1.9-rx*1.55,2.05,pos.z+uz*1.9-rz*1.55);
-(f.head||f.holder).getWorldPosition(_b);
-this.camLook.set(THREE.MathUtils.lerp(pos.x,sp.x,0.45),_b.y-0.2,THREE.MathUtils.lerp(pos.z,sp.z,0.45));
-this.clampCam();
-this.camRig.to(this.camPos,this.camLook,dt,4);
 }else{
-const dist=6.4*(portrait?1.15:1),cp=Math.cos(c.pitch);
-this.camPos.set(pos.x+Math.sin(c.yaw)*dist*cp,1.2+Math.sin(c.pitch)*dist,pos.z+Math.cos(c.yaw)*dist*cp);
-this.camLook.set(pos.x,1.0,pos.z);
-this.clampCam();
+const aspect=(window.innerWidth||800)/Math.max(1,window.innerHeight||600);
+const cam=careCamera(aspect,pos);
+if(camera.fov!==cam.fov){camera.fov=cam.fov;camera.updateProjectionMatrix();}
+this.camPos.set(...cam.eye);
+this.camLook.set(...cam.look);
 this.camRig.to(this.camPos,this.camLook,dt,5);
 }
 this.hud();

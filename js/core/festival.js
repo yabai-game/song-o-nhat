@@ -4,6 +4,7 @@ import{rankOf}from'./jobs.js';
 import{label as calLabel}from'./calendar.js';
 import{ensureHome,callHome,totalDays}from'./home_life.js';
 import{prepScore}from'./disaster.js';
+import{markDinner}from'./wellbeing.js';
 function hash01(seed,a=1,b=0){
 let x=(Math.trunc(seed||1)*2654435761)
 ^(Math.trunc(a)*2246822519)
@@ -260,7 +261,7 @@ where:'room',
 time:'evening',
 acts:[
 {id:'tet_call',icon:'📹',jp:'テトのビデオ通話',vi:'Gọi video đón giao thừa cùng cả nhà',cost:0,min:45,fx:{mental:6},once:true},
-{id:'tet_banhchung',icon:'🟩',jp:'バインチュン作り',vi:'Nấu bánh chưng đêm Tết với bạn phòng',cost:1500,min:90,fx:{mental:12,health:3,team:3},once:true},
+{id:'tet_banhchung',icon:'🟩',jp:'バインチュン作り',vi:'Nấu bánh chưng đêm Tết với bạn phòng',cost:1500,min:90,fx:{mental:12,health:8,team:3},once:true},
 {id:'tet_lixi',icon:'🧧',jp:'お年玉送金',vi:'Gửi tiền lì xì năm mới về quê',cost:5000,min:15,fx:{mental:5},once:true},
 ],
 },
@@ -303,6 +304,7 @@ fx.health=(fx.health||0)+(item.hotHealthBonus||4);
 hotBonus=true;
 }
 const deltas=applyFx(S,fx);
+if((fx.health||0)>0)markDinner(S);
 if(f){
 f.acts[itemId]=true;
 if(itemId==='amazake')f.amazake=true;
@@ -720,6 +722,7 @@ return{ok:false,why:'money',cost,deltas:[]};
 const fx={...YATAI_ITEMS.soba.fx};
 if(cost>0)fx.money=-cost;
 const deltas=applyFx(S,fx);
+if((fx.health||0)>0)markDinner(S);
 f.soba=true;
 f.acts.soba=true;
 visitFestival(S,'oomisoka');
@@ -776,6 +779,7 @@ return{ok:false,why:'money',cost,deltas:[]};
 const fx={health:3,mental:4,culture:2};
 if(cost>0)fx.money=-cost;
 const deltas=applyFx(S,fx);
+if((fx.health||0)>0)markDinner(S);
 f.amazake=true;
 f.acts.amazake=true;
 visitFestival(S,'shogatsu');

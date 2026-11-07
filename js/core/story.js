@@ -2,6 +2,7 @@
 import{daysOf,EVENINGS,rankOf}from'./jobs.js';
 import{applyFx,lessTired,gainXp}from'./state.js';
 import{advance,weatherOf,weatherFx,scaleLifeShift,pickLifeTalk,pickEveningTalk}from'./calendar.js';
+import{sleepMeals}from'./wellbeing.js';
 export const DAYS=5;
 export function daySteps(i,job='site'){
 const W=daysOf(job)[i],E=EVENINGS[i];
@@ -74,8 +75,9 @@ if(c.watch)S.watch=(S.watch||0)+1;
 return d;
 }
 export function shiftEnd(S,{f,done,fail},hard){
+const baseHealth=(hard?-12:-8)*((S?.hungry||0)>=1?1.5:1);
 const deltas=applyFx(S,lessTired(S,{
-health:hard?-6:-4,
+health:baseHealth,
 mental:fail?-6:hard?-3:-2,
 boss:fail?-5:Math.round((hard?5:3)*f),
 money:hard&&!fail?3000:0,
@@ -88,7 +90,10 @@ const after=rankOf(S.jobXp);
 return{deltas,jobXp,rankUp:after>before?after:0,title:fail?'❌ Chưa đạt':hard?'🏆 Vượt qua thử thách!':'✅ Xong ca'};
 }
 export function retryCost(S){return applyFx(S,{mental:-4});}
-export function sleep(S){return applyFx(S,{health:9,mental:7});}
+export function sleep(S){
+sleepMeals(S);
+return applyFx(S,{health:5,mental:7});
+}
 export function completeStep(S){
 if(S.life){
 const steps=lifeDaySteps(S,S.job||'site');

@@ -1,5 +1,6 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import{applyFx}from'./state.js';
+import{markBreakfast}from'./wellbeing.js';
 import{
 TIMETABLE,RIDE,WALKIN,DWELL,DELAY_REASONS,
 makeTrainInfo,nextTrain,followingTrain,lastSafeTrain,crowdEffect,delayToday,
@@ -68,7 +69,8 @@ if(st.over||st.phase==='wake')return{ok:false,why:'not-now'};
 if(id==='eat'){
 if(st.phase!=='room'||st.ate)return{ok:false,why:'done'};
 st.ate=true;st.min+=MORNING.BREAKFAST;
-return{ok:true,deltas:applyFx(S,{health:3})};
+markBreakfast(S);
+return{ok:true,deltas:applyFx(S,{health:6})};
 }
 if(id==='drink'){
 if(st.phase!=='street'||st.drank)return{ok:false,why:'done'};

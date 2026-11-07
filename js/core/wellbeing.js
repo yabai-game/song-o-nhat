@@ -44,4 +44,53 @@ const pct=maxed?100:Math.round(((xp-from)/(to-from))*100);
 return{rank,title:ranksOf(job)[rank]||'',xp:xp-from,need:to-from,pct,maxed,pay:rankPay(rank+1)};
 }
 export function rankUp(prevXp,xp){const a=rankOf(prevXp||0),b=rankOf(xp||0);return b>a?b:0;}
+export function mealDayOf(S){
+if(!S)return 0;
+if(S.life&&S.cal){
+const y=Math.max(1,S.cal.year||1);
+const s=Math.max(0,Math.min(3,S.cal.season||0));
+const d=Math.max(1,S.cal.day||1);
+return(y-1)*112+s*28+d;
+}
+if(typeof S.story==='number')return S.story;
+return S.meals?.day||0;
+}
+export function ensureMeals(S){
+if(!S)return{day:0,breakfast:false,dinner:false};
+const curDay=mealDayOf(S);
+if(!S.meals||typeof S.meals!=='object'){
+S.meals={day:curDay,breakfast:false,dinner:false};
+}else if(S.meals.day!==curDay){
+S.meals={day:curDay,breakfast:false,dinner:false};
+}
+if(typeof S.hungry!=='number')S.hungry=0;
+return S.meals;
+}
+export function markBreakfast(S){
+if(!S)return;
+const m=ensureMeals(S);
+m.breakfast=true;
+}
+export function markDinner(S){
+if(!S)return;
+const m=ensureMeals(S);
+m.dinner=true;
+S.hungry=0;
+}
+export function ateDinner(S){
+if(!S)return false;
+return!!ensureMeals(S).dinner;
+}
+export function sleepMeals(S){
+if(!S)return 0;
+const m=ensureMeals(S);
+if(m.dinner){
+S.hungry=0;
+}else{
+S.hungry=(S.hungry||0)+1;
+}
+m.breakfast=false;
+m.dinner=false;
+return S.hungry;
+}
 export{applyFx};

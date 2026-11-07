@@ -2,9 +2,10 @@
 import*as THREE from'three';
 import{EVENING,createEvening,tick,talked,enterRoom,act,toBed}from'../core/evening.js';
 import{
-COOK_STEPS,goodOf,cookable,canCookTonight,cook,savingVsKonbini,
+COOK_STEPS,KONBINI_MEAL,goodOf,cookable,canCookTonight,cook,eatKonbiniBento,savingVsKonbini,
 createCookStove,pressCookStep,releaseCookStep,tickCookStep,cookStepProgress,
 }from'../core/market_rules.js';
+import{ateDinner}from'../core/wellbeing.js';
 import{yen,save}from'../core/state.js';
 import{clock}from'../core/morning.js';
 import{DORM}from'../gfx/dorm.js';
@@ -24,6 +25,7 @@ import{QUAKE_STEPS,SHELTER_QUESTION,quakeToday,resolveQuake,markStormReady,answe
 const BUTTONS=[
 {id:'sleep',icon:'🛏️',label:'Đi ngủ',jp:'おやすみ',main:true},
 {id:'cook',icon:'🍳',label:'Nấu cơm',jp:'自炊'},
+{id:'bento',icon:'🍱',label:'Cơm hộp konbini',jp:`コンビニ弁当 ${KONBINI_MEAL}¥`},
 {id:'bath',icon:'🛁',label:'Tắm',jp:'お風呂'},
 {id:'call',icon:'📱',label:'Gọi về nhà',jp:'電話'},
 {id:'wash',icon:'🧺',label:'Giặt đồ',jp:'洗濯'},
@@ -37,7 +39,7 @@ const SHOW={
 toSpot:['market','run'],
 toDorm:['market','run'],
 talk:[],
-room:['sleep','cook','bath','call','wash','clean','tv','study'],
+room:['sleep','cook','bento','bath','call','wash','clean','tv','study'],
 bed:[],
 };
 const WALK=3.0,RUN_MUL=1.6;
@@ -187,7 +189,15 @@ if(this.S?.life&&!this.S?.lDay?.quakeDone&&quakeToday(this.S,this.S.cal,this.S.s
 this.S.lDay.quakeDone=true;
 setTimeout(()=>this.active&&this.triggerQuake(),550);
 }
-this.tip('ただいま！',hasCook?'Có nguyên liệu trong bếp! Bấm 🍳 Nấu cơm, 🛁 Tắm, 📱 Gọi về nhà, rồi 🛏️ Đi ngủ':'Tắm 🛁, gọi về nhà 📱, rồi lên futon đi ngủ 🛏️',6);
+this.tip(
+'ただいま！',
+hasCook
+?'Có nguyên liệu trong bếp! Bấm 🍳 Nấu cơm hoặc 🍱 Cơm hộp konbini (mua trên đường về — tiện nhưng đắt hơn tự nấu), rồi 🛏️ Đi ngủ'
+:(!ateDinner(this.S)
+?'Mua trên đường về — tiện nhưng đắt hơn tự nấu: bấm 🍱 Cơm hộp konbini (600 ¥), 🛁 Tắm, 📱 Gọi về nhà, rồi 🛏️ Đi ngủ'
+:'Tắm 🛁, gọi về nhà 📱, rồi lên futon đi ngủ 🛏️'),
+6,
+);
 }else{
 this.paused=true;this._hide();this.onArrive();
 }
@@ -250,6 +260,11 @@ g.classList.toggle('warn',e.min>=EVENING.LATE);
 for(const a of BUTTONS){
 if(a.id==='cook'){
 this.btn.cook.hidden=e.phase!=='room'||!canCookTonight(this.S)||!!this.cookState;
+}else if(a.id==='bento'){
+const ate=ateDinner(this.S);
+this.btn.bento.hidden=e.phase!=='room'||ate||!!this.cookState;
+this.btn.bento.disabled=ate||(this.S?.money||0)<KONBINI_MEAL||!!this.cookState;
+this.btn.bento.title='Mua trên đường về — tiện nhưng đắt hơn tự nấu';
 }else if(a.id==='tv'){
 this.btn.tv.hidden=e.phase!=='room'||!!this.cookState;
 }else if(a.id==='bath'){
@@ -305,6 +320,21 @@ if(id==='cook'){
 this.openCookMenu();
 return;
 }
+if(id==='bento'){
+const r=eatKonbiniBento(this.S);
+if(!r.ok){
+if(r.why==='money')this.tip('お金が足りない','Không đủ 600 ¥ mua cơm hộp konbini',3);
+return;
+}
+e.min+=10;
+this.busy=1.2;
+if(this.storage&&!this.S?.flags?.demo)save(this.S,this.storage);
+this.overhead.say(P,'いただきます！ コンビニ弁当',2.5);
+toast('🍱 Cơm hộp konbini · コンビニ弁当',`${deltaText(r.delta)} · Mua trên đường về — tiện nhưng đắt hơn tự nấu`);
+this.tip('コンビニ弁当','Mua trên đường về — tiện nhưng đắt hơn tự nấu',4);
+this.hud();
+return;
+}
 if(id==='tv'){this.openTvForecast();return;}
 if(id==='wash'){this.openWashMenu();return;}
 if(id==='clean'){this.doCleanDuty();return;}
@@ -318,6 +348,44 @@ else{P.play('talk');this.overhead.say(P,'Mẹ ơi, con khỏe! — 元気だよ'
 return;
 }
 if(id==='sleep'){
+if(!ateDinner(this.S)){
+this.paused=true;
+const btns=[];
+if(canCookTonight(this.S)){
+btns.push({
+label:'🍳 Nấu cơm',
+on:()=>{show('modal',false);this.paused=false;this.openCookMenu();},
+});
+}
+if((this.S?.money||0)>=KONBINI_MEAL){
+btns.push({
+label:`🍱 Cơm hộp konbini ${KONBINI_MEAL} ¥`,
+on:()=>{
+show('modal',false);
+this.paused=false;
+this.action('bento');
+},
+});
+}
+btns.push({
+label:'Ngủ luôn',
+cls:'ghost',
+on:()=>{
+show('modal',false);
+this.paused=false;
+this.goToSleep();
+},
+});
+card(`<div class="big">🍙</div><h2>Chưa ăn tối!</h2>
+          <p>Bạn chưa ăn tối. Đi ngủ đói thì mai mệt và dễ ốm.</p>
+          <p class="lesson">🍱 Cơm hộp konbini (${KONBINI_MEAL} ¥): mua trên đường về — tiện nhưng đắt hơn tự nấu.</p>`,btns);
+return;
+}
+this.goToSleep();
+}
+}
+goToSleep(){
+const e=this.ev;
 if(!toBed(e))return;
 if(dutyToday(this.S,this.S?.cal)&&!this.S?.home?.cleanedToday){
 ensureHome(this.S).missedDutyPending=true;
@@ -326,7 +394,6 @@ if(this.storage&&!this.S?.flags?.demo)save(this.S,this.storage);
 show('sh-tip',false);
 this.controls.target=new THREE.Vector3(DORM.bed.x,0,DORM.bed.z+0.3);
 this.toFuton=true;
-}
 }
 openTvForecast(){
 this.paused=true;

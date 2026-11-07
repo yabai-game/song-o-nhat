@@ -64,6 +64,8 @@ if(!S)return null;
 if(S.ill&&S.ill.daysLeft>0)return S.ill;
 const health=S.health??80;
 let chance=health<35?0.18:health<55?0.10:health<75?0.05:0.02;
+if((S.hungry||0)>=2)chance+=0.25;
+else if((S.hungry||0)>=1)chance+=0.15;
 let kind='kaze';
 const season=cal?.season??0;
 const day=cal?.day??1;

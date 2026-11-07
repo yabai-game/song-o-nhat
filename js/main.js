@@ -29,7 +29,7 @@ import{dayOffSummary}from'./core/dayoff_rules.js';
 import{$,show,card,toast,deltaChips,esc,Overhead}from'./ui/ui.js';
 import{newState,save,load,clearSave,yen,jpLevel,applyFx}from'./core/state.js';
 import{JOBS,NPCS,INTRO,rankOf,rankPay,daysOf,ranksOf}from'./core/jobs.js';
-import{WELL,checkCollapse,lowBars,sickLeave,skillInfo}from'./core/wellbeing.js';
+import{WELL,checkCollapse,lowBars,sickLeave,skillInfo,markDinner}from'./core/wellbeing.js';
 import{CAREER,targets,cannotStudy,startStudy,quitStudy}from'./core/career.js';
 import{daySteps,lifeDaySteps,shiftOpts,shiftEnd,chooseTalk,completeStep,weekEval,sleep,retryCost,DAYS}from'./core/story.js';
 import{stars,formatStars,recordStars,getStars}from'./core/stars.js';
@@ -1070,6 +1070,17 @@ return morningHankyuCard(urgentDocs);
 }
 }
 if(S.lDay.kind==='dayoff'||S.lDay.kind==='typhoonOff'){
+if(S.sStep===0&&(S.hungry||0)>=1&&!S.lDay.hungryPrompted){
+S.lDay.hungryPrompted=true;
+save(S,storage);
+setStage('dorm');G.stages.dorm.setTime('day');hideNpcs();
+G.mode='talk';
+dayHud('😵 Đói bụng');
+return card(`<div class="big">😵</div><h2>😵 Đói bụng</h2>
+        <p>Tối qua chưa ăn — hôm nay mệt nhanh hơn và dễ ốm. Ăn sáng 🍙 rồi tối nhớ ăn cơm!</p>`,[
+{label:'Đã hiểu →',on:()=>runStep()},
+]);
+}
 if(S.sStep>=5||(S.lDay.min||540)>=21*60){
 S.sStep=5;
 return sleepStep({label:'Đêm · Ký túc xá',xp:5,data:{}});
@@ -1456,7 +1467,7 @@ on:()=>sendTetLixi(5000),
 }
 if(!S.lDay.tetCooked){
 btns.push({
-label:'🟩 Nấu bánh chưng với bạn phòng (góp 1.500 ¥ · 🧠 +12, ❤️ +3, 🤝 +3)',
+label:'🟩 Nấu bánh chưng với bạn phòng (góp 1.500 ¥ · 🧠 +12, ❤️ +8, 🤝 +3)',
 cls:btns.length>0?'ghost':'',
 on:()=>{
 const r=cookVietnamese(S,'banh_chung');
@@ -1464,7 +1475,7 @@ if(!r.ok){toast('💴 Chưa đủ tiền góp','Cần 1.500 ¥');return;}
 S.lDay.tetCooked=true;
 save(S,storage);
 notifyAchievements(S);
-toast('🟩 Cắt bánh chưng đêm Tết nơi đất khách','Ấm lòng hương vị quê nhà · 🧠 +12, ❤️ +3, 🤝 +3');
+toast('🟩 Cắt bánh chưng đêm Tết nơi đất khách','Ấm lòng hương vị quê nhà · 🧠 +12, ❤️ +8, 🤝 +3');
 tetVnEveningCard(ev,onDone);
 },
 });
@@ -1631,7 +1642,7 @@ if(group==='home'){
 const btns=[];
 if(!d.cookedVn){
 btns.push({
-label:'🍜 Nấu món Việt với bạn phòng (+2h–3h · 🧠 +8..+12, ❤️ +3)',
+label:'🍜 Nấu món Việt với bạn phòng (+2h–3h · 🧠 +8..+12, ❤️ +8)',
 on:()=>lifeVnCookPicker(),
 });
 }
@@ -2331,6 +2342,7 @@ return;
 const fx={...(hAct.fx||{})};
 if(effCost)fx.money=-effCost;
 const deltas=applyFx(S,fx);
+if((fx.health||0)>0)markDinner(S);
 d['holi_'+hAct.id]=true;
 d.min=(d.min||540)+(hAct.min||120);
 save(S,storage);
@@ -2438,7 +2450,7 @@ S.lDay.caughtReport=cRes;
 }
 if(S.ill){
 illDayTick(S);
-}else if(S.life){
+}else if(S.life||(S.hungry||0)>=1){
 catchIll(S,ensureCal(S),curWeather(S),jobOf());
 }
 if(S.bike?.owned){

@@ -47,6 +47,8 @@ joyaBell:false,soba:false,nyCall:false,amazake:false,nengajo:false,giriChoco:fal
 remitCount:0,legalRemitCount:0,cheapRemitCount:0,vnCookCount:0,lastSickDay:0,lastLateDay:0,
 },
 pets:{goldfish:0},
+meals:{day:0,breakfast:false,dinner:false},
+hungry:0,
 flags:{},certs:[jpLevel(START_TTS.jp)],log:[],pantry:[],
 };
 }
@@ -123,6 +125,11 @@ S.prep={water:false,food:false,light:false,radio:false,bag:false,stormReady:fals
 if(!S.notebook||typeof S.notebook!=='object'||Array.isArray(S.notebook))S.notebook={};
 if(!S.pets||typeof S.pets!=='object')S.pets={goldfish:0};
 if(typeof S.pets.goldfish!=='number')S.pets.goldfish=0;
+if(!S.meals||typeof S.meals!=='object'){
+const dk=S.life&&S.cal?((S.cal.year||1)-1)*112+(S.cal.season||0)*28+(S.cal.day||1):(S.story||0);
+S.meals={day:dk,breakfast:false,dinner:false};
+}
+if(typeof S.hungry!=='number')S.hungry=0;
 if(!S.festLog||typeof S.festLog!=='object'){
 S.festLog={
 visited:[],stamps:{},acts:{},bonOdoriBest:0,fireworks:false,launches:0,yukata:false,

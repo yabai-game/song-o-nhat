@@ -44,7 +44,7 @@ choices:[
 {t:'「すみません！すぐ被ります。もう忘れません」',fx:{boss:3,culture:3},r:'「次はないぞ。」 Quản lý gật đầu cho đi.'},
 {t:'Giải thích dài rằng mình chỉ đi một chút',fx:{boss:-6},watch:true,r:'「言い訳するな！」 Từ giờ bạn bị để mắt.'},
 ]},
-b:{goal:3,limit:60,drift:0.35,pipeKinds:1,label:'Ca chiều: kịp xe bê tông',jp:'「生コン車が来るぞ！」',vi:'Xe bê tông sắp đến, vác đủ 3 bó. Giữ thăng bằng khi đang vác!'},
+b:{goal:3,limit:75,drift:0.35,pipeKinds:1,label:'Ca chiều: kịp xe bê tông',jp:'「生コン車が来るぞ！」',vi:'Xe bê tông sắp đến, vác đủ 3 bó. Giữ thăng bằng khi đang vác!'},
 },
 {
 story:{title:'Dây an toàn',who:'tanaka',jp:'「フルハーネス、ちゃんと掛けたか？」',text:'Trên cao 4 mét, ai cũng phải móc dây an toàn toàn thân.',
@@ -58,7 +58,7 @@ choices:[
 {t:'Đi mua, nhưng nói rõ: 「お金、後でお願いします」',fx:{mental:3,culture:3},ally:true,r:'Anh Hùng bật cười, trả tiền đủ, còn mua thêm cho bạn một chai.'},
 {t:'Không dám nói, cứ trả tiền',fx:{money:-2400,mental:-5},r:'Bạn mất 2.400 ¥. Hôm sau lại bị nhờ tiếp.'},
 ]},
-b:{goal:4,limit:70,maxMiss:1,drift:0.45,pipeKinds:2,label:'Ca chiều: không rơi ống',jp:'「落とすな！」',vi:'Rơi ống hoặc đặt sai ô quá 1 lần là bị gọi lên phê bình'},
+b:{goal:4,limit:85,maxMiss:2,drift:0.45,pipeKinds:2,label:'Ca chiều: không rơi ống',jp:'「落とすな！」',vi:'Rơi ống hoặc đặt sai ô quá 2 lần là bị gọi lên phê bình'},
 },
 {
 story:{title:'Suýt nữa thì…',who:'hung',jp:'「さっき、パイプ落としそうになった？」',text:'Một bó ống trượt khỏi vai bạn, may mà không rơi xuống dưới.',
@@ -66,13 +66,13 @@ choices:[
 {t:'Báo với quản lý: 「ヒヤリハットがありました」',fx:{boss:7,culture:5},r:'Quản lý ghi vào sổ, cả nhóm sửa lại chỗ để ống.',lesson:'ヒヤリハット: những lần “suýt tai nạn” phải báo để cả nhóm phòng tránh.'},
 {t:'Thôi kệ, có sao đâu',fx:{mental:-3},r:'Hai hôm sau, bó ống của người khác rơi đúng chỗ đó.'},
 ],after:'Giờ bạn nghe được tiếng Nhật công trường rồi.'},
-a:{goal:3,drift:0.56,pipeKinds:2,label:'Ca sáng: vác ống tầng 3'},
+a:{goal:3,drift:0.50,pipeKinds:2,label:'Ca sáng: vác ống tầng 3'},
 drama:{title:'Mưa thì ai trả lương?',who:'hoa',jp:'「雨の日は休みです。給料は…」',text:'Mưa to, công trường nghỉ. Bạn lo tháng này thiếu tiền gửi về.',
 choices:[
 {t:'Hỏi chị Hoa về tiền nghỉ do công ty (休業手当)',fx:{culture:6,money:12000},r:'Công ty phải trả tiền nghỉ. Bạn nhận thêm 12.000 ¥.',lesson:'休業手当: nghỉ vì lý do của công ty thì được trả ít nhất 60% lương.'},
 {t:'Nhận làm chui cuối tuần',fx:{money:8000,health:-6,boss:-5},watch:true,r:'Thêm 8.000 ¥ nhưng mệt rã rời, và làm ngoài là vi phạm hợp đồng.'},
 ]},
-b:{goal:4,limit:70,rain:true,walk:0.85,drift:0.56,pipeKinds:2,label:'Ca chiều: mưa, sàn trơn',jp:'「足元注意！」',vi:'Trời mưa sàn trơn, đi chậm hơn. Vác 4 bó đúng phiếu kịp giờ'},
+b:{goal:4,limit:85,rain:true,walk:0.85,drift:0.50,pipeKinds:2,label:'Ca chiều: mưa, sàn trơn',jp:'「足元注意！」',vi:'Trời mưa sàn trơn, đi chậm hơn. Vác 4 bó đúng phiếu kịp giờ'},
 },
 {
 story:{title:'Gió mạnh',who:'tanaka',jp:'「今日は風が強い。高所は要注意だ。」',text:'Dự báo có gió giật trên cao.',
@@ -80,13 +80,13 @@ choices:[
 {t:'Hỏi lại: 「風が強いときは、止まればいいですか」',fx:{boss:5,culture:3},r:'「そうだ。迷ったら止まれ。」'},
 {t:'“Có gió tí thôi, làm luôn cho xong”',fx:{boss:-4},r:'「お前、命いらないのか！」'},
 ],after:'Một ngày dài nữa đã qua.'},
-a:{goal:3,drift:0.58,pipeKinds:3,label:'Ca sáng: chuẩn bị chằng buộc'},
+a:{goal:3,drift:0.52,pipeKinds:3,label:'Ca sáng: chuẩn bị chằng buộc'},
 drama:{title:'Đồng đội bị thương',who:'sato',jp:'「痛っ！指が…」',text:'Chị Satō kẹp tay vào khóa giàn giáo, ngón tay sưng tím.',
 choices:[
 {t:'Vẫn báo Quản lý: 「すぐ報告します」',fx:{boss:7,culture:5},ally:true,r:'Chị được đưa đi khám, tiền khám do bảo hiểm lao động trả.',lesson:'労災隠し: giấu tai nạn lao động là phạm luật. Bị thương khi làm việc thì 労災 chi trả.'},
 {t:'Giúp băng và im lặng',fx:{boss:-4,mental:-4},r:'Tối đó tay chị sưng to hơn, và không ai biết để giúp.'},
 ]},
-b:{goal:4,limit:70,wind:true,maxMiss:2,drift:0.58,pipeKinds:3,label:'Ca chiều: gió giật',jp:'「突風注意！」',vi:'Có cảnh báo gió thì đứng yên đừng đi. Nhớ nhìn phiếu 3 cỡ ống!'},
+b:{goal:4,limit:85,wind:true,maxMiss:2,drift:0.52,pipeKinds:3,label:'Ca chiều: gió giật',jp:'「突風注意！」',vi:'Có cảnh báo gió thì đứng yên đừng đi. Nhớ nhìn phiếu 3 cỡ ống!'},
 },
 {
 story:{title:'Đoàn kiểm tra an toàn',who:'tanaka',jp:'「今日は安全パトロールだ。全員、気を引き締めろ！」',text:'Đoàn tuần tra an toàn đến thăm công trường.',
@@ -94,13 +94,13 @@ choices:[
 {t:'Kiểm tra lại dây, mũ, giày cho cả nhóm',fx:{boss:6,team:5},r:'Cả nhóm qua kiểm tra không lỗi nào.',lesson:'声かけ: nhắc nhau an toàn là văn hóa ở công trường Nhật.'},
 {t:'Lo phần mình thôi',fx:{team:-3},r:'Một bạn trong nhóm bị nhắc vì quên khóa dây.'},
 ],after:'Một ngày dài nữa đã qua.'},
-a:{goal:3,drift:0.65,pipeKinds:3,label:'Ca sáng: kiểm tra và dọn sàn'},
+a:{goal:3,drift:0.56,pipeKinds:3,label:'Ca sáng: kiểm tra và dọn sàn'},
 drama:{title:'Ống rơi trong lúc tuần tra',who:'tanaka',jp:'「今の音は何だ！」',text:'Một ống thép tuột khỏi tay bạn, rơi xuống sàn kêu rất to.',
 choices:[
 {t:'Dừng lại, báo ngay: 「すみません、私です。怪我はありません」',fx:{boss:7,culture:4},ally:true,r:'Đoàn kiểm tra gật đầu: báo ngay là đúng cách.'},
 {t:'Coi như không có gì',fx:{boss:-6},watch:true,r:'Quản lý nhìn bạn rất lâu.'},
 ]},
-b:{goal:5,limit:85,wind:true,maxMiss:1,drift:0.65,pipeKinds:3,label:'Thử thách cuối tuần: tuần tra an toàn',jp:'「パトロール中だ！」',vi:'5 bó, 3 cỡ ống, có gió, chỉ được sai 1 lần'},
+b:{goal:5,limit:105,wind:true,maxMiss:2,drift:0.56,pipeKinds:3,label:'Thử thách cuối tuần: tuần tra an toàn',jp:'「パトロール中だ！」',vi:'5 bó, 3 cỡ ống, có gió, chỉ được sai 2 lần'},
 },
 ];
 export const EVENINGS=[

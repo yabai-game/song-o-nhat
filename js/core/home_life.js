@@ -1,6 +1,7 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import{applyFx,clamp}from'./state.js';
 import{DAYS_PER_SEASON,weekday,eventsOn}from'./calendar.js';
+import{markDinner}from'./wellbeing.js';
 export function totalDays(cal){
 if(!cal)return 1;
 const y=Math.max(1,cal.year||1);
@@ -53,11 +54,11 @@ scam:0.15,
 },
 };
 const VN_DISH_LIST=[
-{id:'pho',icon:'🍜',vi:'Phở bò quê nhà',jp:'ベトナム料理',share:1000,min:150,fx:{mental:10,health:3,team:3}},
-{id:'nem',icon:'🌯',vi:'Nem rán giòn',jp:'ベトナム料理',share:900,min:120,fx:{mental:9,health:3,team:3}},
-{id:'canh_chua',icon:'🍲',vi:'Canh chua cá',jp:'ベトナム料理',share:800,min:120,fx:{mental:8,health:3,team:3}},
-{id:'bun_cha',icon:'🥣',vi:'Bún chả Hà Nội',jp:'ベトナム料理',share:1100,min:150,fx:{mental:11,health:3,team:3}},
-{id:'banh_chung',icon:'🟩',vi:'Bánh chưng ngày Tết',jp:'ベトナム料理',share:1500,min:180,tetOnly:true,fx:{mental:12,health:3,team:3}},
+{id:'pho',icon:'🍜',vi:'Phở bò quê nhà',jp:'ベトナム料理',share:1000,min:150,fx:{mental:10,health:8,team:3}},
+{id:'nem',icon:'🌯',vi:'Nem rán giòn',jp:'ベトナム料理',share:900,min:120,fx:{mental:9,health:8,team:3}},
+{id:'canh_chua',icon:'🍲',vi:'Canh chua cá',jp:'ベトナム料理',share:800,min:120,fx:{mental:8,health:8,team:3}},
+{id:'bun_cha',icon:'🥣',vi:'Bún chả Hà Nội',jp:'ベトナム料理',share:1100,min:150,fx:{mental:11,health:8,team:3}},
+{id:'banh_chung',icon:'🟩',vi:'Bánh chưng ngày Tết',jp:'ベトナム料理',share:1500,min:180,tetOnly:true,fx:{mental:12,health:8,team:3}},
 ];
 for(const d of VN_DISH_LIST)VN_DISH_LIST[d.id]=d;
 export const VN_DISHES=VN_DISH_LIST;
@@ -294,6 +295,7 @@ if((S.money||0)<d.share){
 return{ok:false,why:'money',cost:d.share,min:d.min,deltas:[]};
 }
 const deltas=applyFx(S,{money:-d.share,...d.fx});
+markDinner(S);
 if(h)h.homesick=clamp(h.homesick-8);
 S.festLog=S.festLog||{};
 S.festLog.vnCookCount=(S.festLog.vnCookCount||0)+1;
@@ -304,6 +306,7 @@ const h=ensureHome(S);
 if(!h)return[];
 const chips=[];
 if(S?.ill&&S.ill.daysLeft>0)chips.push({id:'ill',text:S.ill.chip||`${S.ill.icon || '🤒'} ${S.ill.vi}`});
+if((S?.hungry||0)>=1)chips.push({id:'hungry',text:'🍙 Đói'});
 if(h.homesick>=HOME.HOMESICK_WARN)chips.push({id:'homesick',text:'🏠 Nhớ nhà'});
 if(h.dirty>=HOME.DIRTY_WARN)chips.push({id:'dirty',text:'👕 Quần áo bẩn'});
 if(dutyToday(S,cal)&&!h.cleanedToday)chips.push({id:'duty',text:'🧹 Trực nhật'});
