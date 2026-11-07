@@ -6,6 +6,7 @@ site:[['足場','Giàn giáo'],['安全帯','Dây an toàn'],['鉄筋','Cốt th
 care:[['食事介助','Hỗ trợ ăn uống'],['車椅子','Xe lăn'],['入浴介助','Hỗ trợ tắm'],['利用者','Người dùng dịch vụ (các cụ)'],['転倒','Té ngã'],['口腔ケア','Vệ sinh răng miệng'],['敬語','Kính ngữ']],
 bento:[['盛り付け','Bày món ăn'],['異物混入','Dị vật lẫn vào'],['手洗い','Rửa tay'],['衛生','Vệ sinh'],['賞味期限','Hạn sử dụng'],['不良品','Hàng lỗi'],['弁当','Cơm hộp']],
 lotus:[['掘る','Đào'],['洗う','Rửa'],['抜く','Nhổ'],['蓮根','Củ sen'],['収穫','Thu hoạch'],['泥','Bùn'],['蓮田','Ruộng sen']],
+konbini:[['レジ','Quầy thu ngân'],['お釣り','Tiền thừa'],['温め','Hâm nóng'],['レジ袋','Túi ni-lông'],['品出し','Bày hàng lên kệ'],['接客','Tiếp khách'],['お箸','Đũa']],
 };
 export const targets=(S)=>Object.keys(JOBS).filter((j)=>JOBS[j].ready&&j!==S.job);
 export function cannotStudy(S){

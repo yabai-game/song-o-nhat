@@ -7,14 +7,14 @@ export const TRACKS={
 title:'Màn hình chính',
 street_spring:'Phố mùa xuân',street_summer:'Phố mùa hạ',street_autumn:'Phố mùa thu',street_winter:'Phố mùa đông',
 dorm_warm:'Ký túc xá (xuân hạ)',dorm_cold:'Ký túc xá (thu đông)',
-work_site:'Công trường',work_care:'Viện dưỡng lão',work_bento:'Xưởng cơm hộp',work_lotus:'Ruộng sen',
+work_site:'Công trường',work_care:'Viện dưỡng lão',work_bento:'Xưởng cơm hộp',work_lotus:'Ruộng sen',work_konbini:'Cửa hàng tiện lợi',
 market:'Siêu thị',station:'Ga tàu',
 matsuri:'Lễ hội mùa hè / Obon',newyear:'Tết / giao thừa',halloween:'Halloween',
 };
 const FALLBACK={
 street_summer:'street_spring',street_autumn:'street_spring',street_winter:'street_autumn',
 dorm_cold:'dorm_warm',dorm_warm:'street_spring',station:'street_spring',market:'street_spring',
-work_site:'street_summer',work_care:'dorm_warm',work_bento:'work_site',work_lotus:'street_summer',
+work_site:'street_summer',work_care:'dorm_warm',work_bento:'work_site',work_lotus:'street_summer',work_konbini:'market',
 matsuri:'street_summer',newyear:'street_winter',halloween:'street_autumn',title:'street_spring',
 };
 const SEASONS=['spring','summer','autumn','winter'];
@@ -26,13 +26,13 @@ if(stageId==='shrine')return FEST[festival]||`street_${s}`;
 if(stageId==='dorm')return season===2||season===3?'dorm_cold':'dorm_warm';
 if(stageId==='station')return'station';
 if(mode==='market'||stageId==='market')return'market';
-if(stageId==='care'||stageId==='bento'||stageId==='lotus')return`work_${stageId}`;
+if(stageId==='care'||stageId==='bento'||stageId==='lotus'||stageId==='konbini')return`work_${stageId}`;
 if(stageId==='site')return mode==='shift'||atWork?'work_site':`street_${s}`;
 return`street_${s}`;
 }
 export class Music{
 constructor(){
-this.ctx=null;this.bus=null;this.cur=null;this.want=null;this.buffers={};this.missing=new Set();
+this.ctx=null;this.bus=null;this.cur=null;this.want=null;this.buffers={};this.missing=new Set(['work_konbini']);
 this.muted=false;try{this.muted=localStorage.getItem(PREF)==='0';}catch{}
 this.loading={};this.raw={};
 const unlock=()=>{this.start();window.removeEventListener('pointerdown',unlock);window.removeEventListener('keydown',unlock);};
@@ -63,7 +63,9 @@ this.loading[id]=bytes.then((b)=>{delete this.raw[id];return this.ctx.decodeAudi
 return this.loading[id];
 }
 async prefetch(onEach){
-await Promise.all(Object.keys(TRACKS).map((id)=>fetch(`${FILES}${id}.mp3`).then((r)=>(r.ok?r.arrayBuffer():null))
+await Promise.all(Object.keys(TRACKS).map((id)=>(this.missing.has(id)
+?Promise.resolve(null)
+:fetch(`${FILES}${id}.mp3`).then((r)=>(r.ok?r.arrayBuffer():null)))
 .then((b)=>{if(b)this.raw[id]=b;else this.missing.add(id);}).catch(()=>this.missing.add(id)).finally(()=>onEach&&onEach())));
 }
 set(id){

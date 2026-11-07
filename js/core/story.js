@@ -55,6 +55,8 @@ drift:W.drift,pipeKinds:W.pipeKinds,
 hintDelay:W.hintDelay,decay:W.decay,urgent:W.urgent,waitMin:W.waitMin,waitRand:W.waitRand,
 multi:W.multi,defect:W.defect,speed:W.speed,
 pullPeriod:W.pullPeriod,pullZone:W.pullZone,weeds:!!W.weeds,
+patience:W.patience,items:W.items,bag:!!W.bag,bento:!!W.bento,
+icRate:W.icRate,hot:!!W.hot,queue:!!W.queue,oddChange:!!W.oddChange,roundCash:!!W.roundCash,
 jp:W.jp,vi:W.vi,label:W.label,hard,
 };
 if(!hard)return o;

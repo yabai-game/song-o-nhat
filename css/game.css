@@ -562,4 +562,276 @@ html.ios-tb body { background: #1d2742; }
   }
 }
 
+/* TASK-S30: Konbini cashier shift UI (#acts.konbini-acts) and customer patience tag (.konbini-tag) */
+.acts.konbini-acts {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  width: min(410px, calc(100vw - 16px));
+  box-sizing: border-box;
+  display: block;
+}
+.kb-panel {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 6px 8px;
+  display: grid;
+  gap: 5px;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.35);
+}
+.kb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+.kb-reg {
+  background: rgba(12, 22, 30, 0.85);
+  border: 1px solid rgba(126, 214, 160, 0.45);
+  border-radius: 9px;
+  padding: 5px 9px;
+  font-family: var(--font-jp);
+  font-size: 12px;
+  line-height: 1.25;
+  color: #e2f5ec;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kb-reg b { color: var(--gold); font-weight: 800; }
+.kb-reg b.ok { color: var(--good); }
+.kb-reg b.warn { color: var(--bad); }
+.kb-head-btns {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.kb-btn {
+  appearance: none;
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+  padding: 4px 8px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 1px;
+  cursor: pointer;
+  touch-action: manipulation;
+  text-align: center;
+  overflow: hidden;
+}
+.kb-btn:active:not(:disabled) { transform: scale(0.97); }
+.kb-btn:disabled { opacity: 0.48; cursor: default; }
+.kb-btn.hot {
+  border-color: var(--gold);
+  background: rgba(255, 214, 102, 0.2);
+  box-shadow: 0 0 0 2px rgba(255, 214, 102, 0.26);
+}
+.kb-btn .jp {
+  font-family: var(--font-jp);
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #fff;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kb-btn .vi {
+  font-size: 10.5px;
+  line-height: 1.15;
+  color: var(--ink-dim);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kb-wait {
+  padding: 4px 10px;
+  background: rgba(226, 87, 76, 0.24);
+  border-color: var(--accent);
+}
+.kb-hint {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--gold);
+  border-color: var(--gold);
+  padding: 4px 10px;
+}
+.kb-phrases {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+.kb-phrase {
+  min-height: 46px;
+  justify-items: start;
+  text-align: left;
+  padding: 5px 10px;
+}
+.kb-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 5px;
+}
+.kb-item {
+  min-height: 46px;
+  padding: 3px 4px;
+}
+.kb-item .ic { font-size: 15px; line-height: 1.05; }
+.kb-item .jp { font-size: 11px; }
+.kb-item .pr { font-size: 10px; color: var(--gold); font-weight: 700; line-height: 1.05; }
+.kb-item.done {
+  border-color: rgba(126, 214, 160, 0.55);
+  background: rgba(126, 214, 160, 0.14);
+}
+.kb-item.done .pr { color: var(--good); }
+.kb-scan-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+.kb-scan-row.with-hot {
+  grid-template-columns: 1.15fr 1fr 1fr;
+}
+.kb-scan, .kb-hot { min-height: 46px; padding: 4px 6px; }
+.kb-scan .jp, .kb-hot .jp { font-size: 11.5px; }
+.kb-scan .vi, .kb-hot .vi { font-size: 10px; }
+.kb-reply {
+  background: rgba(255, 255, 255, 0.08);
+  border-left: 3px solid var(--gold);
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kb-reply .jp { font-family: var(--font-jp); font-weight: 800; color: #fff; }
+.kb-reply .vi { color: var(--ink-dim); font-size: 11px; }
+.kb-ans-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.kb-ans { min-height: 48px; }
+.kb-denoms {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.kb-denom, .kb-clear {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 2px 3px;
+  gap: 0;
+}
+.kb-denom.bill {
+  background: rgba(235, 224, 196, 0.18);
+  border-color: rgba(255, 214, 102, 0.45);
+}
+.kb-denom.coin {
+  background: rgba(186, 214, 235, 0.14);
+}
+.kb-denom .dval, .kb-clear .dval {
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #fff;
+   font-variant-numeric: tabular-nums;
+}
+.kb-denom .dyen, .kb-clear .dyen {
+  font-size: 9.5px;
+  line-height: 1.05;
+  color: var(--ink-dim);
+}
+.kb-pay-acts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.kb-give, .kb-ic { min-height: 46px; }
+
+.tag.konbini-tag {
+  display: grid;
+  gap: 2px;
+  padding: 3px 8px 4px;
+  font-size: 11.5px;
+  line-height: 1.2;
+  max-width: min(240px, calc(100vw - 24px));
+  white-space: nowrap;
+}
+.tag.konbini-tag .kt-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tag.konbini-tag .kt-bar {
+  display: block;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+.tag.konbini-tag .kt-bar i {
+  display: block;
+  height: 100%;
+  background: #2f9e5a;
+  border-radius: 99px;
+}
+.tag.konbini-tag.urgent .kt-bar i { background: #dc2626; }
+
+#shifthud:has(#acts.konbini-acts) #sh-tip {
+  padding: 5px 10px;
+}
+#shifthud:has(#acts.konbini-acts) #sh-tip b { font-size: 14px; }
+#shifthud:has(#acts.konbini-acts) #sh-tip span { font-size: 11.5px; line-height: 1.22; }
+
+@media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  .acts.konbini-acts {
+    bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    width: min(792px, calc(100vw - 16px));
+  }
+  .kb-panel {
+    padding: 5px 8px;
+    gap: 4px;
+  }
+  .kb-phrases {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .kb-phrase {
+    min-height: 44px;
+    padding: 4px 8px;
+  }
+  .kb-denoms {
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+  }
+  .kb-give, .kb-ic, .kb-ans, .kb-item, .kb-scan, .kb-hot {
+    min-height: 44px;
+  }
+  #shifthud:has(#acts.konbini-acts) #sh-tip {
+    padding: 3px 9px;
+  }
+  #shifthud:has(#acts.konbini-acts) #sh-tip b { font-size: 13px; }
+  #shifthud:has(#acts.konbini-acts) #sh-tip span { font-size: 11px; }
+}
+
+
 

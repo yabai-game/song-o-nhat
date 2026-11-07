@@ -1,6 +1,7 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import*as THREE from'three';
 import{GLTFLoader}from'three/addons/loaders/GLTFLoader.js';
+import{createAdaptiveDpr}from'../core/perf.js';
 export const MODEL_V='21';
 export const canvas=document.getElementById('c');
 export const LOW_MEM=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
@@ -11,11 +12,25 @@ renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.05;
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=LOW_MEM?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
+export const adaptiveDpr=createAdaptiveDpr();
+export function updateAdaptiveDpr(dtMs){
+if(!LOW_MEM)return false;
+const r=adaptiveDpr.tick(dtMs);
+if(r.changed){
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,r.dpr));
+resize(true);
+}
+return r.changed;
+}
+export const INSTANCED_DEPTH_MAT=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});
 export function trimShadowCasters(scene,minRadius=1.0,minRadiusOnBones=0.25){
-if(!LOW_MEM)return 0;
 let n=0;
 const s=new THREE.Vector3();
 scene.traverse((o)=>{
+if(o.isInstancedMesh&&o.castShadow&&!o.customDepthMaterial){
+o.customDepthMaterial=INSTANCED_DEPTH_MAT;
+}
+if(!LOW_MEM)return;
 if(!o.isMesh||!o.castShadow||o.isSkinnedMesh)return;
 let onBone=false;
 for(let p=o.parent;p;p=p.parent)if(p.isBone){onBone=true;break;}
@@ -23,27 +38,61 @@ const g=o.geometry;
 if(!g.boundingSphere)g.computeBoundingSphere();
 o.getWorldScale(s);
 const r=g.boundingSphere.radius*Math.max(s.x,s.y,s.z);
-if(r<(onBone?minRadiusOnBones:minRadius)){o.castShadow=false;n++;}
+const verts=g.attributes.position?g.attributes.position.count:0;
+if(r<(onBone?minRadiusOnBones:minRadius)||verts>=65000){o.castShadow=false;n++;}
 });
 return n;
 }
 export const camera=new THREE.PerspectiveCamera(46,1,0.3,400);
-export const isPortrait=()=>canvas.clientWidth<canvas.clientHeight;
-export function resize(){
-const w=canvas.clientWidth,h=canvas.clientHeight,pr=renderer.getPixelRatio();
-if(canvas.width!==Math.floor(w*pr)||canvas.height!==Math.floor(h*pr))renderer.setSize(w,h,false);
-camera.aspect=w/h;camera.updateProjectionMatrix();
+let viewW=canvas?(canvas.clientWidth||window.innerWidth||375):375;
+let viewH=canvas?(canvas.clientHeight||window.innerHeight||812):812;
+let lastPr=0;
+let sizeDirty=true;
+if(typeof addEventListener==='function'){
+addEventListener('resize',()=>{sizeDirty=true;});
+addEventListener('orientationchange',()=>{sizeDirty=true;});
+}
+export const isPortrait=()=>viewW<viewH;
+export function resize(force=false){
+const pr=renderer.getPixelRatio();
+const winW=typeof window!=='undefined'?window.innerWidth:viewW;
+const winH=typeof window!=='undefined'?window.innerHeight:viewH;
+if(!force&&!sizeDirty&&pr===lastPr&&winW===viewW&&winH===viewH)return;
+const w=canvas.clientWidth||winW||375;
+const h=canvas.clientHeight||winH||812;
+sizeDirty=false;
+const cw=Math.floor(w*pr),ch=Math.floor(h*pr);
+if(w===viewW&&h===viewH&&pr===lastPr&&canvas.width===cw&&canvas.height===ch)return;
+viewW=w;
+viewH=h;
+lastPr=pr;
+if(canvas.width!==cw||canvas.height!==ch)renderer.setSize(w,h,false);
+camera.aspect=w/h;
+camera.updateProjectionMatrix();
 }
 export function makeSun(scene,{color=0xfff0dc,intensity=2.3,size=11,offset=[6,12,7]}={}){
 const sun=new THREE.DirectionalLight(color,intensity);
 sun.castShadow=true;
-sun.shadow.mapSize.set(1024,1024);
+const mapSz=LOW_MEM?512:1024;
+sun.shadow.mapSize.set(mapSz,mapSz);
 Object.assign(sun.shadow.camera,{left:-size,right:size,top:size,bottom:-size,near:1,far:60});
 sun.shadow.bias=-0.0012;sun.shadow.normalBias=0.05;
+if(LOW_MEM){
+sun.shadow.autoUpdate=false;
+sun.shadow.needsUpdate=true;
+}
 scene.add(sun,sun.target);
-const texel=(size*2)/1024;
+const texel=(size*2)/mapSz;
+let lastSx=NaN,lastSz=NaN,frameTick=0;
 sun.userData.follow=(p)=>{
 const sx=Math.round(p.x/texel)*texel,sz=Math.round(p.z/texel)*texel;
+if(LOW_MEM){
+frameTick=(frameTick+1)&1;
+const moved=Number.isNaN(lastSx)||sx!==lastSx||sz!==lastSz;
+if(!moved&&frameTick!==0)return;
+lastSx=sx;lastSz=sz;
+sun.shadow.needsUpdate=true;
+}
 sun.position.set(sx+offset[0],p.y+offset[1],sz+offset[2]);sun.target.position.set(sx,p.y,sz);
 };
 return sun;
@@ -87,7 +136,18 @@ cache[name]=get(2)
 .then((j)=>new Promise((res,rej)=>loader.parse(b64ToBuffer(j.b64),'',res,rej)))
 .then((gltf)=>{
 gltf.scene.traverse((o)=>{
-if(o.isMesh&&/^glass/i.test(o.material.name))Object.assign(o.material,{transparent:true,opacity:0.16,depthWrite:false});
+if(!o.isMesh)return;
+for(const m of[].concat(o.material)){
+if(!m)continue;
+if(m.transmission>0){
+m.transmission=0;
+m.transparent=true;
+m.opacity=Math.min(m.opacity??1,0.35);
+m.depthWrite=false;
+}
+if(/^glass/i.test(m.name))Object.assign(m,{transparent:true,opacity:0.16,depthWrite:false});
+if(m.transparent&&m.side===THREE.DoubleSide)m.forceSinglePass=true;
+}
 });
 return gltf;
 });

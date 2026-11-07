@@ -2,7 +2,7 @@
 import*as THREE from'three';
 import{mergeGeometries}from'three/addons/utils/BufferGeometryUtils.js';
 import{SimplifyModifier}from'three/addons/modifiers/SimplifyModifier.js';
-import{canvasTexture,signTexture,makeSun,loadModel}from'./stage.js';
+import{canvasTexture,signTexture,makeSun,loadModel,LOW_MEM}from'./stage.js';
 import{makeCharacter,makeSanitaryCap,wearHelmet}from'./chars.js';
 import{BENTO,ITEMS,ITEM_KEYS,DEFECTS}from'../core/bento_rules.js';
 import{beltToWorldX,zoneWorld}from'../core/bento_view.js';
@@ -137,10 +137,32 @@ karaage:[[0,0,0,0.4,0.2,1.0]],
 sausage:[[0,0,0,0.0,0,1.1]],
 veg:[[0,0,0,0.3,0.2,0.95]],
 };
+function buildClusterGeo(baseGeo,pieces){
+const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),p=new THREE.Vector3(),s=new THREE.Vector3();
+const list=pieces.map(([x,y,z,ry,tilt,sc])=>{
+e.set(tilt,ry,0);q.setFromEuler(e);p.set(x,y,z);s.setScalar(sc);
+let g=baseGeo.clone().applyMatrix4(m4.compose(p,q,s));
+if(g.index)g=g.toNonIndexed();
+for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
+return g;
+});
+const merged=mergeGeometries(list,false);
+merged.computeBoundingSphere();
+return merged;
+}
 function makeCompartmentDish(layout=DISH_LAYOUT){
 const g=new THREE.Group();
 const sets={};
+const isCompartment=layout===DISH_LAYOUT;
 for(const key of ITEM_KEYS){
+if(isCompartment&&FOOD[key].clusterGeo){
+const m=new THREE.Mesh(FOOD[key].clusterGeo,FOOD[key].mat);
+m.castShadow=true;
+m.visible=false;
+sets[key]=m;
+g.add(m);
+continue;
+}
 const sub=new THREE.Group();
 for(const[x,y,z,ry,tilt,s]of layout[key]){
 const m=new THREE.Mesh(FOOD[key].geo,FOOD[key].mat);
@@ -264,26 +286,24 @@ triggerReject,
 syncCamera,
 };
 }
+const RAW_RIM_GEO=mergeGeometries([
+new THREE.BoxGeometry(0.316,0.044,0.014).translate(0,0.022,0.111).toNonIndexed(),
+new THREE.BoxGeometry(0.316,0.044,0.014).translate(0,0.022,-0.111).toNonIndexed(),
+new THREE.BoxGeometry(0.014,0.044,0.236).translate(-0.151,0.022,0).toNonIndexed(),
+new THREE.BoxGeometry(0.014,0.044,0.236).translate(0.151,0.022,0).toNonIndexed(),
+new THREE.BoxGeometry(0.011,0.038,0.21).translate(-0.018,0.020,0).toNonIndexed(),
+new THREE.BoxGeometry(0.158,0.036,0.010).translate(0.064,0.019,-0.035).toNonIndexed(),
+new THREE.BoxGeometry(0.158,0.036,0.010).translate(0.064,0.019,0.035).toNonIndexed(),
+],false);
 function makeRawTray(trayMat,rimMat,riceMat,umeboshiMat,sideMats,hairMat){
 const g=new THREE.Group();
 const base=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.016,0.22),trayMat);
 base.position.y=0.008;
 base.castShadow=true;
 base.receiveShadow=true;
-const rim=new THREE.Group();
-const wallFB=new THREE.BoxGeometry(0.316,0.044,0.014);
-const wallLR=new THREE.BoxGeometry(0.014,0.044,0.236);
-const wFront=new THREE.Mesh(wallFB,rimMat);wFront.position.set(0,0.022,0.111);
-const wBack=new THREE.Mesh(wallFB,rimMat);wBack.position.set(0,0.022,-0.111);
-const wLeft=new THREE.Mesh(wallLR,rimMat);wLeft.position.set(-0.151,0.022,0);
-const wRight=new THREE.Mesh(wallLR,rimMat);wRight.position.set(0.151,0.022,0);
-const divMain=new THREE.Mesh(new THREE.BoxGeometry(0.011,0.038,0.21),rimMat);
-divMain.position.set(-0.018,0.020,0);
-const divSub1=new THREE.Mesh(new THREE.BoxGeometry(0.158,0.036,0.010),rimMat);
-divSub1.position.set(0.064,0.019,-0.035);
-const divSub2=new THREE.Mesh(new THREE.BoxGeometry(0.158,0.036,0.010),rimMat);
-divSub2.position.set(0.064,0.019,0.035);
-rim.add(wFront,wBack,wLeft,wRight,divMain,divSub1,divSub2);
+const rim=new THREE.Mesh(RAW_RIM_GEO,rimMat);
+rim.castShadow=true;
+rim.receiveShadow=true;
 const rice=new THREE.Group();
 const riceBed=new THREE.Mesh(new THREE.BoxGeometry(0.112,0.026,0.188),riceMat);
 riceBed.position.set(-0.082,0.021,0);
@@ -327,11 +347,27 @@ scene.add(tubeLightL,tubeLightR);
 const batch=new Map(),mats={};
 const col=(c,o={})=>mats[c]||(mats[c]=new THREE.MeshStandardMaterial({color:c,roughness:0.75,...o}));
 const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),p=new THREE.Vector3(),s1=new THREE.Vector3(1,1,1);
+function putMat(geo,m,mat4){
+let g=geo.clone().applyMatrix4(mat4);if(g.index)g=g.toNonIndexed();
+for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
+if(!g.attributes.normal)g.computeVertexNormals();
+if(!g.attributes.uv)g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*2),2));
+if(!batch.has(m))batch.set(m,[]);batch.get(m).push(g);
+}
 function put(geo,m,x,y,z,ry=0){
 e.set(0,ry,0);q.setFromEuler(e);p.set(x,y,z);
-let g=geo.applyMatrix4(m4.compose(p,q,s1));if(g.index)g=g.toNonIndexed();
-for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
-if(!batch.has(m))batch.set(m,[]);batch.get(m).push(g);
+putMat(geo,m,m4.compose(p,q,s1));
+}
+const rootM=new THREE.Matrix4(),meshM=new THREE.Matrix4();
+function putModel(gltf,x,y,z,ry=0,overrideMat=null){
+gltf.scene.updateMatrixWorld(true);
+e.set(0,ry,0);q.setFromEuler(e);p.set(x,y,z);
+rootM.compose(p,q,s1);
+gltf.scene.traverse((o)=>{
+if(!o.isMesh)return;
+meshM.copy(rootM).multiply(o.matrixWorld);
+putMat(o.geometry,overrideMat||o.material,meshM);
+});
 }
 const B=(w,h,d)=>new THREE.BoxGeometry(w,h,d);
 const floorTex=canvasTexture(128,128,(g)=>{
@@ -400,10 +436,7 @@ put(B(0.28,0.14,0.22),stackTrayMat,rx+sx,sy+0.085,rz);
 }
 put(B(1.6,0.86,0.65),brightSteel,-1.2,0.43,-3.95);
 for(let i=0;i<3;i++){
-const b=bentoBox.scene.clone(true);
-b.position.set(-1.65+i*0.45,0.87,-3.95);
-b.traverse((o)=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
-scene.add(b);
+putModel(bentoBox,-1.65+i*0.45,0.87,-3.95,0);
 }
 const pvcMat=new THREE.MeshStandardMaterial({
 color:'#b4e0f8',
@@ -413,64 +446,24 @@ roughness:0.14,
 metalness:0.05,
 side:THREE.DoubleSide,
 depthWrite:false,
+forceSinglePass:true,
 });
+pvcMat.userData.noCast=true;
+const pvcStripGeo=new THREE.BoxGeometry(0.21,2.34,0.012);
 function addPvcDoorway(cx,cz){
 put(B(1.92,0.12,0.18),brightSteel,cx,2.42,cz);
 put(B(0.10,2.45,0.18),brightSteel,cx-0.92,1.225,cz);
 put(B(0.10,2.45,0.18),brightSteel,cx+0.92,1.225,cz);
 for(let i=0;i<9;i++){
-const strip=new THREE.Mesh(new THREE.BoxGeometry(0.21,2.34,0.012),pvcMat);
-strip.position.set(cx-0.76+i*0.19,1.18,cz+(i%2?0.012:-0.012));
-scene.add(strip);
+put(pvcStripGeo,pvcMat,cx-0.76+i*0.19,1.18,cz+(i%2?0.012:-0.012));
 }
 }
 addPvcDoorway(5.1,Z_BACK+0.10);
 addPvcDoorway(2.6,4.92);
-const placeSink=(sx,sz,rotY)=>{
-const s=steelSink.scene.clone(true);
-s.position.set(sx,0,sz);
-s.rotation.y=rotY;
-s.traverse((o)=>{
-if(o.isMesh){
-o.material=brightSteel;
-o.castShadow=true;
-o.receiveShadow=true;
-}
-});
-scene.add(s);
-};
-placeSink(2.2,Z_BACK+0.56,Math.PI);
+putModel(steelSink,2.2,0,Z_BACK+0.56,Math.PI,brightSteel);
 put(B(2.1,0.78,0.04),col('#cfe6f3',{metalness:0.55,roughness:0.15}),2.2,1.62,Z_BACK+0.11);
-for(const[m,list]of batch){
-const mesh=new THREE.Mesh(mergeGeometries(list,false),m);
-mesh.castShadow=true;
-mesh.receiveShadow=true;
-scene.add(mesh);
-}
-const addSign=(text,w,h,bg,fg,x,y,z)=>{
-const m=new THREE.Mesh(
-new THREE.PlaneGeometry(w,h),
-new THREE.MeshStandardMaterial({map:signTexture(text,512,148,bg,fg),roughness:0.45}),
-);
-m.position.set(x,y,z);
-scene.add(m);
-};
-addSign('衛生第一',2.3,0.66,'#f2f7f2','#1f6b3a',-3.8,3.25,Z_BACK+0.10);
-addSign('異物混入注意',2.6,0.66,'#fff6f4','#c92a1d',-0.8,3.25,Z_BACK+0.10);
-addSign('手洗い30秒',2.3,0.66,'#eef5fb','#1c5a96',2.2,2.55,Z_BACK+0.10);
-addSign('作業中',1.8,0.56,'#fff9db','#b45309',5.1,3.15,Z_BACK+0.10);
 for(let i=0;i<4;i++){
-const seg=conveyor.scene.clone(true);
-seg.rotation.y=Math.PI/2;
-seg.position.set(BELT_X0+(i+0.5)*SEG_LEN,0,BELT_Z);
-seg.traverse((o)=>{
-if(o.isMesh){
-o.material=brightSteel;
-o.castShadow=true;
-o.receiveShadow=true;
-}
-});
-scene.add(seg);
+putModel(conveyor,BELT_X0+(i+0.5)*SEG_LEN,0,BELT_Z,Math.PI/2,brightSteel);
 }
 const puBeltTex=canvasTexture(128,64,(g)=>{
 g.fillStyle='#eaeeef';g.fillRect(0,0,128,64);
@@ -495,17 +488,39 @@ panAssignments.push({x:w.x-0.19,z:w.panZ,kind:w.dish});
 panAssignments.push({x:w.x+0.19,z:w.panZ,kind:ITEM_KEYS[(ITEM_KEYS.indexOf(w.dish)+1)%3]});
 }
 for(const pa of panAssignments){
-const fp=foodPan.scene.clone(true);
-fp.position.set(pa.x,0.882,pa.z);
-fp.traverse((o)=>{
-if(o.isMesh){
-o.material=panMat;
-o.castShadow=true;
-o.receiveShadow=true;
+putModel(foodPan,pa.x,0.882,pa.z,0,panMat);
 }
-});
-scene.add(fp);
+const zw=zoneWorld();
+const zoneW=zw.x1-zw.x0;
+const zoneCenterX=(zw.x0+zw.x1)/2;
+const zonePlane=new THREE.Mesh(
+new THREE.PlaneGeometry(zoneW,0.40),
+new THREE.MeshBasicMaterial({color:'#f5c71a',transparent:true,opacity:0.30,depthWrite:false}),
+);
+zonePlane.rotation.x=-Math.PI/2;
+zonePlane.position.set(zoneCenterX,BELT_Y+0.013,BELT_Z);
+scene.add(zonePlane);
+const railMat=new THREE.MeshStandardMaterial({color:'#f2b705',emissive:'#b88600',emissiveIntensity:0.25,roughness:0.35});
+for(const dz of[-0.20,0.20])put(new THREE.BoxGeometry(zoneW,0.03,0.035),railMat,zoneCenterX,BELT_Y+0.022,BELT_Z+dz);
+for(const xEdge of[zw.x0,zw.x1])put(new THREE.BoxGeometry(0.035,0.025,0.435),railMat,xEdge,BELT_Y+0.020,BELT_Z);
+for(const[m,list]of batch){
+const mesh=new THREE.Mesh(mergeGeometries(list,false),m);
+mesh.castShadow=!m.transparent&&!m.userData?.noCast;
+mesh.receiveShadow=true;
+scene.add(mesh);
 }
+const addSign=(text,w,h,bg,fg,x,y,z)=>{
+const m=new THREE.Mesh(
+new THREE.PlaneGeometry(w,h),
+new THREE.MeshStandardMaterial({map:signTexture(text,512,148,bg,fg),roughness:0.45}),
+);
+m.position.set(x,y,z);
+scene.add(m);
+};
+addSign('衛生第一',2.3,0.66,'#f2f7f2','#1f6b3a',-3.8,3.25,Z_BACK+0.10);
+addSign('異物混入注意',2.6,0.66,'#fff6f4','#c92a1d',-0.8,3.25,Z_BACK+0.10);
+addSign('手洗い30秒',2.3,0.66,'#eef5fb','#1c5a96',2.2,2.55,Z_BACK+0.10);
+addSign('作業中',1.8,0.56,'#fff9db','#b45309',5.1,3.15,Z_BACK+0.10);
 FOOD.karaage=prepFood(karaageModel,-Math.PI/2,0.8);
 FOOD.sausage=prepFood(sausageModel,0,0.42);
 FOOD.sausage.mat=new THREE.MeshStandardMaterial({color:'#b8442f',roughness:0.38});
@@ -515,17 +530,25 @@ const piecesPerPan=30;
 const sideMats={karaage:FOOD.karaage.mat,sausage:FOOD.sausage.mat,veg:FOOD.veg.mat};
 const panScale={karaage:1.1,sausage:1.2,veg:1.05};
 for(const key of ITEM_KEYS){
-const pans=panAssignments.filter((p)=>p.kind===key);
+const allPans=panAssignments.filter((p)=>p.kind===key);
 let panGeo=FOOD[key].geo;
 try{
 const n=panGeo.attributes.position.count;
 panGeo=new SimplifyModifier().modify(FOOD[key].geo,Math.floor(n*0.66));
 panGeo.computeVertexNormals();
 }catch(err){console.warn('pan food simplify',err);panGeo=FOOD[key].geo;}
-const inst=new THREE.InstancedMesh(panGeo,FOOD[key].mat,pans.length*piecesPerPan);
+FOOD[key].clusterGeo=buildClusterGeo(panGeo.attributes.uv?panGeo:FOOD[key].geo,DISH_LAYOUT[key]);
+const panBuckets=[
+allPans.filter((pa)=>pa.x<-1.5),
+allPans.filter((pa)=>Math.abs(pa.x)<=1.5),
+allPans.filter((pa)=>pa.x>1.5),
+].filter((b)=>b.length>0);
+s1.setScalar(panScale[key]);
+const panInstMat=FOOD[key].mat.clone();
+for(const pans of panBuckets){
+const inst=new THREE.InstancedMesh(panGeo,panInstMat,pans.length*piecesPerPan);
 inst.castShadow=false;
 inst.receiveShadow=true;
-s1.setScalar(panScale[key]);
 let idx=0;
 for(let pi=0;pi<pans.length;pi++){
 const pa=pans[pi];
@@ -543,30 +566,11 @@ inst.setMatrixAt(idx++,m4.compose(p,q,s1));
 }
 }
 inst.instanceMatrix.needsUpdate=true;
+inst.computeBoundingSphere();
 scene.add(inst);
 }
+}
 s1.set(1,1,1);
-const zw=zoneWorld();
-const zoneW=zw.x1-zw.x0;
-const zoneCenterX=(zw.x0+zw.x1)/2;
-const zonePlane=new THREE.Mesh(
-new THREE.PlaneGeometry(zoneW,0.40),
-new THREE.MeshBasicMaterial({color:'#f5c71a',transparent:true,opacity:0.30,depthWrite:false}),
-);
-zonePlane.rotation.x=-Math.PI/2;
-zonePlane.position.set(zoneCenterX,BELT_Y+0.013,BELT_Z);
-scene.add(zonePlane);
-const railMat=new THREE.MeshStandardMaterial({color:'#f2b705',emissive:'#b88600',emissiveIntensity:0.25,roughness:0.35});
-for(const dz of[-0.20,0.20]){
-const r=new THREE.Mesh(new THREE.BoxGeometry(zoneW,0.03,0.035),railMat);
-r.position.set(zoneCenterX,BELT_Y+0.022,BELT_Z+dz);
-scene.add(r);
-}
-for(const xEdge of[zw.x0,zw.x1]){
-const bar=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.025,0.435),railMat);
-bar.position.set(xEdge,BELT_Y+0.020,BELT_Z);
-scene.add(bar);
-}
 const trayMat=new THREE.MeshStandardMaterial({color:'#181a1f',roughness:0.20,metalness:0.16});
 const rimMat=new THREE.MeshStandardMaterial({color:'#242830',roughness:0.18,metalness:0.18});
 const riceMat=new THREE.MeshStandardMaterial({color:'#fbfaf5',roughness:0.82});
@@ -597,6 +601,7 @@ scene.add(fpTongs.group);
 const lineWorkers=await Promise.all(
 WORKER_SPOTS.map(async(cfg,i)=>{
 const ch=await makeCharacter(cfg.kind,BENTO_UNIFORM);
+if(LOW_MEM)ch.setCastShadow(false);
 const cap=makeSanitaryCap(ch);
 wearHelmet(ch,cap.group);
 ch.cap=cap.group;
@@ -612,6 +617,7 @@ ch,
 dish:cfg.dish,
 timer:0.35+(i*0.31)%1.8,
 period:1.65+(i%4)*0.28,
+animDt:0,
 };
 }),
 );
@@ -676,14 +682,22 @@ rejectTray.position.set(rejectStartX,BELT_Y+0.011,BELT_Z);
 rejectTray.rotation.set(0,0,0);
 rejectTray.visible=true;
 }
+let workerFrame=0;
 function update(dt){
-for(const w of lineWorkers){
+workerFrame=(workerFrame+1)|0;
+for(let i=0;i<lineWorkers.length;i++){
+const w=lineWorkers[i];
 w.timer-=dt;
 if(w.timer<=0){
 w.timer=w.period;
 w.ch.triggerPick(w.dish,0.38);
 }
-w.ch.update(dt);
+w.animDt+=dt;
+const interval=(!LOW_MEM||w.ch.pickT>=0)?1:(Math.abs(w.ch.holder.position.x)>3.0?3:2);
+if((workerFrame+i)%interval===0){
+w.ch.update(w.animDt);
+w.animDt=0;
+}
 }
 if(rejectAnimT>=0){
 rejectAnimT+=dt/0.25;

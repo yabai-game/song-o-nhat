@@ -1,6 +1,6 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import*as THREE from'three';
-import{canvasTexture}from'./stage.js';
+import{canvasTexture,LOW_MEM}from'./stage.js';
 export const SEASON_IDS=['spring','summer','autumn','winter'];
 const asId=(s)=>(typeof s==='number'?SEASON_IDS[s]:s)||'spring';
 export const SEASON_LOOK={
@@ -54,9 +54,10 @@ export function makeSeasonFx(scene,{foliage=[],crowns=[],sakura=[],ground=[],sky
 const base=new Map();
 const remember=(m)=>{if(m&&m.color&&!base.has(m))base.set(m,m.color.clone());};
 [...foliage,...sakura,...ground].forEach(remember);
-const petals=flakes(scene,260,['#ffc4d6','#ffd6e2','#ffb3c8'],0.12,false);
-const leaves=flakes(scene,200,['#e2742c','#c94a26','#e8a838','#b5651d'],0.16,false);
-const snow=flakes(scene,700,['#ffffff'],0.11,true);
+const petals=flakes(scene,LOW_MEM?120:260,['#ffc4d6','#ffd6e2','#ffb3c8'],0.12,false);
+const leaves=flakes(scene,LOW_MEM?100:200,['#e2742c','#c94a26','#e8a838','#b5651d'],0.16,false);
+const snow=flakes(scene,LOW_MEM?280:700,['#ffffff'],0.11,true);
+let flakeTick=0,flakeAccDt=0;
 snowCover(scene);
 const sheets=[];
 for(const a of snowArea?[{y:groundY,...snowArea},...snowAreas]:snowAreas){
@@ -99,9 +100,18 @@ SNOW.value=season==='winter'?(snowing?0.95:0.8):snowing?0.6:0;
 },
 update(dt,focus){
 if(!focus)return;
+if(!petals.im.visible&&!leaves.im.visible&&!snow.im.visible)return;
+if(LOW_MEM){
+flakeAccDt+=dt;
+flakeTick=(flakeTick+1)&1;
+if(flakeTick!==0)return;
+dt=flakeAccDt;
+flakeAccDt=0;
+}
 const step=(f,fallSpeed,sway,spin)=>{
 if(!f.im.visible)return;
-for(let i=0;i<f.n;i++){
+const count=f.im.count;
+for(let i=0;i<count;i++){
 const k=i*4;f.p[k+1]-=dt*fallSpeed;f.p[k+3]+=dt*spin;
 if(f.p[k+1]<0){f.p[k+1]+=12;f.p[k]=(Math.random()-0.5)*26;f.p[k+2]=(Math.random()-0.5)*22;}
 _v.set(focus.x+f.p[k]+Math.sin(f.p[k+3])*sway,focus.y+f.p[k+1]-1,focus.z+f.p[k+2]);

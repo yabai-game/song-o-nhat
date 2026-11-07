@@ -1,7 +1,7 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import*as THREE from'three';
 import{mergeGeometries}from'three/addons/utils/BufferGeometryUtils.js';
-import{canvasTexture}from'./stage.js';
+import{canvasTexture,LOW_MEM}from'./stage.js';
 function rng(seed){
 return()=>{
 seed=(seed+0x6d2b79f5)|0;
@@ -60,38 +60,40 @@ g.fillStyle='#ffffff';g.fillRect(0,0,64,64);
 g.fillStyle='#e8e2d6';g.fillRect(0,54,64,10);
 g.fillStyle='#5f6e7a';g.fillRect(18,18,26,20);g.fillStyle='#d6d0c4';g.fillRect(16,38,30,3);
 },[1,1]);
-const aptGeo=[],houseGeo=[],treeGeo=[],towerGeo=[];
+const aptQ=[[],[],[],[]],houseQ=[[],[],[],[]],treeQ=[[],[],[],[]],towerQ=[[],[],[],[]];
+const qOf=(x,z)=>(x>=0?1:0)+(z>=0?2:0);
 const walls=['#f1ece2','#e6dfd2','#dfe3e4','#efe3cf','#d9d1c4','#e9e6df','#cfd6d9'];
 const roofs=['#4a535c','#5b5048','#3d4851','#6c5c4d','#55606a','#7a4a3c','#3f5a66'];
 function house(x,z,ry){
-const w=6.5+R()*2.5,d=6+R()*2,h=5.2+R()*0.8,roof=pick(roofs);
-houseGeo.push(place(facadeBox(w,h,d,3,2.8,pick(walls),roof).translate(0,h/2,0),x,0,z,ry));
-houseGeo.push(place(gable(w+0.8,1.6+R()*0.6,d+0.8,roof).translate(0,h,0),x,0,z,ry));
+const w=6.5+R()*2.5,d=6+R()*2,h=5.2+R()*0.8,roof=pick(roofs),qi=qOf(x,z);
+houseQ[qi].push(place(facadeBox(w,h,d,3,2.8,pick(walls),roof).translate(0,h/2,0),x,0,z,ry));
+houseQ[qi].push(place(gable(w+0.8,1.6+R()*0.6,d+0.8,roof).translate(0,h,0),x,0,z,ry));
 }
 function apartment(x,z,ry,floors){
-const w=12+Math.round(R()*3)*3.2,d=8+R()*4,h=floors*3;
-aptGeo.push(place(facadeBox(w,h,d,3.2,3,pick(walls),'#9a978f').translate(0,h/2,0),x,0,z,ry));
-aptGeo.push(place(facadeBox(w+0.4,0.5,d+0.4,3.2,3,'#a8a49c','#8e8b84').translate(0,h+0.25,0),x,0,z,ry));
+const w=12+Math.round(R()*3)*3.2,d=8+R()*4,h=floors*3,qi=qOf(x,z);
+aptQ[qi].push(place(facadeBox(w,h,d,3.2,3,pick(walls),'#9a978f').translate(0,h/2,0),x,0,z,ry));
+aptQ[qi].push(place(facadeBox(w+0.4,0.5,d+0.4,3.2,3,'#a8a49c','#8e8b84').translate(0,h+0.25,0),x,0,z,ry));
 }
 const treeLeaf=new THREE.Color('#6f9e55'),treeDark=new THREE.Color('#5d8a48');
 function trees(x,z,n){
+const qi=qOf(x,z);
 for(let k=0;k<n;k++){
 const r=1.6+R()*1.6,tx=x+(R()-0.5)*8,tz=z+(R()-0.5)*8;
 let g=new THREE.IcosahedronGeometry(r,0);g=keep(g.index?g.toNonIndexed():g);
 const c=R()>0.5?treeLeaf:treeDark,col=new Float32Array(g.attributes.position.count*3);
 for(let i=0;i<col.length;i+=3){col[i]=c.r;col[i+1]=c.g;col[i+2]=c.b;}
 g.setAttribute('color',new THREE.BufferAttribute(col,3));
-treeGeo.push(place(g,tx,r*1.1,tz,R()*3));
+treeQ[qi].push(place(g,tx,r*1.1,tz,R()*3));
 }
 }
-const light=[];
+const lightQ=[[],[],[],[]];
 for(let tx=-10;tx<10;tx++)for(let tz=-10;tz<10;tz++)for(const[ox,oz]of[[7.5,7.5],[18.5,7.5],[7.5,18.5],[18.5,18.5]]){
 const x=tx*TILE+ox,z=tz*TILE+oz,r=Math.hypot(x,z);
 if(r>182||!isFree(x,z))continue;
 const ry=(Math.floor(R()*4)*Math.PI)/2,roll=R();
 if(roll<0.1){trees(x,z,3);continue;}
 if(r<95){
-if(roll<0.45)light.push([x,z,ry]);
+if(!LOW_MEM&&roll<0.45)lightQ[qOf(x,z)].push([x,z,ry]);
 else if(roll<0.92)house(x,z,ry);
 else apartment(x,z,ry,3+Math.floor(R()*2));
 }else if(r<145){
@@ -102,22 +104,34 @@ else apartment(x,z,ry,4+Math.floor(R()*6));
 houseLight.scene.updateMatrixWorld(true);
 houseLight.scene.traverse((o)=>{
 if(!o.isMesh)return;
-const im=new THREE.InstancedMesh(o.geometry,new THREE.MeshLambertMaterial({map:o.material.map}),light.length);
-light.forEach(([x,z,ry],i)=>{e.set(0,ry,0);q.setFromEuler(e);p.set(x,0.02,z);im.setMatrixAt(i,m4.compose(p,q,s1).multiply(o.matrixWorld));});
+const mat=new THREE.MeshLambertMaterial({map:o.material.map});
+for(const qList of lightQ){
+if(!qList.length)continue;
+const im=new THREE.InstancedMesh(o.geometry,mat,qList.length);
+qList.forEach(([x,z,ry],i)=>{e.set(0,ry,0);q.setFromEuler(e);p.set(x,0.02,z);im.setMatrixAt(i,m4.compose(p,q,s1).multiply(o.matrixWorld));});
 im.computeBoundingSphere();scene.add(im);
+}
 });
 for(let k=0;k<44;k++){
 const a=R()*Math.PI*2,r=192+R()*30,h=16+R()*R()*55,w=12+R()*14;
-towerGeo.push(place(facadeBox(w,h,w*(0.6+R()*0.5),3.2,3,pick(['#dfe3e6','#cfd6dc','#e8e4dc','#c4ccd2']),'#9aa0a6').translate(0,h/2,0),Math.cos(a)*r,0,Math.sin(a)*r,-a));
+const tx=Math.cos(a)*r,tz=Math.sin(a)*r;
+towerQ[qOf(tx,tz)].push(place(facadeBox(w,h,w*(0.6+R()*0.5),3.2,3,pick(['#dfe3e6','#cfd6dc','#e8e4dc','#c4ccd2']),'#9aa0a6').translate(0,h/2,0),tx,0,tz,-a));
 }
 const vc={vertexColors:true};
 const meshes=[
-[houseGeo,new THREE.MeshLambertMaterial({map:houseTex,...vc})],
-[aptGeo,new THREE.MeshLambertMaterial({map:aptTex,...vc})],
-[towerGeo,new THREE.MeshLambertMaterial({map:aptTex,...vc})],
-[treeGeo,Object.assign(new THREE.MeshLambertMaterial({vertexColors:true,flatShading:true}),{name:'tree_far'})],
+[houseQ,new THREE.MeshLambertMaterial({map:houseTex,...vc})],
+[aptQ,new THREE.MeshLambertMaterial({map:aptTex,...vc})],
+[towerQ,new THREE.MeshLambertMaterial({map:aptTex,...vc})],
+[treeQ,Object.assign(new THREE.MeshLambertMaterial({vertexColors:true,flatShading:true}),{name:'tree_far'})],
 ];
-for(const[list,mat]of meshes)if(list.length)scene.add(new THREE.Mesh(mergeGeometries(list.map(keep),false),mat));
+for(const[qArr,mat]of meshes){
+for(const list of qArr){
+if(!list.length)continue;
+const g=mergeGeometries(list.map(keep),false);
+g.computeBoundingSphere();
+scene.add(new THREE.Mesh(g,mat));
+}
+}
 const haze=new THREE.Color('#d6e0e4');
 function ridge(radius,base,amp,top,seed){
 const RR=rng(seed),N=160,pos=[],col=[],ct=new THREE.Color(top);

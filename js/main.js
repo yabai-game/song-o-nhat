@@ -1,7 +1,8 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import{pageview,track}from'./net/stats.js';
 import*as THREE from'three';
-import{renderer,camera,resize,isPortrait,CamRig,loadModel,loadBrand,loadStats,LOW_MEM,trimShadowCasters}from'./gfx/stage.js';
+import{renderer,camera,resize,isPortrait,CamRig,loadModel,loadBrand,loadStats,LOW_MEM,trimShadowCasters,updateAdaptiveDpr}from'./gfx/stage.js';
+import{charStepInterval,shouldCullByFog}from'./core/perf.js';
 import{OUTFITS,SWATCH,ensureSrc,makeCharacter,makeHelmet,makeSanitaryCap,wearHelmet,wearWaders,refHex}from'./gfx/chars.js';
 import{buildTown}from'./gfx/town.js';
 import{buildSite,DECK_Y,WANDER,ROUTE}from'./gfx/site.js';
@@ -19,17 +20,19 @@ import{buildShrine}from'./gfx/shrine.js';
 import{buildCare}from'./gfx/care.js';
 import{buildBento,BENTO_ROOM}from'./gfx/bento.js';
 import{buildLotus,LOTUS_FIELD}from'./gfx/lotus.js';
+import{buildKonbiniStore,KONBINI_STORE,KONBINI_COLORS}from'./gfx/konbini_store.js';
 import{buildStation}from'./gfx/station.js';
 import{Crowd}from'./gfx/crowd.js';
 import{CareShift,seatFolk}from'./work/care_shift.js';
 import{BentoShift}from'./work/bento_shift.js';
 import{LotusShift}from'./work/lotus_shift.js';
+import{KonbiniShift}from'./work/konbini_shift.js';
 import{DayOff}from'./work/dayoff.js';
 import{dayOffSummary}from'./core/dayoff_rules.js';
 import{$,show,card,toast,deltaChips,esc,Overhead}from'./ui/ui.js';
 import{PLAY,dayKey,tickPlay}from'./core/playtime.js';
 import{newState,save,load,clearSave,yen,jpLevel,applyFx}from'./core/state.js';
-import{JOBS,NPCS,INTRO,rankOf,rankPay,daysOf,ranksOf}from'./core/jobs.js';
+import{JOBS,NPCS,INTRO,rankOf,rankPay,daysOf,ranksOf,SOON_ON_PUBLIC}from'./core/jobs.js';
 import{WELL,checkCollapse,lowBars,sickLeave,skillInfo,markDinner}from'./core/wellbeing.js';
 import{CAREER,targets,cannotStudy,startStudy,quitStudy}from'./core/career.js';
 import{daySteps,lifeDaySteps,shiftOpts,shiftEnd,chooseTalk,completeStep,weekEval,sleep,retryCost,DAYS}from'./core/story.js';
@@ -71,6 +74,7 @@ ACHIEVEMENTS,checkAchievements,ensureFestivalState,visitFestival,
 }from'./core/festival.js';
 const storage=(()=>{try{return window.localStorage;}catch{return{getItem:()=>null,setItem(){},removeItem(){}};}})();
 import{Music,pickTrack}from'./audio/music.js';
+if(globalThis.SON_PUBLIC)for(const j of SOON_ON_PUBLIC)if(JOBS[j])JOBS[j].ready=false;
 const music=new Music();
 let musicT=0;
 const G={
@@ -120,7 +124,7 @@ const bootT0=performance.now();
 try{
 const fontReady=document.fonts?document.fonts.load('700 48px "Zen Maru Gothic"','ラーメン安全第一'):Promise.resolve();
 let stagesDone=0,musicDone=0,best=0;
-const STAGES=9,TRACKS_N=16,EST_MODELS=64;
+const STAGES=10,TRACKS_N=16,EST_MODELS=64;
 const step=(p)=>p.then((v)=>{stagesDone++;return v;});
 const paint=(label)=>{
 const total=Math.max(loadStats.started,EST_MODELS)+TRACKS_N+STAGES;
@@ -132,13 +136,14 @@ $('loadmsg').textContent=label||`Đang tải mô hình ${loadStats.done}/${Math.
 const painter=setInterval(()=>paint(),150);
 const musicP=music.prefetch(()=>{musicDone++;});
 const outfitsP=Promise.all(Object.keys(OUTFITS).map((k)=>ensureSrc(k).catch(()=>null)));
-const[town,site,care,bento,lotus]=await Promise.all([step(buildTown()),step(buildSite()),step(buildCare()),step(buildBento()),step(buildLotus()),
+const[town,site,care,bento,lotus,konbini]=await Promise.all([step(buildTown()),step(buildSite()),step(buildCare()),step(buildBento()),step(buildLotus()),step(buildKonbiniStore()),
 step(ensureShrine()),step(ensureStation()),step(ensureMarket()),outfitsP,musicP,fontReady.catch(()=>{})]);
 G.stages.town=town;
 G.stages.site=site;
 G.stages.care=care;
 G.stages.bento=bento;
 G.stages.lotus=lotus;
+G.stages.konbini=konbini;
 const[lowtable,gas_stove,brandWhite,futon,washing_machine,drying_rack,rice_cooker,cooking_pot]=await Promise.all([loadModel('lowtable'),loadModel('gas_stove'),loadBrand('white'),loadModel('futon'),loadModel('washing_machine'),loadModel('drying_rack'),loadModel('rice_cooker'),loadModel('cooking_pot')]);
 G.stages.dorm=buildDorm({lowtable,gas_stove,brandWhite,futon,washing_machine,drying_rack,rice_cooker,cooking_pot});stagesDone++;
 clearInterval(painter);
@@ -163,6 +168,8 @@ G.market=new MarketShop({controls:G.controls,overhead:G.overhead,camRig:G.camRig
 G.care=new CareShift({stage:G.stages.care,controls:G.controls,overhead:G.overhead,camRig:G.camRig});
 G.bento=new BentoShift({stage:G.stages.bento,controls:G.controls,overhead:G.overhead,camRig:G.camRig});
 G.lotus=new LotusShift({stage:G.stages.lotus,controls:G.controls,overhead:G.overhead,camRig:G.camRig});
+G.konbini=new KonbiniShift({stage:G.stages.konbini,controls:G.controls,overhead:G.overhead,camRig:G.camRig});
+G.konbiniShift=G.konbini;
 G.dayoff=new DayOff({controls:G.controls,overhead:G.overhead,camRig:G.camRig});
 G.streetCrowd=await new Crowd(G.stages.site.scene,{mode:'street',seed:331}).spawnStreet();
 G.streetCrowd.setVisible(false);
@@ -233,6 +240,9 @@ if(ch.waders)ch.waders.setVisible(where==='lotus');
 if(id==='tanaka'||id==='sato'||id==='hung'){
 ch.look(where==='bento'?{...L.colors,...BENTO_COLORS}:where==='lotus'?{...L.colors,...LOTUS_COLORS}:L.colors);
 }
+if(id==='tencho'){
+ch.look(where==='konbini'?{...L.colors,...KONBINI_COLORS}:L.colors);
+}
 return ch;
 }
 function hideNpcs(){for(const ch of Object.values(G.npcs)){ch.holder.parent?.remove(ch.holder);ch.unpinAll();}}
@@ -258,6 +268,7 @@ if(ch.waders)ch.waders.setVisible(!!(atWork&&job==='lotus'));
 ch.look(
 atWork&&job==='bento'?{...lookOf().colors,...BENTO_COLORS}
 :atWork&&job==='lotus'?{...lookOf().colors,...LOTUS_COLORS}
+:atWork&&job==='konbini'?{...lookOf().colors,...KONBINI_COLORS}
 :lookOf().colors,
 );
 }
@@ -268,7 +279,10 @@ return swapPlayer(G.wardrobe[kind]);
 }
 async function spawnFolk(){
 if(!G.folk.length)G.folk=await Promise.all(FOLK_LOOK.map(([kind,top])=>makeCharacter(kind,{top})));
-for(const ch of G.folk)G.stages.care.scene.add(ch.holder);
+for(const ch of G.folk){
+if(LOW_MEM)ch.setCastShadow(false);
+G.stages.care.scene.add(ch.holder);
+}
 seatFolk(G.folk);
 }
 async function spawnWorkers(){
@@ -278,6 +292,7 @@ const kind=i%2?'suit':'hoodie';
 const ch=await makeCharacter(kind,{top:['#1f3148','#5d6168','#2e5a44'][i%3],bottom:'#2b2b30',hair:'#2a2420'});
 const h=makeHelmet(ch,i%2?'#f4f4f0':'#f2c230');
 wearHelmet(ch,h.group);
+if(LOW_MEM)ch.setCastShadow(false);
 const[x,z,xr,zr]=WANDER[i];
 ch.holder.position.set(x,0,z);
 G.stages.site.scene.add(ch.holder);
@@ -980,7 +995,7 @@ hideAll();G.mode='creator';
 const box=$('joblist');box.textContent='';
 for(const[id,j]of Object.entries(JOBS)){
 const b=document.createElement('button');b.type='button';b.className='job';b.disabled=!j.ready;
-b.innerHTML=`<span class="ic">${j.icon}</span><b>${esc(j.sector)} — ${esc(j.name)}</b><span class="meta">📍 ${esc(j.place)} · ${esc(j.area)}</span><span class="d">${esc(j.desc)}${j.ready ? '' : ' <span class="soon">· Sắp mở</span>'}</span>`;
+b.innerHTML=`<span class="ic">${j.icon}</span><b>${esc(j.sector)} — ${esc(j.name)}</b><span class="meta">📍 ${esc(j.place)} · ${esc(j.area)}</span><span class="d">${esc(j.desc)}${j.ready ? '' : ' <span class="soon">· 🔒 Sắp ra mắt</span>'}</span>`;
 b.addEventListener('click',()=>startGame(id));
 box.appendChild(b);
 }
@@ -2536,7 +2551,7 @@ if(train&&!G.stages.station){toast('🚉 Đang tải ga tàu…','さくら駅')
 if(train&&G.stationCrowd)G.stationCrowd.reset();
 const[suzuki,hung]=[await npc('suzuki','site'),await npc('hung','site')];
 const nurse=job==='care'?await npc('yamada','care'):null;
-const foreman=job==='bento'?await npc('tanaka','bento'):job==='lotus'?await npc('tanaka','lotus'):null;
+const foreman=job==='bento'?await npc('tanaka','bento'):job==='lotus'?await npc('tanaka','lotus'):job==='konbini'?await npc('tencho','konbini'):null;
 if(job==='care')await spawnFolk();
 await spawnWorkers();
 G.morning.start({
@@ -2562,7 +2577,7 @@ await spawnWorkers();
 G.evening.start({
 S,spot:spotFor(st.data),stages:G.stages,who:{player:G.player},setStage,
 storage,
-from:job==='care'||job==='bento'||job==='lotus'?'station':'gate',
+from:job==='care'||job==='bento'||job==='lotus'?'station':job==='konbini'?'konbini':'gate',
 dayLabel:hudCalText(S,'Buổi tối'),
 onMarket:(ev)=>openMarket(ev,()=>{hideNpcs();G.mode='evening';G.evening.resumeFromMarket();}),
 onArrive:()=>{S.flags.eveningDay=curDayKey(S);save(S,storage);talkStep(st,eveningPlace(st));},
@@ -2570,12 +2585,12 @@ onArrive:()=>{S.flags.eveningDay=curDayKey(S);save(S,storage);talkStep(st,evenin
 }
 async function talkStep(st,where=null){
 const d=st.data,job=jobOf(),atWork=st.at==='work'&&!where;
-const atCare=atWork&&job==='care',atBento=atWork&&job==='bento',atLotus=atWork&&job==='lotus';
+const atCare=atWork&&job==='care',atBento=atWork&&job==='bento',atLotus=atWork&&job==='lotus',atKonbini=atWork&&job==='konbini';
 await dress(atWork);
-setStage(where?where.stage:atCare?'care':atBento?'bento':atLotus?'lotus':atWork?'site':'town');
+setStage(where?where.stage:atCare?'care':atBento?'bento':atLotus?'lotus':atKonbini?'konbini':atWork?'site':'town');
 hideNpcs();
 G.mode='talk';
-G.talkCam=where?where.cam:atCare?'care':atBento?'bento':atLotus?'lotus':atWork?'deck':'town';
+G.talkCam=where?where.cam:atCare?'care':atBento?'bento':atLotus?'lotus':atKonbini?'konbini':atWork?'deck':'town';
 const P=G.player;P.play('idle');
 const fx=curWeatherFx(G.S);
 if(atCare){
@@ -2591,6 +2606,9 @@ P.unpinAll();P.holder.rotation.x=0;
 G.stages.lotus.setWeather({rain:!!fx.rain,snow:!!fx.snow,wind:!!fx.wind,cold:!!((d.title||'').includes('lạnh')||fx.snow)});
 G.stages.lotus.setSpray(false);
 P.holder.position.set(LOTUS_FIELD.talkPlayer.x,0,LOTUS_FIELD.talkPlayer.z);
+}else if(atKonbini){
+P.unpinAll();P.holder.rotation.x=0;
+P.holder.position.set(KONBINI_STORE.talkPlayer.x,0,KONBINI_STORE.talkPlayer.z);
 }else if(atWork){
 const forgotHelmet=/Quên mũ bảo hộ/i.test(d.title||'');
 P.look({...G.S.look.colors,...WORK_COLORS});P.unpinAll();P.helmet.visible=!forgotHelmet;
@@ -2609,9 +2627,9 @@ P.holder.position.set(-0.6,0,2.2);
 }
 let N=null;
 if(d.who){
-N=await npc(d.who,where?where.stage:atCare?'care':atBento?'bento':atLotus?'lotus':atWork?'site':'town');
+N=await npc(d.who,where?where.stage:atCare?'care':atBento?'bento':atLotus?'lotus':atKonbini?'konbini':atWork?'site':'town');
 if(where&&job!=='site'&&N.helmet)N.helmet.visible=false;
-const off=atWork&&!atCare&&!atBento&&!atLotus?[-0.5,-1.5]:G.talkCam==='street'?[1.4,0.15]:[1.5,-0.6];
+const off=atWork&&!atCare&&!atBento&&!atLotus&&!atKonbini?[-0.5,-1.5]:G.talkCam==='street'?[1.4,0.15]:[1.5,-0.6];
 N.holder.position.set(P.holder.position.x+off[0],P.holder.position.y,P.holder.position.z+off[1]);
 N.yaw=Math.atan2(P.holder.position.x-N.holder.position.x,P.holder.position.z-N.holder.position.z);
 P.yaw=Math.atan2(N.holder.position.x-P.holder.position.x,N.holder.position.z-P.holder.position.z);
@@ -2645,6 +2663,7 @@ async function shiftStep(st){
 if(jobOf()==='care')return careShiftStep(st);
 if(jobOf()==='bento')return bentoShiftStep(st);
 if(jobOf()==='lotus')return lotusShiftStep(st);
+if(jobOf()==='konbini')return konbiniShiftStep(st);
 const S=G.S;
 await dress(true);
 setStage('site');hideNpcs();
@@ -2753,6 +2772,29 @@ card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
 ]);
 dayHud(st.label);
 G.camRig.snap(G.stages.lotus.showcase.pos,G.stages.lotus.showcase.look);
+}
+async function konbiniShiftStep(st,demo=false,demoDay=0){
+const S=G.S||{jobXp:0,ally:0,watch:0};
+await dress(true);
+setStage('konbini');hideNpcs();
+G.mode='shift';G.activeShift=G.konbini;
+const P=G.player;
+const foreman=await npc('tencho','konbini');
+const opts=shiftOpts(st.data,st.hard,S);
+const rk=rankOf(S.jobXp||0);
+const meta={unit:JOBS.konbini.unit,rankLabel:demo?'🎮 Chế độ thử':`${hudCalText(S)} · 🎖️ ${rk + 1}/10 ${ranksOf('konbini')[rk]}`,
+onRetry:()=>{if(!demo){retryCost(G.S);save(G.S,storage);}}};
+const begin=()=>G.konbini.start(opts,{player:P,foreman},meta,(r)=>(demo?finishDemoShift('konbini',demoDay,r):shiftDone(st,r)));
+if(demo){begin();return;}
+card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
+    ${opts.jp ? `<p class="jpline">${esc(opts.jp)}</p>` : ''}
+    <p>${esc(opts.vi || 'Đứng sau quầy thu ngân, chào khách, quét mã vạch, trả lời yêu cầu và thối đúng tiền thừa.')}</p>
+    <ul><li>🎯 Phục vụ ${opts.goal} lượt khách</li>${opts.limit ? `<li>⏱ ${opts.limit} giây</li>` : '<li>⏱ Không giới hạn giờ</li>'}${opts.maxMiss ? `<li>❌ Sai tối đa ${opts.maxMiss} lần</li>` : ''}</ul>
+    <p class="lesson">🏪 Chào <b>いらっしゃいませ</b> → Chạm từng món để quét (ピッ♪) → Trả lời câu hỏi (nếu có) → Chọn mệnh giá tiền thối rồi bấm <b>✔ Đưa tiền thừa</b> → Chào <b>ありがとうございました</b>.</p>`,[
+{label:'Bắt đầu ca →',on:begin},
+]);
+dayHud(st.label);
+G.camRig.snap(G.stages.konbini.showcase.pos,G.stages.konbini.showcase.look);
 }
 function shiftDone(st,r){
 const S=G.S,job=jobOf();
@@ -2934,8 +2976,9 @@ const rows=[
 ...daysOf('care').map((d,i)=>({label:`👵 Ngày ${i + 1}: ${name(d)}${starStr('care', i)}`,on:()=>demoShift('care',i)})),
 ...daysOf('bento').map((d,i)=>({label:`🍱 Ngày ${i + 1}: ${name(d)}${starStr('bento', i)}`,on:()=>demoShift('bento',i)})),
 ...daysOf('lotus').map((d,i)=>({label:`🪷 Ngày ${i + 1}: ${name(d)}${d.b.rain ? ' 🌧️' : ''}${starStr('lotus', i)}`,on:()=>demoShift('lotus',i)})),
-];
-card('<h2>🎮 Thử ca làm 3D</h2><p>🎌 Ngày nghỉ ở đền · 🗑️ Phân loại rác · 🛒 Siêu thị · 🍳 Nấu cơm · 👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · 🪷 Ruộng sen · không tính điểm.</p>',[...rows,{label:'← Quay lại',cls:'ghost',on:titleScreen}]);
+...daysOf('konbini').map((d,i)=>({label:`🏪 Ngày ${i + 1}: ${name(d)}${starStr('konbini', i)}`,on:()=>demoShift('konbini',i)})),
+].filter((r)=>{const m=/^(👷|👵|🍱|🪷|🏪)/.exec(r.label);const job=m&&{'👷':'site','👵':'care','🍱':'bento','🪷':'lotus','🏪':'konbini'}[m[1]];return!job||JOBS[job].ready;});
+card(`<h2>🎮 Thử ca làm 3D</h2><p>🎌 Ngày nghỉ ở đền · 🗑️ Phân loại rác · 🛒 Siêu thị · 🍳 Nấu cơm · 👷 Công trường · 👵 Viện dưỡng lão · 🍱 Xưởng cơm hộp · 🪷 Ruộng sen · 🏪 Konbini${JOBS.konbini.ready ? '' : ' (sắp ra mắt)'} · không tính điểm.</p>`,[...rows,{label:'← Quay lại',cls:'ghost',on:titleScreen}]);
 }
 async function demoDayOff(){
 hideAll();hideNpcs();
@@ -3006,6 +3049,7 @@ const W=daysOf(job)[i].b;
 if(job==='care')return careShiftStep({data:W,hard:true,label:W.label},true,i);
 if(job==='bento')return bentoShiftStep({data:W,hard:true,label:W.label},true,i);
 if(job==='lotus')return lotusShiftStep({data:W,hard:true,label:W.label},true,i);
+if(job==='konbini')return konbiniShiftStep({data:W,hard:true,label:W.label},true,i);
 await dress(true);
 setStage('site');hideNpcs();G.mode='shift';G.activeShift=G.shift;
 G.player.look({...G.draft.colors,...WORK_COLORS});
@@ -3018,27 +3062,46 @@ G.shift.start(opts,{player:G.player,foreman},{unit:JOBS.site.unit,rankLabel:'�
 }
 const clock=new THREE.Clock();
 const vPos=new THREE.Vector3(),vLook=new THREE.Vector3();
+let occludedAcc=0;
+function setCameraFov(fov){
+if(camera.fov!==fov){
+camera.fov=fov;
+camera.updateProjectionMatrix();
+}
+}
 function frame(){
 requestAnimationFrame(frame);
-const dt=Math.min(clock.getDelta(),0.05),t=(G.t+=dt);
+const rawDt=clock.getDelta();
+const dt=Math.min(rawDt,0.05);
 resize();
+const modalEl=$('modal');
+const occluded=(modalEl&&!modalEl.hidden)||(G.mode==='creator'&&G.spin===0);
+if(occluded){
+occludedAcc+=dt;
+if(occludedAcc<0.1)return;
+occludedAcc=0;
+}else{
+occludedAcc=0;
+updateAdaptiveDpr(rawDt*1000);
+}
+const t=(G.t+=dt);
 const st=G.stage,P=G.player;
 if(G.mode==='title'){
 const a=t*0.08;
-camera.fov=isPortrait()?52:42;camera.updateProjectionMatrix();
+setCameraFov(isPortrait()?52:42);
 vPos.set(Math.sin(a)*9,4.2,4+Math.cos(a)*9);vLook.set(0,1.4,-1);
 G.camRig.to(vPos,vLook,dt,2);
 P.yaw=Math.sin(t*0.4)*0.6;
 }else if(G.mode==='creator'){
 G.yaw+=G.spin*dt;P.yaw=G.yaw;
 const b=P.holder.position,portrait=isPortrait();
-camera.fov=portrait?48:38;camera.updateProjectionMatrix();
+setCameraFov(portrait?48:38);
 if(portrait){vPos.set(b.x,b.y+1.1,b.z+6.6);vLook.set(b.x,b.y-0.75,b.z);}
 else{vPos.set(b.x+1.2,b.y+1.2,b.z+4.6);vLook.set(b.x+1.2,b.y+0.8,b.z);}
 G.camRig.to(vPos,vLook,dt,6);
 }else if(G.mode==='talk'&&G.talkPair&&G.talkPair.N){
 const a=G.talkPair.P.holder.position,b=G.talkPair.N.holder.position,portrait=isPortrait();
-camera.fov=portrait?50:40;camera.updateProjectionMatrix();
+setCameraFov(portrait?50:40);
 vLook.set((a.x+b.x)/2,a.y+(portrait?0.4:1.0),(a.z+b.z)/2);
 if(G.talkCam==='street'){
 if(!portrait)vLook.x-=1.2;
@@ -3069,22 +3132,69 @@ musicT=0.5;
 const atWork=G.mode==='shift'||(G.mode==='talk'&&(G.talkCam==='deck'||!!G.player?.helmet?.visible));
 music.set(pickTrack({mode:G.mode,stageId:G.stageId,season:G.S?.life&&G.S?.cal?G.S.cal.season:0,festival:G.stages.shrine?.festival,atWork}));
 }
+const pPos=P.holder.position;
 if(G.streetCrowd){
 const onStreet=G.stageId==='site'&&(G.mode==='morning'||G.mode==='evening'||G.mode==='dayoff');
 G.streetCrowd.setVisible(onStreet);
-if(onStreet)G.streetCrowd.update(dt,P.holder.position);
+if(onStreet)G.streetCrowd.update(dt,pPos);
 }
 if(G.stationCrowd){
 const onStation=G.stageId==='station'&&G.mode==='morning';
 G.stationCrowd.setVisible(onStation);
-if(onStation)G.stationCrowd.update(dt);
+if(onStation)G.stationCrowd.update(dt,pPos);
 }
-if(G.stageId==='site'){updateWorkers(dt);for(const w of G.workers)w.update(dt);}
+if(G.stageId==='site'){
+const onSiteWork=G.mode==='shift'||(G.mode==='talk'&&G.talkCam==='deck');
+if(onSiteWork)updateWorkers(dt);
+for(let i=0;i<G.workers.length;i++){
+const w=G.workers[i];
+if(!onSiteWork){
+if(w.holder.visible)w.holder.visible=false;
+continue;
+}
+const wp=w.holder.position;
+const distSq=(wp.x-pPos.x)**2+(wp.z-pPos.z)**2;
+if(shouldCullByFog(distSq,36)){
+if(w.holder.visible)w.holder.visible=false;
+continue;
+}
+if(!w.holder.visible)w.holder.visible=true;
+const step=charStepInterval(distSq,LOW_MEM);
+if(step<=1)w.update(dt);
+else{
+w._stepAcc=(w._stepAcc||0)+dt;
+w._stepTick=((w._stepTick??i)+1)%step;
+if(w._stepTick===0){w.update(w._stepAcc);w._stepAcc=0;}
+}
+}
+}
 P.update(dt);
-for(const ch of Object.values(G.npcs))if(ch.holder.parent)ch.update(dt);
-if(G.stageId==='care')for(const ch of G.folk)ch.update(dt);
-st.update(dt,t,P.holder.position);
-st.sun.userData.follow(P.holder.position);
+for(const ch of Object.values(G.npcs)){
+if(!ch.holder.parent)continue;
+const np=ch.holder.position;
+const distSq=(np.x-pPos.x)**2+(np.z-pPos.z)**2;
+if(LOW_MEM)ch.setCastShadow(distSq<=64);
+const step=charStepInterval(distSq,LOW_MEM);
+if(step<=1)ch.update(dt);
+else{
+ch._stepAcc=(ch._stepAcc||0)+dt;
+ch._stepTick=((ch._stepTick??0)+1)%step;
+if(ch._stepTick===0){ch.update(ch._stepAcc);ch._stepAcc=0;}
+}
+}
+if(G.stageId==='care'){
+for(let i=0;i<G.folk.length;i++){
+const ch=G.folk[i];
+if(!LOW_MEM)ch.update(dt);
+else{
+ch._stepAcc=(ch._stepAcc||0)+dt;
+ch._stepTick=((ch._stepTick??i)+1)%2;
+if(ch._stepTick===0){ch.update(ch._stepAcc);ch._stepAcc=0;}
+}
+}
+}
+st.update(dt,t,pPos);
+st.sun.userData.follow(pPos);
 renderer.render(st.scene,camera);
 G.overhead.update(dt);
 }

@@ -490,8 +490,11 @@ this.endT-=dt;
 if(this.endT<0)this.win();
 }
 P.moveAt(speed);
-camera.fov=portrait?56:46;
+const wantFov=portrait?56:46;
+if(camera.fov!==wantFov){
+camera.fov=wantFov;
 camera.updateProjectionMatrix();
+}
 if(this.intro>0){
 this.camRig.to(this.stage.showcase.pos,this.stage.showcase.look,dt,3);
 }else{

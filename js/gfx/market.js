@@ -25,12 +25,11 @@ blocks:[
 {x:-1.9,z:2.0,r:0.72},
 ],
 };
-function recolorShelf(root){
-root.traverse((o)=>{
-if(!o.isMesh||!o.material)return;
-o.castShadow=true;
-o.receiveShadow=true;
-const m=o.material.clone();
+const shelfMatCache=new WeakMap();
+function getRecoloredShelfMat(srcMat){
+let m=shelfMatCache.get(srcMat);
+if(m)return m;
+m=srcMat.clone();
 if(!m.transparent&&m.color){
 const{r,g,b}=m.color;
 if(r>0.8&&g>0.55&&b<0.65){
@@ -41,8 +40,8 @@ m.color.set('#cfd6de');
 m.roughness=0.5;
 }
 }
-o.material=m;
-});
+shelfMatCache.set(srcMat,m);
+return m;
 }
 function makeBadgeTexture(kind){
 const isHalf=kind==='半額';
@@ -146,26 +145,42 @@ new THREE.MeshStandardMaterial({map:signTexture(txt,384,108,bg,fg),roughness:0.6
 s.position.set(x,1.75,-3.15);
 scene.add(s);
 }
+function putShelf(modelKey,x,y,z){
+const root=gl[modelKey].scene;
+root.position.set(x,y,z);
+root.rotation.set(0,0,0);
+root.scale.setScalar(1);
+root.updateMatrixWorld(true);
+root.traverse((o)=>{
+if(!o.isMesh||!o.geometry||!o.material)return;
+let g=o.geometry.clone().applyMatrix4(o.matrixWorld);
+if(g.index)g=g.toNonIndexed();
+for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
+const m=getRecoloredShelfMat(o.material);
+if(!batch.has(m))batch.set(m,[]);
+batch.get(m).push(g);
+});
+root.position.set(0,0,0);
+root.updateMatrixWorld(true);
+}
+putShelf('shelf_fridge',0,0,-2.42);
+putShelf('shelf_long',-1.85,0,-0.35);
+putShelf('shelf_long',1.85,0,-0.35);
+putShelf('shelf_counter',-1.9,0,2.0);
 for(const[m,list]of batch){
-const mesh=new THREE.Mesh(mergeGeometries(list,false),m);
+const hasUv=list.some((g)=>g.attributes.uv);
+if(hasUv){
+for(const g of list){
+if(!g.attributes.uv){
+g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*2),2));
+}
+}
+}
+const merged=mergeGeometries(list,false);
+if(!merged)continue;
+const mesh=new THREE.Mesh(merged,m);
 mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);
 }
-const fridge=gl.shelf_fridge.scene.clone(true);
-recolorShelf(fridge);
-fridge.position.set(0,0,-2.42);
-scene.add(fridge);
-const shelfL=gl.shelf_long.scene.clone(true);
-recolorShelf(shelfL);
-shelfL.position.set(-1.85,0,-0.35);
-scene.add(shelfL);
-const shelfR=gl.shelf_long.scene.clone(true);
-recolorShelf(shelfR);
-shelfR.position.set(1.85,0,-0.35);
-scene.add(shelfR);
-const counter=gl.shelf_counter.scene.clone(true);
-recolorShelf(counter);
-counter.position.set(-1.9,0,2.0);
-scene.add(counter);
 const regSign=new THREE.Mesh(
 new THREE.PlaneGeometry(0.95,0.3),
 new THREE.MeshStandardMaterial({map:signTexture('お会計 レジ',256,84,'#2f5d9a','#ffffff'),roughness:0.6}),
@@ -174,21 +189,27 @@ regSign.position.set(-1.9,1.35,2.0);
 scene.add(regSign);
 const pickTargets=[];
 let foodCount=0;
+const foodBatches=new Map();
 function placeFood(modelKey,goodId,x,y,z,ry=0,scale=1){
-const g=gl[modelKey].scene.clone(true);
-g.position.set(x,y,z);
-g.rotation.y=ry;
-if(scale!==1)g.scale.setScalar(scale);
-g.userData.goodId=goodId;
-g.traverse((o)=>{
-o.userData.goodId=goodId;
-if(o.isMesh){
-o.castShadow=true;
-o.receiveShadow=true;
-pickTargets.push(o);
-}
+const root=gl[modelKey].scene;
+root.position.set(x,y,z);
+root.rotation.set(0,ry,0);
+root.scale.setScalar(scale);
+root.updateMatrixWorld(true);
+root.traverse((o)=>{
+if(!o.isMesh||!o.geometry||!o.material)return;
+let g=o.geometry.clone().applyMatrix4(o.matrixWorld);
+if(g.index)g=g.toNonIndexed();
+for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
+let byMat=foodBatches.get(goodId);
+if(!byMat){byMat=new Map();foodBatches.set(goodId,byMat);}
+if(!byMat.has(o.material))byMat.set(o.material,[]);
+byMat.get(o.material).push(g);
 });
-scene.add(g);
+root.position.set(0,0,0);
+root.rotation.set(0,0,0);
+root.scale.setScalar(1);
+root.updateMatrixWorld(true);
 foodCount++;
 }
 const hitMat=new THREE.MeshBasicMaterial({visible:false});
@@ -245,6 +266,26 @@ addZoneHitbox('banana',1.85,1.55,-0.2,2.35,0.45,0.75);
 addZoneHitbox('apple',1.85,1.08,-0.2,2.35,0.44,0.75);
 addZoneHitbox('banana',1.85,0.62,-0.2,2.35,0.44,0.75);
 addZoneHitbox('apple',1.85,0.22,-0.2,2.35,0.42,0.75);
+for(const[goodId,byMat]of foodBatches){
+for(const[m,list]of byMat){
+const hasUv=list.some((g)=>g.attributes.uv);
+if(hasUv){
+for(const g of list){
+if(!g.attributes.uv){
+g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*2),2));
+}
+}
+}
+const merged=mergeGeometries(list,false);
+if(!merged)continue;
+const mesh=new THREE.Mesh(merged,m);
+mesh.castShadow=true;
+mesh.receiveShadow=true;
+mesh.userData.goodId=goodId;
+scene.add(mesh);
+pickTargets.push(mesh);
+}
+}
 const priceLabels=[
 ['🥩 豚こま 398¥',-0.75,1.14,-1.82],
 ['🍱 お弁当 498¥',0.65,1.14,-1.82],

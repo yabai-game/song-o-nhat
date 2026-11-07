@@ -2,7 +2,8 @@
 import{CARE_DAYS,CARE_RANKS}from'./care_data.js';
 import{BENTO_DAYS,BENTO_RANKS}from'./bento_data.js';
 import{LOTUS_DAYS,LOTUS_RANKS}from'./lotus_data.js';
-export{CARE_DAYS,CARE_RANKS,BENTO_DAYS,BENTO_RANKS,LOTUS_DAYS,LOTUS_RANKS};
+import{KONBINI_DAYS,KONBINI_RANKS}from'./konbini_data.js';
+export{CARE_DAYS,CARE_RANKS,BENTO_DAYS,BENTO_RANKS,LOTUS_DAYS,LOTUS_RANKS,KONBINI_DAYS,KONBINI_RANKS};
 export const JOBS={
 lotus:{icon:'🪷',sector:'Nông nghiệp',name:'Thu hoạch củ sen',place:'Ruộng sen',area:'Ibaraki',jp:'蓮田',unit:'củ sen',ready:true,
 desc:'Lội bùn, xịt nước áp lực cao để đào củ sen. Ibaraki là nơi trồng củ sen nhiều nhất Nhật Bản.'},
@@ -12,6 +13,8 @@ site:{icon:'👷',sector:'Xây dựng 建設',name:'Vác ống thép trên giàn
 desc:'Làm việc trên cao, an toàn là trên hết. Chạy trên giàn giáo là bị đốc công mắng ngay!'},
 bento:{icon:'🍱',sector:'Thực phẩm 食品',name:'Xếp cơm hộp trên băng chuyền',place:'Xưởng cơm hộp',area:'Chiba',jp:'弁当工場',unit:'hộp cơm',ready:true,
 desc:'Băng chuyền không chờ ai: gắp đúng món vào hộp, đúng lúc. Vệ sinh là số một.'},
+konbini:{icon:'🏪',sector:'Bán lẻ 小売',name:'Nhân viên cửa hàng tiện lợi',place:'Cửa hàng サクラマート',area:'Tokyo',jp:'コンビニ',unit:'lượt khách',ready:true,
+desc:'Chào khách, quét hàng, hỏi hâm nóng, thối tiền thật nhanh và đúng. Giao tiếp là chính.'},
 };
 export const NPCS={
 tanaka:{name:'Quản lý Tanaka',role:'Quản lý'},
@@ -130,7 +133,8 @@ choices:[
 {t:'“Để em nghĩ thêm”',fx:{mental:-3},r:'Cả đêm bạn trằn trọc.'},
 ]},
 ];
-export const DAYS_BY_JOB={site:SITE_DAYS,care:CARE_DAYS,bento:BENTO_DAYS,lotus:LOTUS_DAYS};
-export const RANKS_BY_JOB={site:SITE_RANKS,care:CARE_RANKS,bento:BENTO_RANKS,lotus:LOTUS_RANKS};
+export const SOON_ON_PUBLIC=['konbini'];
+export const DAYS_BY_JOB={site:SITE_DAYS,care:CARE_DAYS,bento:BENTO_DAYS,lotus:LOTUS_DAYS,konbini:KONBINI_DAYS};
+export const RANKS_BY_JOB={site:SITE_RANKS,care:CARE_RANKS,bento:BENTO_RANKS,lotus:LOTUS_RANKS,konbini:KONBINI_RANKS};
 export const daysOf=(job)=>DAYS_BY_JOB[job]||SITE_DAYS;
 export const ranksOf=(job)=>RANKS_BY_JOB[job]||SITE_RANKS;

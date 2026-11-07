@@ -80,22 +80,37 @@ put(B(0.32,0.03,0.34),col('#88929b',{metalness:0.5,roughness:0.35}),kx+0.3,kh+0.
 put(new THREE.CylinderGeometry(0.016,0.016,0.18,10),col('#bcc4cc',{metalness:0.6,roughness:0.3}),kx+0.3,kh+0.13,kz-0.16);
 put(B(0.03,0.025,0.12),col('#bcc4cc',{metalness:0.6,roughness:0.3}),kx+0.3,kh+0.21,kz-0.11);
 const stovePos={x:kx-0.18,y:kh+0.04,z:kz+0.01};
+const prop=(m,x,y,z,ry=0,sx=1,sy=sx,sz=sx)=>{
+if(!m)return;
+const root=m.scene;
+root.position.set(x,y,z);
+root.rotation.set(0,ry,0);
+root.scale.set(sx,sy,sz);
+root.updateMatrixWorld(true);
+root.traverse((c)=>{
+if(!c.isMesh||!c.geometry||!c.material)return;
+let g=c.geometry.clone().applyMatrix4(c.matrixWorld);
+if(g.index)g=g.toNonIndexed();
+for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
+if(!batch.has(c.material))batch.set(c.material,[]);
+batch.get(c.material).push(g);
+});
+root.position.set(0,0,0);
+root.rotation.set(0,0,0);
+root.scale.setScalar(1);
+root.updateMatrixWorld(true);
+};
 if(models.gas_stove){
-const st=models.gas_stove.scene.clone(true);
-st.traverse((o)=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
-st.position.set(stovePos.x,stovePos.y,stovePos.z);
-scene.add(st);
+prop(models.gas_stove,stovePos.x,stovePos.y,stovePos.z);
 }else{
 put(B(0.58,0.14,0.44),col('#3a3f45'),stovePos.x,stovePos.y+0.07,stovePos.z);
 }
-const prop=(m,x,y,z,ry=0,s=1)=>{
-if(!m)return null;
-const o=m.scene.clone(true);o.traverse((c)=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}});
-o.position.set(x,y,z);o.rotation.y=ry;o.scale.setScalar(s);scene.add(o);return o;
-};
 if(models.cooking_pot){
 let top=stovePos.y+0.14;
-if(models.gas_stove){const bb=new THREE.Box3().setFromObject(scene.children[scene.children.length-1]);if(isFinite(bb.max.y))top=bb.max.y;}
+if(models.gas_stove){
+const bb=new THREE.Box3().setFromObject(models.gas_stove.scene);
+if(isFinite(bb.max.y))top=stovePos.y+bb.max.y;
+}
 prop(models.cooking_pot,stovePos.x-0.1,top,stovePos.z+0.02,0.4);
 }
 put(B(0.42,0.5,0.36),col('#b88958'),1.18,0.25,-1.96);
@@ -105,10 +120,13 @@ prop(models.washing_machine,2.16,0,-0.35,-Math.PI/2);
 prop(models.drying_rack,-1.78,0,0.6,Math.PI/2,0.75);
 const drying=new THREE.Group();drying.visible=false;scene.add(drying);
 for(const[dz,c,w,h]of[[-0.55,'#3b6ea8',0.34,0.42],[-0.15,'#f4f1ea',0.3,0.36],[0.25,'#c0504d',0.32,0.4],[0.62,'#5f7f58',0.22,0.3]]){
+const clMat=new THREE.MeshStandardMaterial({color:c,roughness:0.95,side:THREE.DoubleSide});
+const clGeos=[];
 for(const dx of[-0.2,0.2]){
-const cl=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({color:c,roughness:0.95,side:THREE.DoubleSide}));
-cl.position.set(-1.78+dx,0.72-h/2,0.6+dz);cl.rotation.y=Math.PI/2;cl.rotation.z=dx*0.6;drying.add(cl);
+e.set(0,Math.PI/2,dx*0.6);q.setFromEuler(e);p.set(-1.78+dx,0.72-h/2,0.6+dz);
+clGeos.push(new THREE.PlaneGeometry(w,h).applyMatrix4(m4.compose(p,q,s1)));
 }
+drying.add(new THREE.Mesh(mergeGeometries(clGeos,false),clMat));
 }
 const steamGroup=new THREE.Group();
 steamGroup.position.set(stovePos.x,stovePos.y+0.36,stovePos.z);
@@ -130,18 +148,22 @@ put(B(0.18,0.14,0.08),col('#e2574c'),DORM.bed.x+0.48,0.07,DORM.bed.z-0.78);
 const clockFace=new THREE.Mesh(new THREE.PlaneGeometry(0.15,0.075),new THREE.MeshBasicMaterial({map:clockTex}));
 clockFace.position.set(DORM.bed.x+0.48,0.08,DORM.bed.z-0.735);scene.add(clockFace);
 if(models.lowtable){
-const t=models.lowtable.scene.clone(true);
-t.traverse((o)=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
-t.scale.set(1.35,1.0,2.0);t.position.set(DORM.table.x,0,DORM.table.z);t.rotation.y=Math.PI/2;scene.add(t);
+prop(models.lowtable,DORM.table.x,0,DORM.table.z,Math.PI/2,1.35,1.0,2.0);
 }else{
 put(new THREE.CylinderGeometry(0.6,0.6,0.05,28),col('#8a5a34'),DORM.table.x,0.34,DORM.table.z);
 for(const[dx,dz]of[[0.32,0.32],[-0.32,0.32],[0.32,-0.32],[-0.32,-0.32]])put(B(0.06,0.32,0.06),col('#6b4428'),DORM.table.x+dx,0.16,DORM.table.z+dz);
 }
 const onigiri=new THREE.Group();onigiri.position.set(DORM.table.x-0.12,0.37,DORM.table.z+0.05);scene.add(onigiri);
 const plate=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.15,0.02,20),new THREE.MeshStandardMaterial({color:'#ffffff',roughness:0.4}));onigiri.add(plate);
+{
+const riceGeos=[],noriGeos=[];
 for(const dx of[-0.06,0.07]){
-const rice=new THREE.Mesh(new THREE.ConeGeometry(0.07,0.1,3),new THREE.MeshStandardMaterial({color:'#fbfaf4',roughness:0.9}));rice.position.set(dx,0.06,0);rice.rotation.y=0.6;onigiri.add(rice);
-const nori=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.04,0.05),new THREE.MeshStandardMaterial({color:'#1f2a1f'}));nori.position.set(dx,0.03,0.025);onigiri.add(nori);
+e.set(0,0.6,0);q.setFromEuler(e);p.set(dx,0.06,0);
+riceGeos.push(new THREE.ConeGeometry(0.07,0.1,3).applyMatrix4(m4.compose(p,q,s1)));
+noriGeos.push(new THREE.BoxGeometry(0.06,0.04,0.05).translate(dx,0.03,0.025));
+}
+onigiri.add(new THREE.Mesh(mergeGeometries(riceGeos,false),new THREE.MeshStandardMaterial({color:'#fbfaf4',roughness:0.9})));
+onigiri.add(new THREE.Mesh(mergeGeometries(noriGeos,false),new THREE.MeshStandardMaterial({color:'#1f2a1f'})));
 }
 put(new THREE.CylinderGeometry(0.045,0.04,0.09,14),col('#5f7f58'),DORM.table.x+0.2,0.41,DORM.table.z-0.1);
 put(new THREE.BoxGeometry(0.42,0.42,0.42),col('#8a5a34'),-2.2,0.21,1.6);
@@ -149,8 +171,7 @@ put(new THREE.BoxGeometry(0.5,0.36,0.06),col('#24282c'),-2.2,0.62,1.6);
 put(B(1.4,0.04,0.3),col('#6b4a30'),-2.38,1.9,0.35,Math.PI/2);
 put(B(0.06,0.8,0.45),col('#1f3148'),-2.46,1.42,0.0);
 put(B(0.06,0.8,0.45),col('#1f3148'),-2.46,1.42,0.7);
-const hat=new THREE.Mesh(new THREE.SphereGeometry(0.16,16,10,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:'#f4f4f0',roughness:0.4}));
-hat.position.set(-2.38,1.93,0.35);scene.add(hat);
+put(new THREE.SphereGeometry(0.16,16,10,0,Math.PI*2,0,Math.PI/2),col('#f4f4f0',{roughness:0.4}),-2.38,1.93,0.35);
 put(B(0.9,0.06,1.5),col('#8d8a84'),2.05,-0.02,1.5);
 put(B(0.06,0.12,1.5),col('#6b4a30'),1.58,0.04,1.5);
 for(const[x,z,c]of[[1.9,1.15,'#2b2b30'],[2.12,1.15,'#2b2b30'],[1.95,1.85,'#f4f4f0'],[2.17,1.85,'#f4f4f0']])put(B(0.12,0.08,0.28),col(c),x,0.04,z);
@@ -186,7 +207,18 @@ scene.add(lMesh);
 }
 const sign=new THREE.Mesh(new THREE.PlaneGeometry(0.55,0.3),new THREE.MeshStandardMaterial({map:signTexture('さくら寮',256,128,'#ffffff','#3a2c23')}));
 sign.position.set(2.5,2.25,1.5);sign.rotation.y=-Math.PI/2;scene.add(sign);
-for(const[m,list]of batch){const mesh=new THREE.Mesh(mergeGeometries(list,false),m);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);}
+for(const[m,list]of batch){
+const hasUv=list.some((g)=>g.attributes.uv);
+if(hasUv){
+for(const g of list){
+if(!g.attributes.uv)g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*2),2));
+}
+}
+const merged=mergeGeometries(list,false);
+if(!merged)continue;
+const mesh=new THREE.Mesh(merged,m);
+mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);
+}
 return{
 scene,sun,onigiri,steamGroup,
 setDrying(on){drying.visible=!!on;},

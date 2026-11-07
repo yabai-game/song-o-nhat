@@ -291,7 +291,7 @@ this.camPos.set(...BENTO_ROOM.showcase.pos);
 this.camRig.to(this.camPos,this.tmp,dt,3);
 this.stage.fpTongs?.setVisible(false);
 }else{
-const aspect=(canvas.clientWidth||375)/Math.max(1,canvas.clientHeight||812);
+const aspect=camera.aspect||(portrait?(375/812):(812/375));
 const fp=fpCamera(aspect);
 if(camera.fov!==fp.fov){camera.fov=fp.fov;camera.updateProjectionMatrix();}
 this.camPos.set(fp.eye[0],fp.eye[1],fp.eye[2]);

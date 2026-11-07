@@ -119,6 +119,7 @@ this._show(dayLabel);
 if(spot==='room')this.target={...ROUTE.start,name:'Ký túc xá さくら寮',enter:true};
 else this.target=SPOT[spot];
 if(from==='station')this.street('dusk',ROUTE.bounds.x1-0.5,24.6,-Math.PI/2);
+else if(from==='konbini')this.street('dusk',spot==='konbini'?ROUTE.konbini.x+2.0:ROUTE.konbini.x,ROUTE.konbini.z,-Math.PI/2);
 else this.street('dusk',ROUTE.gate.x-0.5,ROUTE.gate.z+0.9,-Math.PI/2);
 this.tip('お疲れ様でした！',spot==='room'?'Hết ca rồi. Về ký túc xá thôi (có thể ghé 🛒 Siêu thị).':`Hết ca rồi. Ghé ${this.target.name} trên đường về.`,5);
 }
@@ -256,45 +257,74 @@ bar.style.width=`${pct}%`;
 }
 const txt=`${icon} ${clock(e.min)}${suffix}`;
 if(g.textContent!==txt)g.textContent=txt;
-g.classList.toggle('warn',e.min>=EVENING.LATE);
+const warn=e.min>=EVENING.LATE;
+if(g.classList.contains('warn')!==warn)g.classList.toggle('warn',warn);
+const wantHidden={};
 for(const a of BUTTONS){
 if(a.id==='cook'){
-this.btn.cook.hidden=e.phase!=='room'||!canCookTonight(this.S)||!!this.cookState;
+wantHidden.cook=e.phase!=='room'||!canCookTonight(this.S)||!!this.cookState;
 }else if(a.id==='bento'){
 const ate=ateDinner(this.S);
-this.btn.bento.hidden=e.phase!=='room'||ate||!!this.cookState;
-this.btn.bento.disabled=ate||(this.S?.money||0)<KONBINI_MEAL||!!this.cookState;
-this.btn.bento.title='Mua trên đường về — tiện nhưng đắt hơn tự nấu';
+wantHidden.bento=e.phase!=='room'||ate||!!this.cookState;
+const dis=ate||(this.S?.money||0)<KONBINI_MEAL||!!this.cookState;
+if(this.btn.bento.disabled!==dis)this.btn.bento.disabled=dis;
+const bentoTitle='Mua trên đường về — tiện nhưng đắt hơn tự nấu';
+if(this.btn.bento.title!==bentoTitle)this.btn.bento.title=bentoTitle;
 }else if(a.id==='tv'){
-this.btn.tv.hidden=e.phase!=='room'||!!this.cookState;
+wantHidden.tv=e.phase!=='room'||!!this.cookState;
 }else if(a.id==='bath'){
-this.btn.bath.hidden=e.phase!=='room'||!!e.bath||!!this.cookState;
+wantHidden.bath=e.phase!=='room'||!!e.bath||!!this.cookState;
 }else if(a.id==='call'){
-this.btn.call.hidden=e.phase!=='room'||!!e.call||!!this.cookState;
+wantHidden.call=e.phase!=='room'||!!e.call||!!this.cookState;
 }else if(a.id==='wash'){
-this.btn.wash.hidden=e.phase!=='room'||!!e.washed||!!this.cookState;
+wantHidden.wash=e.phase!=='room'||!!e.washed||!!this.cookState;
 }else if(a.id==='clean'){
-this.btn.clean.hidden=e.phase!=='room'||!dutyToday(this.S,this.S?.cal)||!!this.S?.home?.cleanedToday||!!this.cookState;
+wantHidden.clean=e.phase!=='room'||!dutyToday(this.S,this.S?.cal)||!!this.S?.home?.cleanedToday||!!this.cookState;
 }else if(a.id==='market'){
-this.btn.market.hidden=!SHOW[e.phase]?.includes('market')||!this.onMarket;
+wantHidden.market=!SHOW[e.phase]?.includes('market')||!this.onMarket;
+}else if(a.id==='study'){
+const c=this.S&&this.S.career;
+wantHidden.study=e.phase!=='room'||!c||!!this.cookState;
 }else{
-this.btn[a.id].hidden=!SHOW[e.phase]?.includes(a.id);
+wantHidden[a.id]=!SHOW[e.phase]?.includes(a.id);
 }
 }
-this.btn.bath.disabled=e.bath||!!this.cookState;
+const bathDis=!!(e.bath||this.cookState);
+if(this.btn.bath.disabled!==bathDis)this.btn.bath.disabled=bathDis;
 {
 const c=this.S&&this.S.career,b=this.btn.study;
-b.hidden=e.phase!=='room'||!c||!!this.cookState;
-if(c){const ready=examReady(this.S);b.querySelector('.i').textContent=ready?'📝':'📚';b.querySelector('.l').textContent=ready?'Thi chứng chỉ':`Học ${c.lessons}/${CAREER.LESSONS}`;b.disabled=!ready&&!!e.studied;}
+if(c){
+const ready=examReady(this.S);
+const iconTxt=ready?'📝':'📚';
+const lblTxt=ready?'Thi chứng chỉ':`Học ${c.lessons}/${CAREER.LESSONS}`;
+const iEl=b.querySelector('.i'),lEl=b.querySelector('.l');
+if(iEl&&iEl.textContent!==iconTxt)iEl.textContent=iconTxt;
+if(lEl&&lEl.textContent!==lblTxt)lEl.textContent=lblTxt;
+const studyDis=!ready&&!!e.studied;
+if(b.disabled!==studyDis)b.disabled=studyDis;
 }
-this.btn.call.disabled=e.call||!!this.cookState;
-this.btn.sleep.disabled=!!this.cookState;
+}
+const callDis=!!(e.call||this.cookState);
+if(this.btn.call.disabled!==callDis)this.btn.call.disabled=callDis;
+const sleepDis=!!this.cookState;
+if(this.btn.sleep.disabled!==sleepDis)this.btn.sleep.disabled=sleepDis;
+let visCount=0;
+for(const a of BUTTONS)if(!wantHidden[a.id])visCount++;
 for(const overflowId of['tv','wash','study']){
-if(this.mine.filter((b)=>!b.hidden).length<=6)break;
-if(this.btn[overflowId]&&!this.btn[overflowId].hidden)this.btn[overflowId].hidden=true;
+if(visCount<=6)break;
+if(!wantHidden[overflowId]){
+wantHidden[overflowId]=true;
+visCount--;
 }
-const visCount=this.mine.filter((b)=>!b.hidden).length;
-$('acts').classList.toggle('many',visCount>=5);
+}
+for(const a of BUTTONS){
+const b=this.btn[a.id];
+const h=!!wantHidden[a.id];
+if(b.hidden!==h)b.hidden=h;
+}
+const actsEl=$('acts');
+const many=visCount>=5;
+if(actsEl.classList.contains('many')!==many)actsEl.classList.toggle('many',many);
 }
 fadeTo(fn){
 this.paused=true;this.fade.classList.add('on');
@@ -785,7 +815,8 @@ if((e.phase==='toSpot'||e.phase==='toDorm')&&!this.toMarket&&Math.hypot(pos.x-th
 if(this.toFuton&&!c.target){this.toFuton=false;this.lie=0;}
 }
 if(this.lie<0)P.moveAt(speed);
-camera.fov=portrait?56:46;camera.updateProjectionMatrix();
+const wantFov=portrait?56:46;
+if(camera.fov!==wantFov){camera.fov=wantFov;camera.updateProjectionMatrix();}
 if(e.phase==='room'||e.phase==='bed'){
 const fx=pos.x*0.5,fz=THREE.MathUtils.clamp(pos.z,-1.2,1.4);
 this.camPos.set(fx,2.9*(portrait?1.25:1),fz+(portrait?4.9:3.9));

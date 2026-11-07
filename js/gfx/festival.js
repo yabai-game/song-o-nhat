@@ -1,6 +1,7 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import*as THREE from'three';
-import{canvasTexture,signTexture}from'./stage.js';
+import{mergeGeometries}from'three/addons/utils/BufferGeometryUtils.js';
+import{canvasTexture,signTexture,LOW_MEM}from'./stage.js';
 export const FESTIVAL_SPOTS={
 stalls:[
 {id:'takoyaki',jp:'たこ焼き',x:-4.5,z:3.8,side:-1},
@@ -28,11 +29,55 @@ export function makeFestival(scene,{sky,hemi,sun,fill,backdrop}={}){
 const mats=new Map();
 const M=(c,o={})=>{const k=c+JSON.stringify(o);if(!mats.has(k))mats.set(k,new THREE.MeshStandardMaterial({color:c,roughness:0.8,...o}));return mats.get(k);};
 const glowMats=[];
-const glow=(c)=>{const m=new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:0.15,roughness:0.6});glowMats.push(m);return m;};
+const glowCache=new Map();
+const glow=(c)=>{
+if(glowCache.has(c))return glowCache.get(c);
+const m=new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:0.15,roughness:0.6});
+glowMats.push(m);
+glowCache.set(c,m);
+return m;
+};
 const add=(g,geo,m,x,y,z,ry=0)=>{const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);o.rotation.y=ry;o.castShadow=true;g.add(o);return o;};
 const groups={};
 const group=(k)=>{const g=new THREE.Group();g.visible=false;scene.add(g);groups[k]=g;return g;};
+function mergeGroup(grp){
+grp.updateMatrixWorld(true);
+const inv=grp.matrixWorld.clone().invert();
+const byMat=new Map();
+const toRemove=[];
+const ws=new THREE.Vector3();
+grp.traverse((o)=>{
+if(!o.isMesh||!o.geometry||!o.material)return;
+toRemove.push(o);
+if(!o.geometry.boundingSphere)o.geometry.computeBoundingSphere();
+o.getWorldScale(ws);
+const r=o.geometry.boundingSphere.radius*Math.max(ws.x,ws.y,ws.z);
+const cast=!LOW_MEM?o.castShadow:(o.castShadow&&r>=1.0);
+let g=o.geometry.clone().applyMatrix4(inv.clone().multiply(o.matrixWorld));
+if(g.index)g=g.toNonIndexed();
+for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
+let bucket=byMat.get(o.material);
+if(!bucket){bucket={cast:false,list:[]};byMat.set(o.material,bucket);}
+if(cast)bucket.cast=true;
+bucket.list.push(g);
+});
+for(const o of toRemove)if(o.parent)o.parent.remove(o);
+for(const[m,{cast,list}]of byMat){
+const hasUv=list.some((g)=>g.attributes.uv);
+if(hasUv){
+for(const g of list){
+if(!g.attributes.uv)g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*2),2));
+}
+}
+const merged=mergeGeometries(list,false);
+if(!merged)continue;
+const mesh=new THREE.Mesh(merged,m);
+mesh.castShadow=cast;
+grp.add(mesh);
+}
+}
 const awning=canvasTexture(128,64,(g)=>{for(let i=0;i<8;i++){g.fillStyle=i%2?'#ffffff':'#d63c3c';g.fillRect(i*16,0,16,64);}});
+const awningMat=new THREE.MeshStandardMaterial({map:awning,side:THREE.DoubleSide,roughness:0.9});
 const stalls={};
 for(const s of FESTIVAL_SPOTS.stalls){
 const g=group('stall_'+s.id),ry=s.side<0?Math.PI/2:-Math.PI/2;
@@ -40,13 +85,14 @@ const root=new THREE.Group();root.position.set(s.x,0,s.z);root.rotation.y=ry;g.a
 add(root,new THREE.BoxGeometry(1.9,0.9,0.8),M('#8a5a34'),0,0.45,0);
 add(root,new THREE.BoxGeometry(1.95,0.05,0.85),M('#d9c7a6'),0,0.92,0);
 for(const dx of[-0.92,0.92])for(const dz of[-0.36,0.36])add(root,new THREE.CylinderGeometry(0.04,0.04,2.2,6),M('#6b4a30'),dx,1.1,dz);
-const roof=add(root,new THREE.PlaneGeometry(2.2,1.2),new THREE.MeshStandardMaterial({map:awning,side:THREE.DoubleSide,roughness:0.9}),0,2.2,0.1);
+const roof=add(root,new THREE.PlaneGeometry(2.2,1.2),awningMat,0,2.2,0.1);
 roof.rotation.x=-Math.PI/2+0.28;
 const sign=add(root,new THREE.PlaneGeometry(1.7,0.42),new THREE.MeshStandardMaterial({map:signTexture(s.jp,420,104,STALL_COLORS[s.id],s.id==='amazake'?'#c0392b':'#ffffff'),roughness:0.8}),0,1.86,0.58);
 sign.rotation.x=-0.12;
 add(root,new THREE.SphereGeometry(0.16,12,8),glow('#ff6b3d'),0.75,1.75,0.55);
 if(s.id==='kingyo'){const pool=add(root,new THREE.CylinderGeometry(0.62,0.62,0.14,20),M('#3a7bd5',{roughness:0.2}),0,1.0,0.05);pool.scale.z=0.55;for(let i=0;i<6;i++)add(root,new THREE.SphereGeometry(0.035,6,4),M('#ff5a1f'),-0.4+i*0.16,1.08,(i%2?0.08:-0.08));}
 else for(let i=0;i<4;i++)add(root,new THREE.BoxGeometry(0.22,0.08,0.16),M(i%2?'#f0e2c0':'#c9963e'),-0.6+i*0.4,0.98,0.15);
+mergeGroup(g);
 stalls[s.id]=g;
 }
 const strings=group('strings');
@@ -58,14 +104,17 @@ for(let i=0;i<=12;i++){const x=-3.4+i*(6.8/12);pts.push(new THREE.Vector3(x,3.45
 strings.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),wire));
 for(let i=1;i<12;i++){const p=pts[i];const l=add(strings,new THREE.SphereGeometry(0.14,10,8),glow(i%2?'#ff4d3d':'#fff3d6'),p.x,p.y-0.2,z);l.scale.y=1.3;}
 }
+mergeGroup(strings);
 const Y=FESTIVAL_SPOTS.yagura,yag=group('yagura');
 const kohaku=canvasTexture(128,32,(g)=>{for(let i=0;i<8;i++){g.fillStyle=i%2?'#ffffff':'#d63c3c';g.fillRect(i*16,0,16,32);}});
+const kohakuMat=new THREE.MeshStandardMaterial({map:kohaku,side:THREE.DoubleSide});
 for(const dx of[-1,1])for(const dz of[-1,1])add(yag,new THREE.BoxGeometry(0.16,2.6,0.16),M('#7a5236'),Y.x+dx*1.1,1.3,Y.z+dz*1.1);
 add(yag,new THREE.BoxGeometry(2.5,0.12,2.5),M('#8a5a34'),Y.x,1.6,Y.z);
-for(const[dx,dz,ry]of[[0,1.2,0],[0,-1.2,0],[1.2,0,Math.PI/2],[-1.2,0,Math.PI/2]])add(yag,new THREE.PlaneGeometry(2.4,0.9),new THREE.MeshStandardMaterial({map:kohaku,side:THREE.DoubleSide}),Y.x+dx,1.12,Y.z+dz,ry);
+for(const[dx,dz,ry]of[[0,1.2,0],[0,-1.2,0],[1.2,0,Math.PI/2],[-1.2,0,Math.PI/2]])add(yag,new THREE.PlaneGeometry(2.4,0.9),kohakuMat,Y.x+dx,1.12,Y.z+dz,ry);
 const drum=add(yag,new THREE.CylinderGeometry(0.42,0.42,0.55,18),M('#8a3a22'),Y.x,2.05,Y.z);drum.rotation.z=Math.PI/2;
 add(yag,new THREE.ConeGeometry(1.9,0.7,4),M('#5b3a22'),Y.x,3.0,Y.z,Math.PI/4);
 for(let i=0;i<8;i++){const a=(i/8)*Math.PI*2;add(yag,new THREE.SphereGeometry(0.15,10,8),glow(i%2?'#ff4d3d':'#fff3d6'),Y.x+Math.cos(a)*1.9,2.55,Y.z+Math.sin(a)*1.9);}
+mergeGroup(yag);
 const ny=group('newyear');
 for(const sx of[-1.95,1.95]){
 add(ny,new THREE.CylinderGeometry(0.34,0.38,0.5,14),M('#b8955a'),sx,0.25,9.0);
@@ -75,10 +124,12 @@ b.rotation.z=0.02;
 }
 for(let i=0;i<5;i++)add(ny,new THREE.SphereGeometry(0.16,8,6),M('#2f5d2a'),sx+Math.cos(i)*0.22,0.6,9.0+Math.sin(i)*0.22);
 }
+mergeGroup(ny);
 const hw=group('halloween');
 const face=canvasTexture(128,64,(g)=>{g.fillStyle='#e87814';g.fillRect(0,0,128,64);g.fillStyle='#ffe28a';g.beginPath();g.moveTo(34,18);g.lineTo(46,30);g.lineTo(22,30);g.fill();g.beginPath();g.moveTo(94,18);g.lineTo(106,30);g.lineTo(82,30);g.fill();g.fillRect(36,42,56,8);});
 const pmat=new THREE.MeshStandardMaterial({map:face,emissive:'#ffb347',emissiveMap:face,emissiveIntensity:0.2,roughness:0.7});glowMats.push(pmat);
 for(const z of[1.2,4.2,7.2])for(const sx of[-1.95,1.95]){const p=add(hw,new THREE.SphereGeometry(0.28,16,10),pmat,sx,0.24,z,sx<0?Math.PI/2:-Math.PI/2);p.scale.y=0.8;add(hw,new THREE.CylinderGeometry(0.03,0.04,0.1,6),M('#4b6b2a'),sx,0.47,z);}
+mergeGroup(hw);
 const B=FESTIVAL_SPOTS.bell,eve=group('eve');
 for(const dx of[-0.8,0.8])add(eve,new THREE.BoxGeometry(0.18,2.6,0.18),M('#5b3a22'),B.x+dx,1.3,B.z);
 add(eve,new THREE.BoxGeometry(2.2,0.16,0.5),M('#5b3a22'),B.x,2.6,B.z);

@@ -1,7 +1,8 @@
 /*! © 2026 YABAI · Sống ở Nhật 3D · all rights reserved */
 import*as THREE from'three';
 import*as SkeletonUtils from'three/addons/utils/SkeletonUtils.js';
-import{loadModel}from'./stage.js';
+import{mergeGeometries}from'three/addons/utils/BufferGeometryUtils.js';
+import{loadModel,LOW_MEM}from'./stage.js';
 import{gait}from'../core/gait.js';
 export const OUTFITS={
 hoodie:{g:'m',file:'hero_hoodie',name:'Áo hoodie',desc:'Đi học, làm thêm',bottomLabel:'Màu quần',
@@ -81,6 +82,7 @@ for(let i=0;i<v.length;i+=3){v[i]=x0;v[i+2]=z0;}
 return clip;
 }
 const SRC={};
+const SKINNED_DEPTH_MAT=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});
 export function ensureSrc(kind){
 if(!SRC[kind]){
 SRC[kind]=loadModel(OUTFITS[kind].file).then((g)=>({scene:g.scene,clips:g.animations.map(fixInPlace)}));
@@ -90,9 +92,32 @@ return SRC[kind];
 export class Character{
 constructor(kind,src,shared=[]){
 this.kind=kind;
+this._skelDirty=true;
 this.root=SkeletonUtils.clone(src.scene);
 this.root.traverse((o)=>{
-if(o.isSkinnedMesh){o.castShadow=true;o.frustumCulled=false;this.skinGeo=o.geometry;this.tint=o.material=makeTint(o.material,OUTFITS[kind].ref);}
+if(o.isSkinnedMesh){
+o.castShadow=true;
+o.customDepthMaterial=SKINNED_DEPTH_MAT;
+if(!o.geometry.boundingSphere)o.geometry.computeBoundingSphere();
+o.boundingSphere=o.geometry.boundingSphere.clone();
+o.boundingSphere.radius*=1.8;
+o.frustumCulled=true;
+this.skinMesh=o;
+this.skinGeo=o.geometry;
+this.tint=o.material=makeTint(o.material,OUTFITS[kind].ref);
+if(o.skeleton){
+const skel=o.skeleton,origUpdate=skel.update.bind(skel);
+let lx=NaN,ly=NaN,lz=NaN,lry=NaN,lrx=NaN;
+skel.update=()=>{
+const hp=this.holder.position,hr=this.holder.rotation;
+if(!this._skelDirty&&hp.x===lx&&hp.y===ly&&hp.z===lz&&hr.y===lry&&hr.x===lrx)return;
+if(!this._skelDirty)this.holder.updateMatrixWorld(true);
+origUpdate();
+this._skelDirty=false;
+lx=hp.x;ly=hp.y;lz=hp.z;lry=hr.y;lrx=hr.x;
+};
+}
+}
 if(/^headfront$/i.test(o.name))this.headFront=o;
 if(o.isBone){
 const n=o.name.replace(/^mixamorig:?/,'');
@@ -166,6 +191,9 @@ look(colors){for(const s of['top','bottom','hair','skin'])this.setColor(s,colors
 setHideHair(on){
 if(this.tint?.userData?.u?.uHideHair)this.tint.userData.u.uHideHair.value=on?1:0;
 }
+setCastShadow(on){
+if(this.skinMesh)this.skinMesh.castShadow=!!on;
+}
 triggerPick(itemKey='karaage',dur=0.35){
 this.pickT=0;
 this.pickDur=Math.max(0.15,dur);
@@ -191,26 +219,29 @@ if(sum>1e-4&&Math.abs(sum-1)>1e-4)for(const a of Object.values(this.acts))a.setE
 this.mixer.update(dt);
 for(const[b,q]of this.posed)q.copy(b.quaternion);
 this.bend+=(this.bendTo-this.bend)*Math.min(1,dt*12);
+this.reach+=(this.reachTo-this.reach)*Math.min(1,dt*12);
+this.shoulder+=(this.shoulderTo-this.shoulder)*Math.min(1,dt*10);
+let worldReady=false;
+const ensureWorld=()=>{if(!worldReady){this.holder.updateMatrixWorld(true);worldReady=true;}};
 if(this.bend>0.01&&this.spine){
 _side.set(Math.cos(this.yaw),0,-Math.sin(this.yaw));
-this.holder.updateMatrixWorld(true);
+ensureWorld();
 tilt(this.spine,_side,this.bend*0.32);
 if(this.spine1)tilt(this.spine1,_side,this.bend*0.26);
 if(this.chest)tilt(this.chest,_side,this.bend*0.14);
 }
 if(this.sit>0&&this.thighL){
 _side.set(Math.cos(this.yaw),0,-Math.sin(this.yaw));
-this.holder.updateMatrixWorld(true);
+ensureWorld();
 const k=this.sit*Math.PI/2;
 tilt(this.thighL,_side,-k);tilt(this.thighR,_side,-k);
 tilt(this.shinL,_side,k);tilt(this.shinR,_side,k);
 if(this.foreL)tilt(this.foreL,_side,-0.9*this.sit);
 if(this.foreR)tilt(this.foreR,_side,-0.9*this.sit);
 }
-this.reach+=(this.reachTo-this.reach)*Math.min(1,dt*12);
 if(this.reach>0.01){
 _side.set(Math.cos(this.yaw),0,-Math.sin(this.yaw));
-this.holder.updateMatrixWorld(true);
+ensureWorld();
 if(this.armL)tilt(this.armL,_side,-this.reach*0.96);
 if(this.armR)tilt(this.armR,_side,-this.reach*0.96);
 if(this.foreL)tilt(this.foreL,_side,-this.reach*0.61);
@@ -219,13 +250,12 @@ if(this.foreR)tilt(this.foreR,_side,-this.reach*0.61);
 if(this.wristSway>0.01){
 this.swayT+=dt;
 const wAngle=Math.sin(this.swayT*Math.PI*4)*0.28*this.wristSway;
-this.holder.updateMatrixWorld(true);
+ensureWorld();
 if(this.foreL)tilt(this.foreL,_up,wAngle*0.45);
 if(this.foreR)tilt(this.foreR,_up,wAngle*0.45);
 if(this.handL)tilt(this.handL,_up,wAngle);
 if(this.handR)tilt(this.handR,_up,wAngle);
 }
-this.shoulder+=(this.shoulderTo-this.shoulder)*Math.min(1,dt*10);
 if(this.shoulder>0.01&&this.armR&&this.foreR){
 _q.setFromAxisAngle(_x,this.shoulder*1.1);this.armR.quaternion.multiply(_q);
 _q.setFromAxisAngle(_x,this.shoulder*1.2);this.foreR.quaternion.multiply(_q);
@@ -249,7 +279,7 @@ const reachExtra=p<0.48
 ?0.55*Math.sin((p/0.48)*Math.PI*0.5)
 :0.55+0.28*Math.sin(((p-0.48)/0.52)*Math.PI);
 _side.set(Math.cos(this.yaw),0,-Math.sin(this.yaw));
-this.holder.updateMatrixWorld(true);
+ensureWorld();
 if(this.spine)tilt(this.spine,_side,arc*0.14);
 if(this.armR){
 tilt(this.armR,_side,-reachExtra*0.95);
@@ -266,8 +296,9 @@ if(p>0.88)this.bentoGear.setFood(null);
 }
 }
 }
-if(this.attach.length){
 this.holder.updateMatrixWorld(true);
+this._skelDirty=true;
+if(this.attach.length){
 const s=Math.sin(this.yaw),c=Math.cos(this.yaw);
 for(const a of this.attach){
 if(!a.bone)continue;
@@ -310,11 +341,17 @@ _stand.set(walk,clip);
 return clip;
 }
 function tilt(bone,axisW,angle){
-bone.parent.getWorldQuaternion(_qp);
+_qp.setFromRotationMatrix(bone.parent.matrixWorld);
 _a.copy(axisW).applyQuaternion(_qp.invert()).normalize();
 _q.setFromAxisAngle(_a,angle);
 bone.quaternion.premultiply(_q);
-bone.updateMatrixWorld(true);
+bone.updateMatrix();
+bone.matrixWorld.multiplyMatrices(bone.parent.matrixWorld,bone.matrix);
+const ch=bone.children;
+for(let i=0;i<ch.length;i++){
+const c=ch[i];
+if(c.isBone)c.matrixWorld.multiplyMatrices(bone.matrixWorld,c.matrix);
+}
 }
 const _retarget=new Map();
 function retarget(kind,src,donor){
@@ -342,6 +379,29 @@ const[src,donor]=await Promise.all([ensureSrc(kind),ensureSrc('hoodie')]);
 const ch=new Character(kind,src,kind==='hoodie'?[]:retarget(kind,src,donor));
 if(colors)ch.look(colors);
 return ch;
+}
+function mergeStaticChildren(grp){
+grp.updateMatrixWorld(true);
+const inv=grp.matrixWorld.clone().invert();
+const byMat=new Map();
+const toRemove=[];
+for(const o of grp.children){
+if(!o.isMesh||!o.geometry||!o.material)continue;
+toRemove.push(o);
+let g=o.geometry.clone().applyMatrix4(inv.clone().multiply(o.matrixWorld));
+if(g.index)g=g.toNonIndexed();
+for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
+if(!byMat.has(o.material))byMat.set(o.material,[]);
+byMat.get(o.material).push(g);
+}
+for(const o of toRemove)grp.remove(o);
+for(const[m,list]of byMat){
+const merged=mergeGeometries(list,false);
+if(!merged)continue;
+const mesh=new THREE.Mesh(merged,m);
+mesh.castShadow=!LOW_MEM;
+grp.add(mesh);
+}
 }
 export function makeHelmet(ch,color='#f4f4f0'){
 ch.holder.updateMatrixWorld(true);
@@ -372,7 +432,7 @@ const crossV=new THREE.Mesh(new THREE.BoxGeometry(R*0.12,R*0.34,R*0.02),green);
 const crossH=new THREE.Mesh(new THREE.BoxGeometry(R*0.34,R*0.12,R*0.02),green);
 for(const c of[crossV,crossH]){c.position.set(0,R*0.42,R*0.98);c.rotation.x=-0.42;}
 g.add(dome,peak,rim,ridge,strap,crossV,crossH);
-g.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
+mergeStaticChildren(g);
 return{group:g,h};
 }
 export function wearHelmet(ch,helmet){
@@ -457,7 +517,7 @@ fold3.rotation.x=Math.PI/2-0.18;
 fold3.scale.set(rx*0.98,rz*0.94,R);
 fold3.position.set(0,-0.68*R,cz-0.04*R);
 g.add(crown,hoodSides,cheekL,cheekR,foreBand,brim,neckCape,fold1,fold2,fold3);
-g.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
+mergeStaticChildren(g);
 const maskGroup=new THREE.Group();
 const maskPanel=new THREE.Mesh(
 new THREE.CylinderGeometry(R*0.90,R*0.76,R*0.62,24,1,true,-Math.PI*0.30,Math.PI*0.60),
@@ -488,7 +548,7 @@ maskGroup.add(loop);
 }
 }
 maskGroup.add(maskPanel,noseWire);
-maskGroup.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
+mergeStaticChildren(maskGroup);
 const maskParent=ch.headFront||ch.head;
 if(maskParent){
 const yaw=ch.holder.rotation.y||0;
@@ -542,7 +602,7 @@ const thumb=new THREE.Mesh(new THREE.CapsuleGeometry(0.022,0.045,4,8),gloveMat);
 thumb.position.set(isRight?0.045:-0.045,0.068,0.025);
 thumb.rotation.z=isRight?-0.55:0.55;
 g.add(wristCuff,palm,thumb);
-g.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
+mergeStaticChildren(g);
 hand.add(g);
 parts.push(g);
 }
@@ -563,6 +623,7 @@ const tip=new THREE.Mesh(new THREE.CylinderGeometry(0.016,0.012,0.036,8),steelMa
 tip.scale.set(0.35,1,1.15);
 tip.position.set(sign*0.010,0.215,0);
 piv.add(arm,tip);
+mergeStaticChildren(piv);
 piv.rotation.z=sign*-0.11;
 return piv;
 };
@@ -589,11 +650,11 @@ foods.sausage=sausageMesh;
 foods.veg=vegMesh;
 for(const m of Object.values(foods)){
 m.visible=false;
-m.castShadow=true;
+m.castShadow=!LOW_MEM;
 foodHolder.add(m);
 }
 tongs.add(foodHolder);
-tongs.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
+tongs.traverse((o)=>{if(o.isMesh)o.castShadow=!LOW_MEM;});
 ch.handR.add(tongs);
 parts.push(tongs);
 }
@@ -636,7 +697,7 @@ const mitt=new THREE.Mesh(new THREE.SphereGeometry(0.064,12,10),gloveMat);
 mitt.scale.set(0.9,1.28,0.85);
 mitt.position.set(0,0.08,0);
 g.add(cuff,mitt);
-g.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
+mergeStaticChildren(g);
 hand.add(g);
 parts.push(g);
 }
@@ -650,7 +711,7 @@ sL.position.set(-0.08,0.10,0.135);
 const sR=sL.clone();
 sR.position.x=0.08;
 bib.add(front,sL,sR);
-bib.traverse((o)=>{if(o.isMesh)o.castShadow=true;});
+mergeStaticChildren(bib);
 const pos=new THREE.Vector3();
 spineBone.getWorldPosition(pos);
 const local=spineBone.matrixWorld.clone().invert().multiply(new THREE.Matrix4().compose(pos,q,s1));

@@ -116,12 +116,29 @@ const B=(w,h,d)=>new THREE.BoxGeometry(w,h,d);
 const torii=shadowAll(gl.torii.scene.clone(true));
 torii.position.set(0,0,8.2);
 scene.add(torii);
+const propBatch=new Map();
+function putProp(modelKey,x,y,z,ry=0,sc=1){
+const root=gl[modelKey].scene;
+root.position.set(x,y,z);
+root.rotation.set(0,ry,0);
+root.scale.setScalar(sc);
+root.updateMatrixWorld(true);
+root.traverse((o)=>{
+if(!o.isMesh||!o.geometry||!o.material)return;
+let g=o.geometry.clone().applyMatrix4(o.matrixWorld);
+if(g.index)g=g.toNonIndexed();
+for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
+if(!propBatch.has(o.material))propBatch.set(o.material,[]);
+propBatch.get(o.material).push(g);
+});
+root.position.set(0,0,0);
+root.rotation.set(0,0,0);
+root.scale.setScalar(1);
+root.updateMatrixWorld(true);
+}
 for(const z of[5.4,2.2,-0.8]){
 for(const sx of[-2.35,2.35]){
-const sl=shadowAll(gl.stone_lantern.scene.clone(true));
-sl.position.set(sx,0,z);
-sl.rotation.y=sx<0?Math.PI/2:-Math.PI/2;
-scene.add(sl);
+putProp('stone_lantern',sx,0,z,sx<0?Math.PI/2:-Math.PI/2,1);
 }
 }
 const temple=shadowAll(gl.temple.scene.clone(true));
@@ -129,10 +146,19 @@ temple.position.set(-2.8,0,-12.2);
 temple.rotation.y=0.2;
 scene.add(temple);
 for(const x of[-2.2,-1.1,1.1,2.2]){
-const lan=shadowAll(gl.lantern.scene.clone(true));
-lan.scale.setScalar(1.15);
-lan.position.set(x,2.45,-4.4);
-scene.add(lan);
+putProp('lantern',x,2.45,-4.4,0,1.15);
+}
+for(const[m,list]of propBatch){
+const hasUv=list.some((g)=>g.attributes.uv);
+if(hasUv){
+for(const g of list){
+if(!g.attributes.uv)g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*2),2));
+}
+}
+const merged=mergeGeometries(list,false);
+if(!merged)continue;
+const mesh=new THREE.Mesh(merged,m);
+mesh.castShadow=true;mesh.receiveShadow=false;scene.add(mesh);
 }
 const woodDark=col('#5b3a22'),woodMid=col('#7c5232'),brass=col('#c8a858',{metalness:0.5,roughness:0.4});
 const sx=0,sz=-3.2;
@@ -193,11 +219,13 @@ scene.add(tree);
 SHRINE.blocks.push({x:tx,z:tz,r:0.52});
 }
 const hanamiGroup=new THREE.Group();
+const hanamiBatch=new Map();
 const putHanami=(geo,mat,x,y,z)=>{
-const m=new THREE.Mesh(geo,mat);
-m.position.set(x,y,z);
-m.castShadow=true;m.receiveShadow=true;
-hanamiGroup.add(m);
+let g=geo.clone().translate(x,y,z);
+if(g.index)g=g.toNonIndexed();
+for(const k of Object.keys(g.attributes))if(!['position','normal','uv'].includes(k))g.deleteAttribute(k);
+if(!hanamiBatch.has(mat))hanamiBatch.set(mat,[]);
+hanamiBatch.get(mat).push(g);
 };
 const tarpTex=canvasTexture(128,128,(g)=>{
 g.fillStyle='#1e6ec7';g.fillRect(0,0,128,128);
@@ -222,6 +250,11 @@ putHanami(new THREE.CylinderGeometry(0.035,0.03,0.07,10),col('#5f7f58'),4.5+dx,0
 }
 for(const[dx,c]of[[-0.08,'#f4a8b8'],[0,'#fbfaf4'],[0.08,'#7ea862']]){
 putHanami(new THREE.SphereGeometry(0.032,8,6),col(c),4.5+dx,0.075,1.1);
+}
+for(const[m,list]of hanamiBatch){
+const mesh=new THREE.Mesh(mergeGeometries(list,false),m);
+mesh.castShadow=true;mesh.receiveShadow=true;
+hanamiGroup.add(mesh);
 }
 scene.add(hanamiGroup);
 for(const[m,list]of batch){

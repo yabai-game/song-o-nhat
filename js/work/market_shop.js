@@ -316,8 +316,11 @@ this.leave();
 }
 }
 P.moveAt(speed);
-camera.fov=portrait?56:46;
+const wantFov=portrait?56:46;
+if(camera.fov!==wantFov){
+camera.fov=wantFov;
 camera.updateProjectionMatrix();
+}
 const fx=pos.x*0.35;
 const fz=THREE.MathUtils.clamp(pos.z*0.35,-0.6,0.8);
 this.camPos.set(fx,portrait?4.4:3.6,fz+(portrait?6.2:5.1));

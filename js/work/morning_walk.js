@@ -16,6 +16,7 @@ import{STATION}from'../gfx/station.js';
 import{CARE_ROOM}from'../gfx/care.js';
 import{BENTO_ROOM}from'../gfx/bento.js';
 import{LOTUS_FIELD}from'../gfx/lotus.js';
+import{KONBINI_STORE,KONBINI_COLORS}from'../gfx/konbini_store.js';
 import{camera,isPortrait}from'../gfx/stage.js';
 import{$,show,card,esc,deltaChips,deltaText,toast}from'../ui/ui.js';
 const BUTTONS=[
@@ -42,6 +43,18 @@ walkin:['greet'],
 const NURSE_AT={x:-1.4,z:2.6};
 const WALK=3.0,RUN_MUL=1.6,NEAR=1.7;
 function walkinFor(job,stages){
+if(job==='konbini'){
+return{
+stage:'konbini',
+start:KONBINI_STORE.start,
+greeter:'foreman',
+greeterAt:KONBINI_STORE.greeterAt,
+bounds:KONBINI_STORE.bounds,
+blocks:stages.konbini?stages.konbini.blocks||[]:[],
+place:'Cửa hàng サクラマート',
+tip:'Vào cửa hàng, chào cửa hàng trưởng trước giờ giao ca',
+};
+}
 if(job==='bento'){
 return{
 stage:'bento',
@@ -176,7 +189,7 @@ this.tip('急いで！',`Còn ≤ 3 phút tới chuyến cuối kịp giờ (${s
 }
 const txt=`⏰ ${clock(s.min)} · 朝礼 ${clock(MORNING.CHOREI)}${trainPill}${late ? ' · muộn rồi!' : ''}`;
 if(g.textContent!==txt)g.textContent=txt;
-g.classList.toggle('warn',close);
+if(g.classList.contains('warn')!==close)g.classList.toggle('warn',close);
 const tk=$('sh-ticket');
 if(tk){
 if(s.phase==='platform'){
@@ -186,40 +199,53 @@ const delayTag=s.delay>0?` · 🚨遅れ+${s.delay}分 (${s.delayReasonJp})`:(t1
 const certTag=s.delayCert?' · 📄済':'';
 const boardTxt=`🚉 次発 ${t1.label} 普通${delayTag} · 次々発 ${t2.label}${certTag}`;
 if(tk.textContent!==boardTxt)tk.textContent=boardTxt;
-tk.hidden=false;
-}else{
+if(tk.hidden)tk.hidden=false;
+}else if(!tk.hidden){
 tk.hidden=true;
 }
 }
-for(const a of BUTTONS)this.btn[a.id].hidden=!SHOW[s.phase].includes(a.id);
+const setHid=(b,h)=>{if(b.hidden!==h)b.hidden=h;};
+const setDis=(b,d)=>{if(b.disabled!==d)b.disabled=d;};
+const setHot=(b,hot)=>{if(b.classList.contains('hot')!==hot)b.classList.toggle('hot',hot);};
+for(const a of BUTTONS){
+if(a.id==='trash'&&s.phase==='room')continue;
+if(a.id==='run'&&s.phase==='street')continue;
+if(a.id==='drop'&&s.phase==='street')continue;
+if(a.id==='cert'&&s.phase==='platform')continue;
+setHid(this.btn[a.id],!SHOW[s.phase].includes(a.id));
+}
 if(s.phase==='room'){
-this.btn.eat.disabled=s.ate;
-this.btn.eat.classList.toggle('hot',!s.ate&&this.near(DORM.table,1.4));
+setDis(this.btn.eat,!!s.ate);
+setHot(this.btn.eat,!s.ate&&this.near(DORM.table,1.4));
 const tDone=this.trashDone();
-this.btn.trash.hidden=tDone;
-this.btn.trash.classList.toggle('hot',!tDone&&this.demoTrash);
+setHid(this.btn.trash,tDone);
+setHot(this.btn.trash,!tDone&&!!this.demoTrash);
 const hasBike=!!(this.S?.bike?.owned&&!this.S.bike.stolen);
+const outKey=hasBike?'bike':'walk';
+if(this.btn.out.dataset.modeKey!==outKey){
+this.btn.out.dataset.modeKey=outKey;
 this.btn.out.querySelector('.i').textContent=hasBike?'🚲':'🚪';
 this.btn.out.querySelector('.l').textContent=hasBike?'Đạp xe đi làm':'Ra ngoài';
 this.btn.out.querySelector('.j').textContent=hasBike?'自転車で出勤':'行ってきます';
-this.btn.out.classList.toggle('hot',this.near(DORM.door)||(this.demoTrash&&this.carryingBag));
+}
+setHot(this.btn.out,this.near(DORM.door)||!!(this.demoTrash&&this.carryingBag));
 }else if(s.phase==='street'){
-this.btn.run.hidden=!!this.ridingBike;
-this.btn.drop.hidden=!this.carryingBag;
-this.btn.drop.classList.toggle('hot',this.carryingBag&&this.near(ROUTE.trash,1.9));
-this.btn.drink.disabled=s.drank;
-this.btn.drink.classList.toggle('hot',!s.drank&&this.nearV());
+setHid(this.btn.run,!!this.ridingBike);
+setHid(this.btn.drop,!this.carryingBag);
+setHot(this.btn.drop,!!(this.carryingBag&&this.near(ROUTE.trash,1.9)));
+setDis(this.btn.drink,!!s.drank);
+setHot(this.btn.drink,!s.drank&&this.nearV());
 const suzPos=this.who.suzuki?this.who.suzuki.holder.position:ROUTE.suzuki;
-this.btn.greet.classList.toggle('hot',!s.greeted&&this.near(suzPos,2.2));
+setHot(this.btn.greet,!s.greeted&&this.near(suzPos,2.2));
 }else if(s.phase==='platform'){
 const stopped=this.stages.station.trainState()==='stopped';
-this.btn.board.disabled=!stopped;
-this.btn.board.classList.toggle('hot',stopped);
+setDis(this.btn.board,!stopped);
+setHot(this.btn.board,stopped);
 const showCert=s.delay>0&&!s.delayCert;
-this.btn.cert.hidden=!showCert;
-this.btn.cert.classList.toggle('hot',showCert);
+setHid(this.btn.cert,!showCert);
+setHot(this.btn.cert,showCert);
 }else if(s.phase==='walkin'){
-this.btn.greet.classList.toggle('hot',this.near(this.walkin.greeterAt,2.2));
+setHot(this.btn.greet,this.near(this.walkin.greeterAt,2.2));
 }
 }
 near(pt,r=NEAR){const p=this.who.player.holder.position;return Math.hypot(p.x-pt.x,p.z-pt.z)<r;}
@@ -265,7 +291,7 @@ if(site.trashRing)site.trashRing.visible=!!this.carryingBag;
 P.look({...this.S.look.colors,top:'#1f3148',bottom:'#1c2c42'});
 P.holder.rotation.x=0;
 P.holder.position.set(ROUTE.start.x,0,ROUTE.start.z);P.yaw=Math.PI/2;P.play('idle');
-const{suzuki,hung}=this.who,train=this.commute==='train';
+const{suzuki,hung}=this.who,train=this.commute==='train',isKonbini=this.S?.job==='konbini';
 if(this.carryingBag){
 suzuki.holder.position.set(ROUTE.trash.x+1.25,0,ROUTE.trash.z+0.55);
 suzuki.yaw=-Math.PI/2;
@@ -276,7 +302,7 @@ suzuki.yaw=Math.PI;
 suzuki.play('idle');
 hung.holder.position.set(ROUTE.hung.x,0,ROUTE.hung.z);hung.yaw=-Math.PI/2;hung.play('idle');
 if(hung.helmet)hung.helmet.visible=true;
-hung.holder.visible=!train;
+hung.holder.visible=!train&&!isKonbini;
 this.controls.reset({yaw:-Math.PI/2,pitch:0.3,groundY:0,yawLimit:[-Infinity,Infinity]});
 this.controls.enabled=true;
 this.controls.onTap=(pt)=>{
@@ -293,6 +319,9 @@ const dest=this.walkin.stage==='bento'?'xưởng':this.walkin.stage==='lotus'?'r
 const nt=nextTrain(this.st.min,this.st.delay||0);
 $('sh-place').querySelector('span').textContent='Đường ra ga さくら駅';
 this.tip('駅はあっち',`Ra ga さくら駅 đón tàu (chuyến kế ${nt.label}, chuyến cuối kịp giờ 7:34) tới ${dest}`,5);
+}else if(isKonbini){
+$('sh-place').querySelector('span').textContent='Đường tới サクラマート';
+this.tip('行ってきます！','Đi bộ tới cửa hàng tiện lợi サクラマート trên phố trước 7:45',5);
 }else{
 $('sh-place').querySelector('span').textContent='Đường tới công trường';
 this.tip('行ってきます！','Đi bộ tới cổng công trường trước 7:45 (họp đầu ca 朝礼)',5);
@@ -431,11 +460,13 @@ return typeof g==='string'?(this.who[g]||this.who.greeter):(g||this.who.greeter|
 }
 enterCare(){
 const s=this.st,P=this.who.player,w=this.walkin,N=this.greeterNpc();
-alight(s);this.rideT=-1;
+alight(s);s.phase='walkin';this.rideT=-1;
 this.setStage(w.stage);
 if(w.stage==='bento'){
 P.look({...this.S.look.colors,top:'#f2f2ee',bottom:'#f2f2ee'});
 if(P.cap)P.cap.visible=true;
+}else if(w.stage==='konbini'){
+P.look({...this.S.look.colors,...KONBINI_COLORS});
 }else if(w.stage==='lotus'){
 P.look({...this.S.look.colors,top:'#2b3a36',bottom:'#3f5a3c'});
 if(P.waders)P.waders.setVisible(true);
@@ -574,10 +605,10 @@ card(`<div class="big">🗑️✨</div><h2>Phân loại chuẩn xác!</h2>
 ]);
 },700);
 }else{
-const train=this.commute==='train';
+const train=this.commute==='train',isKonbini=this.S?.job==='konbini';
 const dest=this.walkin.stage==='bento'?'xưởng':this.walkin.stage==='lotus'?'ruộng sen':'viện';
-$('sh-place').querySelector('span').textContent=train?'Đường ra ga さくら駅':'Đường tới công trường';
-this.tip('ゴミ出し完了！',train?`Đã bỏ rác xong! Đi bộ tới biển 🚉 さくら駅 để tới ${dest} trước 7:45`:'Đã bỏ rác xong! Đi bộ tới cổng công trường trước 7:45',4.5);
+$('sh-place').querySelector('span').textContent=train?'Đường ra ga さくら駅':isKonbini?'Đường tới サクラマート':'Đường tới công trường';
+this.tip('ゴミ出し完了！',train?`Đã bỏ rác xong! Đi bộ tới biển 🚉 さくら駅 để tới ${dest} trước 7:45`:isKonbini?'Đã bỏ rác xong! Đi bộ tới cửa hàng tiện lợi サクラマート trước 7:45':'Đã bỏ rác xong! Đi bộ tới cổng công trường trước 7:45',4.5);
 }
 }else if(id==='drink'){
 if(!this.nearV()){this.tip('自販機','Máy bán nước ở ngay cạnh cửa ký túc xá',3);return;}
@@ -622,7 +653,8 @@ askSkip(){
 if(this.paused)return;
 if(this.demoTrash){this.stop();this.onEnd();return;}
 this.paused=true;
-const place=this.commute==='train'?(this.walkin.stage==='bento'?'xưởng cơm hộp':this.walkin.stage==='lotus'?'ruộng sen':'viện dưỡng lão'):'công trường';
+const isKonbini=this.S?.job==='konbini';
+const place=this.commute==='train'?(this.walkin.stage==='bento'?'xưởng cơm hộp':this.walkin.stage==='lotus'?'ruộng sen':'viện dưỡng lão'):isKonbini?'cửa hàng サクラマート':'công trường';
 card(`<h2>Bỏ qua buổi sáng?</h2><p>Đi thẳng tới ${place}, đến vừa kịp giờ.</p>`,[
 {label:'Đi tiếp',on:()=>{this.paused=false;}},
 {label:'Bỏ qua →',cls:'ghost',on:()=>{
@@ -638,7 +670,7 @@ const r=arrive(this.S,this.st),P=this.who.player;
 this.carryingBag=false;P.unpinAll();
 if(this.stages.site&&this.stages.site.trashRing)this.stages.site.trashRing.visible=false;
 this.paused=true;
-const train=this.commute==='train';
+const train=this.commute==='train',isKonbini=this.S?.job==='konbini';
 const head=r.kind==='early'
 ?'👍 Đến sớm 5 phút'
 :r.kind==='ontime'
@@ -652,8 +684,8 @@ const lesson=train
 ?'Ở Nhật, “đúng giờ” nghĩa là có mặt trước giờ hẹn. Đến muộn họp đầu ca là cả đội phải chờ bạn.'
 :r.kind==='early'?'5分前行動 (gofun-mae kōdō): có mặt trước 5 phút — người Nhật rất quý điều này.':'Lần sau thử đến sớm hơn 5 phút nhé (5分前行動).');
 const hungLine=r.kind==='late'?'遅いぞ！みんな待ってる。 — Muộn rồi! Mọi người đang chờ.':'おはよう！今日も頑張ろう。 — Chào em! Hôm nay cố lên nhé.';
-if(!train){this.overhead.say(this.who.hung,hungLine,4);if(P.helmet)P.helmet.visible=true;}
-const whereTxt=train?(this.walkin.stage==='bento'?'Bạn tới xưởng cơm hộp':this.walkin.stage==='lotus'?'Bạn tới ruộng sen':'Bạn tới viện dưỡng lão'):'Bạn tới cổng công trường';
+if(!train&&!isKonbini){this.overhead.say(this.who.hung,hungLine,4);if(P.helmet)P.helmet.visible=true;}
+const whereTxt=train?(this.walkin.stage==='bento'?'Bạn tới xưởng cơm hộp':this.walkin.stage==='lotus'?'Bạn tới ruộng sen':'Bạn tới viện dưỡng lão'):isKonbini?'Bạn tới cửa hàng サクラマート':'Bạn tới cổng công trường';
 const trainMetaHtml=train
 ?`<p>🚃 Chuyến đã đi: <b>${esc(r.trainTaken || '—')}</b> · Lỡ tàu: <b>${r.missed || 0} lần</b> · 遅延証明書: <b>${r.delayCert ? '✅ Có' : (r.delay > 0 ? '❌ Quên lấy' : 'Không')}</b></p>
          ${r.kind === 'excused' ? '<p class="jpline" style="text-align:center">「遅延証明書ありがとう。」 — Quản lý nhận giấy xác nhận tàu trễ, không trừ điểm chuyên cần.</p>' : ''}`
@@ -823,7 +855,8 @@ card(`<div class="big">👮</div><h2>お巡りさん kiểm tra xe đạp</h2>
 ]);
 }
 }
-if(s.phase==='street'&&!this.demoTrash&&this.commute!=='train'&&this.near(ROUTE.gate,1.9))this.finish();
+if(s.phase==='street'&&!this.demoTrash&&this.commute!=='train'&&this.S?.job!=='konbini'&&this.near(ROUTE.gate,1.9))this.finish();
+if(s.phase==='street'&&!this.demoTrash&&this.S?.job==='konbini'&&this.near(ROUTE.konbini,1.9)){s.phase='walkin';this.fadeTo(()=>this.enterCare());}
 if(s.phase==='street'&&!this.demoTrash&&this.commute==='train'&&this.near(ROUTE.station,1.6)){toPlatform(s);this.fadeTo(()=>this.enterPlatform());}
 if(s.phase==='platform')this.platform(dt);
 if(this.pendingGreet&&!c.target){this.pendingGreet=false;if(this.near(this.walkin.greeterAt,2.2))this.greetNurse();}
@@ -832,7 +865,8 @@ if(s.phase==='walkin'&&this.greetT<0&&this.near(this.walkin.greeterAt,1.3))this.
 if(this.greetT>=0&&!this.paused){this.greetT+=dt;if(this.greetT>2.4&&!s.over){this.greetT=-1;this.finish();}}
 if(this.rideT>=0&&!this.paused){this.rideT+=dt;if(this.rideT>3.4){this.rideT=-1;this.fadeTo(()=>this.enterCare());}}
 if(this.rise<0&&s.phase!=='wake'&&s.phase!=='ride')P.moveAt(speed);
-camera.fov=portrait?56:46;camera.updateProjectionMatrix();
+const wantFov=portrait?56:46;
+if(camera.fov!==wantFov){camera.fov=wantFov;camera.updateProjectionMatrix();}
 if(s.phase==='wake'||s.phase==='room'){
 const fx=pos.x*0.5,fz=THREE.MathUtils.clamp(pos.z,-1,1.4);
 this.camPos.set(fx,2.9*(portrait?1.25:1),fz+(portrait?4.9:3.9));

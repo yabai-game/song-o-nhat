@@ -529,14 +529,17 @@ visibleIds.add('sleep');
 }
 for(const a of BUTTON_DEFS){
 const b=this.btn[a.id];
-b.hidden=!visibleIds.has(a.id);
+const wantHidden=!visibleIds.has(a.id);
+if(b.hidden!==wantHidden)b.hidden=wantHidden;
+let wantHot=false;
 if(a.id==='coin'||a.id==='bow'||a.id==='clap'){
-b.classList.toggle('hot',visibleIds.has(a.id)&&PRAY_SEQ[st.prayIdx]===a.id);
+wantHot=visibleIds.has(a.id)&&PRAY_SEQ[st.prayIdx]===a.id;
 }else if(a.id==='omikuji'||a.id==='hanami'){
-b.classList.toggle('hot',visibleIds.has(a.id));
+wantHot=visibleIds.has(a.id);
 }else{
-b.classList.toggle('hot',visibleIds.has(a.id)&&hotFestId===a.id);
+wantHot=visibleIds.has(a.id)&&hotFestId===a.id;
 }
+if(b.classList.contains('hot')!==wantHot)b.classList.toggle('hot',wantHot);
 }
 }
 action(id){
@@ -1369,8 +1372,11 @@ this.lie=0;
 }
 }
 if(this.lie<0&&P.sit===0)P.moveAt(speed);
-camera.fov=portrait?56:46;
+const wantFov=portrait?56:46;
+if(camera.fov!==wantFov){
+camera.fov=wantFov;
 camera.updateProjectionMatrix();
+}
 if(ph==='roomDay'||ph==='roomNight'){
 const fx=pos.x*0.5,fz=THREE.MathUtils.clamp(pos.z,-1.2,1.4);
 this.camPos.set(fx,2.9*(portrait?1.25:1),fz+(portrait?4.9:3.9));
