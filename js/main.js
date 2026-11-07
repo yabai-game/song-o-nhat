@@ -27,6 +27,7 @@ import{LotusShift}from'./work/lotus_shift.js';
 import{DayOff}from'./work/dayoff.js';
 import{dayOffSummary}from'./core/dayoff_rules.js';
 import{$,show,card,toast,deltaChips,esc,Overhead}from'./ui/ui.js';
+import{PLAY,dayKey,tickPlay}from'./core/playtime.js';
 import{newState,save,load,clearSave,yen,jpLevel,applyFx}from'./core/state.js';
 import{JOBS,NPCS,INTRO,rankOf,rankPay,daysOf,ranksOf}from'./core/jobs.js';
 import{WELL,checkCollapse,lowBars,sickLeave,skillInfo,markDinner}from'./core/wellbeing.js';
@@ -371,6 +372,22 @@ if(t!==lastTip){lastTip=t;if(t)fresh();}
 layoutHud();
 },200);
 addEventListener('resize',()=>requestAnimationFrame(layoutHud));
+}
+{
+const KEY='son-playtime',STEP=15;
+let rec=null;
+try{rec=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){rec=null;}
+setInterval(()=>{
+if(document.visibilityState!=='visible')return;
+const r=tickPlay(rec,STEP,dayKey());
+rec=r.rec;
+try{localStorage.setItem(KEY,JSON.stringify(rec));}catch(e){}
+if(r.ev==='warn')toast(`⏱️ Bạn đã chơi ${Math.round(rec.sec / 60)} phút hôm nay`,PLAY.MSG,6);
+else if(r.ev==='over'&&$('modal').hidden){
+card(`<div class="big">⏱️</div><h2>Đã chơi hơn ${Math.floor(rec.sec / 3600)} giờ hôm nay</h2>
+          <p><b>${PLAY.MSG}.</b></p><p>Nghỉ mắt, đứng dậy vận động một chút nhé.</p>`,[{label:'Đã hiểu'}]);
+}
+},STEP*1000);
 }
 setInterval(()=>{
 const on=!['title','creator','jobs'].includes(G.mode)&&$('title').hidden&&$('creator').hidden;
