@@ -14,7 +14,7 @@ const ACTIONS=[
 {id:'support',icon:'🤲',label:'Đỡ cụ',jp:'支える'},
 {id:'hint',icon:'💡',label:'Gợi ý',jp:'ヒント'},
 ];
-const WALK=1.9,NEAR_TAG=4.2,SEAT=0.52;
+const WALK=1.9,NEAR_TAG=4.2,NEAR_TEXT=2.6,SEAT=0.52;
 const ANIM=1.6;
 const STAND=0.96;
 const REPLY={
@@ -544,7 +544,7 @@ if(ev==='warn10')this.tip('急いで！','Còn 10 giây!',3);
 }
 }
 if(this.endT>=0){this.endT-=dt;if(this.endT<0)this.win();}
-let focus=-1,fd=NEAR_TAG;
+let focus=-1,fd=NEAR_TEXT;
 this.spots.forEach((sp,n)=>{const d=Math.hypot(pos.x-sp.x,pos.z-sp.z);if(d<fd){fd=d;focus=n;}});
 s.folk.forEach((f,i)=>{
 const ch=this.who.folk[i],sp=this.spots[i],d=Math.hypot(pos.x-sp.x,pos.z-sp.z);
@@ -571,7 +571,7 @@ const heart=f.sat>=50?'💗':f.sat>=30?'🧡':'💔';
 const pill=`${heart} Độ hài lòng • ${satPct}%`;
 let txt='';
 if(isUrgent){
-txt=`🚨 「あっ…！」 (${Math.ceil(s.urgent.time)}s)\n🤲 Đỡ cụ ngay!`;
+txt=d<NEAR_TAG?`🚨 「あっ…！」 (${Math.ceil(s.urgent.time)}s)\n🤲 Đỡ cụ ngay!`:`🚨 ${Math.ceil(s.urgent.time)}s`;
 }else if(f.need){
 const N=Object.values(NEEDS).find((n)=>n.phrases.includes(f.jp))||NEEDS[f.need];
 const jpLine=f.jp||N.jp;

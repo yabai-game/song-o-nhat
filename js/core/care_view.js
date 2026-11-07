@@ -21,24 +21,18 @@ blocks.push(
 );
 return blocks;
 })();
-export const CARE_FOLLOW=0.30;
+export const CARE_CAM={
+portrait:{up:9.2,back:9.0,lookY:0.55,lookAhead:0.9,fov:62},
+landscape:{up:5.6,back:7.8,lookY:0.8,lookAhead:0.3,fov:46},
+clampX:7.6,clampZ0:-5.2,clampZ1:5.4,
+};
 export function careCamera(aspect,player={x:0,z:0}){
 const px=Array.isArray(player)?(player[0]||0):(player?.x??0);
 const pz=Array.isArray(player)?(player[2]??player[1]??0):(player?.z??0);
-const lx=px*CARE_FOLLOW;
-const lz=pz*CARE_FOLLOW;
-if(aspect<1){
-return{
-eye:[lx,13.8,20.6+lz],
-look:[lx,-0.35,lz],
-fov:70,
-};
-}
-return{
-eye:[lx,6.6,12.0+lz],
-look:[lx,0.95,lz],
-fov:45,
-};
+const C=aspect<1?CARE_CAM.portrait:CARE_CAM.landscape;
+const lx=Math.max(-CARE_CAM.clampX,Math.min(CARE_CAM.clampX,px));
+const lz=Math.max(CARE_CAM.clampZ0,Math.min(CARE_CAM.clampZ1,pz))-C.lookAhead;
+return{eye:[lx,C.up,lz+C.back],look:[lx,C.lookY,lz],fov:C.fov};
 }
 export function project(cam,aspect,p){
 const px=Array.isArray(p)?p[0]:p.x;
