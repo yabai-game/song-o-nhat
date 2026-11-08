@@ -115,7 +115,15 @@ if(!Array.isArray(S.holidayLog))S.holidayLog=[];
 if(!S.papers||typeof S.papers!=='object'){
 const totalD=((S.cal.year||1)-1)*112+(S.cal.season||0)*28+(S.cal.day||1);
 const pastSpring14=totalD>14;
-S.papers={tennyu:pastSpring14,hoken:pastSpring14,yucho:pastSpring14,juminzei:false,zairyu:false};
+const pastSummer28=totalD>56;
+const pastWinter20=totalD>104;
+S.papers={
+tennyu:pastSpring14,
+hoken:pastSpring14,
+yucho:pastSpring14,
+juminzei:pastSummer28,
+zairyu:pastWinter20,
+};
 }
 if(S.ill===undefined)S.ill=null;
 if(S.bike===undefined)S.bike=null;

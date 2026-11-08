@@ -43,8 +43,8 @@ place:'yubinkyoku',
 placeJp:'郵便局',
 placeVi:'Bưu điện 郵便局',
 startDay:1,
-dueDay:19,
-dueLabel:'Xuân 19 (chưa có thì nhận lương tiền mặt, 🧠 −2/kỳ)',
+dueDay:28,
+dueLabel:'Xuân 28 (chưa có thì nhận lương tiền mặt, 🧠 −2/kỳ)',
 cost:0,
 benefit:'Nhận lương chuyển khoản tự động, không mất công đi nhận tiền mặt',
 desc:'Mở sổ tài khoản 郵便局の口座 tại bưu điện để công ty chuyển khoản lương và gửi tiền về quê.',
@@ -83,7 +83,14 @@ desc:'Hồ sơ gia hạn tư cách lưu trú và thẻ 在留カード (lệ ph�
 export const HANKYU_COST=Math.round(WELL.DAY_PAY/2);
 export const JUMINZEI_BASE=12000;
 export const JUMINZEI_LATE_RATE=1.1;
+const DOC_KEYS=['tennyu','hoken','yucho','juminzei','zairyu'];
+const SHORT_FIELD_IDS=['氏名','在留資格','署名'];
 const LAST_FIELDS={};
+export function hasDonePaper(S){
+const p=S?.papers;
+if(!p||typeof p!=='object')return false;
+return DOC_KEYS.some((k)=>p[k]===true);
+}
 export function ensurePapers(S,migrated=false){
 if(!S)return null;
 if(!S.papers||typeof S.papers!=='object'){
@@ -97,6 +104,16 @@ tennyuWarned:false,
 juminzeiLate:false,
 zairyuWarned:false,
 };
+}else{
+for(const k of['tennyu','hoken','yucho','juminzei','zairyu']){
+if(typeof S.papers[k]!=='boolean')S.papers[k]=Boolean(S.papers[k]);
+}
+if(S.cal&&totalDays(S.cal)<=PAPER_DOCS.yucho.dueDay){
+if(S.papers.yuchoWarned)S.papers.yuchoWarned=false;
+if(S.papers.lastOverdueAlertDay&&typeof S.papers.lastOverdueAlertDay==='object'){
+delete S.papers.lastOverdueAlertDay.yucho;
+}
+}
 }
 return S.papers;
 }
@@ -229,16 +246,19 @@ id:'氏名',
 key:'name',
 jp:'氏名（ローマ字・フリガナ）',
 vi:'Họ và tên (ghi đúng trên thẻ cư trú)',
-correct:`${playerName}（本人）`,
-wrongs:['田中 太郎（代理人）','（空欄 — Để trống）'],
+correct:`${playerName}（本人 – chính mình）`,
+wrongs:['田中 太郎（代理人 – người làm hộ）','（空欄 — Để trống）'],
 },
 {
 id:'住所',
 key:'address',
 jp:'住所（現住所）',
 vi:'Địa chỉ nơi ở hiện tại',
-correct:'埼玉県・さくら寮 203号室',
-wrongs:['東京都・さくら駅北口 1-1','ベトナム・ハノイ市'],
+correct:'埼玉県・さくら寮 203号室（Ký túc xá Sakura phòng 203, Saitama）',
+wrongs:[
+'東京都・さくら駅北口 1-1（Cửa bắc ga Sakura, Tokyo）',
+'ベトナム・ハノイ市（TP. Hà Nội — địa chỉ ở quê）',
+],
 },
 {
 id:'生年月日',
@@ -246,14 +266,14 @@ key:'dob',
 jp:'生年月日（年・月・日）',
 vi:'Ngày tháng năm sinh (theo thứ tự Năm – Tháng – Ngày)',
 correct:'2003年05月12日',
-wrongs:['12/05/2003（Viết ngược ngày/tháng/năm）','令和99年00月00日'],
+wrongs:['12/05/2003（Viết ngược ngày/tháng/năm）','令和99年00月00日（ngày không có thật）'],
 },
 {
 id:'国籍',
 key:'nation',
 jp:'国籍・地域',
 vi:'Quốc tịch',
-correct:'ベトナム（越南）',
+correct:'ベトナム（Việt Nam）',
 wrongs:['日本（Nhật Bản）','未記入（Không điền）'],
 },
 {
@@ -273,8 +293,12 @@ correct:`${playerName}（自署）`,
 wrongs:['友達のサイン（Nhờ bạn ký hộ）','署名なし（Bỏ trống chữ ký）'],
 },
 ];
+const shortForm=hasDonePaper(S);
 const count=doc==='hoken'||doc==='juminzei'?5:6;
-const picked=baseFields.slice(0,count).map((f)=>{
+const sourceFields=shortForm
+?baseFields.filter((f)=>SHORT_FIELD_IDS.includes(f.id))
+:baseFields.slice(0,count);
+const picked=sourceFields.map((f)=>{
 const opts=[f.correct,f.wrongs[0],f.wrongs[1]];
 const shift=Math.floor((typeof rng==='function'?rng():0)*3)%3;
 const rotated=opts.slice(shift).concat(opts.slice(0,shift));
@@ -290,21 +314,29 @@ correctIdx,
 };
 });
 if(typeof doc==='string'){
+picked.playerName=playerName;
+picked.shortForm=shortForm;
 LAST_FIELDS[doc]=picked;
 }
 return picked;
 }
 export function checkForm(docOrFields,answers=[],S={}){
+const wantName=S&&typeof S.name==='string'&&S.name.trim()?S.name.trim():null;
+const hasPapersArg=S&&typeof S.papers==='object'&&S.papers!==null;
+const wantShort=hasDonePaper(S);
+const cached=typeof docOrFields==='string'?LAST_FIELDS[docOrFields]:null;
 const fields=Array.isArray(docOrFields)
 ?docOrFields
-:(LAST_FIELDS[docOrFields]||formFields(docOrFields,S));
+:((cached&&(!wantName||cached.playerName===wantName)&&(!hasPapersArg||cached.shortForm===wantShort))
+?cached
+:formFields(docOrFields,S));
 const wrong=[];
 const wrongIndices=[];
 for(let i=0;i<fields.length;i++){
 const f=fields[i];
 const given=Array.isArray(answers)
 ?answers[i]
-:(answers&&typeof answers==='object'?(answers[f.id]??answers[f.key]??answers[i]):undefined);
+:(answers&&typeof answers==='object'?(answers[f.id]??answers[f.jp]??answers[f.key]??answers[i]):undefined);
 const isOk=given===f.correct||given===f.correctIdx;
 if(!isOk){
 wrong.push(f.id);
@@ -330,7 +362,7 @@ const cost=docId==='juminzei'&&(p.juminzeiLate||today>doc.dueDay)
 ?Math.round(JUMINZEI_BASE*JUMINZEI_LATE_RATE)
 :(doc.cost||0);
 if(cost>0&&(S.money||0)<cost){
-return{ok:false,why:'money',cost,deltas:[]};
+return{ok:false,why:'money',cost,min:0,jpGain:0,deltas:[]};
 }
 p[docId]=true;
 const fx={culture:4,mental:2};
