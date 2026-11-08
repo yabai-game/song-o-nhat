@@ -823,6 +823,7 @@ return`<div class="lime-msg">
 card(`<h2>🛒 フリマ App "Chợ Cũ"</h2>
         ${tabBar}
         <p style="font-size:12.5px;color:var(--ink-dim)">Sàn mua bán đồ cũ & thẻ sưu tầm モンスターカード (phí sàn 10% + phí ship 700 ¥) · 💴 Tiền mặt: <b>${yen(S.money)}</b></p>
+        <p class="lesson">⚠️ <b>Luật ở Nhật:</b> bán lại đồ <b>của chính mình</b> thỉnh thoảng thì được. Nhưng <b>mua đi bán lại để kiếm lời</b> (転売) là kinh doanh: thực tập sinh không được làm việc ngoài tư cách lưu trú (資格外活動) khi chưa xin phép, và thu nhập thêm còn phải khai thuế. Làm thường xuyên có thể bị thu hồi tư cách lưu trú. Trong game chỉ để trải nghiệm — ngoài đời đừng làm nhé!</p>
         <div class="lime-list" id="chocu-list">${cardRows || '<p>Bạn chưa có hộp thẻ hay món đồ nào trong kho. Sáng ngày lễ có thể xếp hàng mua モンスターカード 限定BOX trước 10:00!</p>'}</div>`,[
 {label:'🤝 Mua lại hộp từ người lạ trên Chợ Cũ (4.800 ¥ · coi chừng hàng giả)',cls:'ghost',on:()=>{
 const r=buyFromStranger(S,4800);
