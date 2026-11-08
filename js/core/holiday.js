@@ -15,9 +15,9 @@ BOX_TIERS:[
 ],
 SHOP_BUY_RATE:0.6,
 MONSTERS:[
-['ヒノトリ','Chim Lửa','🔥'],['カッパマル','Kappa Tròn','🥒'],['ユキウサギ','Thỏ Tuyết','❄️'],['タヌキング','Vua Lửng','🍃'],
-['サクラギツネ','Cáo Anh Đào','🌸'],['オニカブト','Bọ Quỷ','🪲'],['ミズクラゲ','Sứa Nước','💧'],['コケダマ','Bóng Rêu','🌱'],
-['カミナリダコ','Bạch Tuộc Sấm','⚡'],['ツキノワグマ','Gấu Trăng','🌙'],
+['ヒノトリ','Chim Lửa','🔥','c01'],['カッパマル','Kappa Tròn','🥒','c02'],['ユキウサギ','Thỏ Tuyết','❄️','c03'],['タヌキング','Vua Lửng','🍃','c04'],
+['サクラギツネ','Cáo Anh Đào','🌸','c05'],['オニカブト','Bọ Quỷ','🪲','c06'],['ミズクラゲ','Sứa Nước','💧','c07'],['コケダマ','Bóng Rêu','🌱','c08'],
+['カミナリダコ','Bạch Tuộc Sấm','⚡','c09'],['ツキノワグマ','Gấu Trăng','🌙','c10'],
 ],
 APP_FEE_RATE:0.10,
 APP_SHIP_FEE:700,
@@ -203,6 +203,27 @@ S.cards.push(box);
 S.holidayLog.push(`box:${today}`);
 return{ok:true,box,cost:HOLI.BOX_PRICE,min:90,deltas};
 }
+export function monsterImg(src){
+if(!src)return'c01';
+if(typeof src==='string'){
+if(/^c\d{2}$/.test(src))return src;
+const idx=HOLI.MONSTERS.findIndex((m)=>m[0]===src);
+return idx>=0?(HOLI.MONSTERS[idx][3]||`c${String(idx + 1).padStart(2, '0')}`):'c01';
+}
+if(Array.isArray(src)){
+if(src[3])return src[3];
+const idx=HOLI.MONSTERS.findIndex((m)=>m[0]===src[0]);
+return idx>=0?(HOLI.MONSTERS[idx][3]||`c${String(idx + 1).padStart(2, '0')}`):'c01';
+}
+if(typeof src.img==='string'&&src.img)return src.img;
+if(typeof src.best?.img==='string'&&src.best.img)return src.best.img;
+const jp=src.jp||src.best?.jp;
+if(jp){
+const idx=HOLI.MONSTERS.findIndex((m)=>m[0]===jp);
+if(idx>=0)return HOLI.MONSTERS[idx][3]||`c${String(idx + 1).padStart(2, '0')}`;
+}
+return'c01';
+}
 export function openBox(arg1,arg2=Math.random,arg3=Math.random){
 let S=null,card=arg1,rng=arg2;
 if(arg1&&Array.isArray(arg1.cards)&&arg2&&typeof arg2==='object'){
@@ -221,13 +242,13 @@ const value=Math.round(T.min+R()*(T.max-T.min));
 const rarity=`${T.tier} (${T.vi})`;
 const M=HOLI.MONSTERS,pick=()=>M[Math.floor(R()*M.length)];
 const cards=[];
-for(let i=0;i<4;i++){const[jp,vi,icon]=pick();cards.push({jp,vi,icon,tier:R()<0.2?'R':'N'});}
-const[jp,vi,icon]=pick();cards.push({jp,vi,icon,tier:T.tier,best:true});
+for(let i=0;i<4;i++){const[jp,vi,icon,img]=pick();cards.push({jp,vi,icon,img,tier:R()<0.2?'R':'N'});}
+const[jp,vi,icon,img]=pick();cards.push({jp,vi,icon,img,tier:T.tier,best:true});
 card.opened=true;
 card.value=value;
 card.rarity=rarity;
 card.tier=T.tier;
-card.best={jp,vi,icon};
+card.best={jp,vi,icon,img};
 const deltas=S?applyFx(S,{mental:2}):[['mental',2]];
 return{ok:true,opened:true,value,rarity,tier:T.tier,rare:T.tier==='SR'||T.tier==='UR',cards,deltas};
 }

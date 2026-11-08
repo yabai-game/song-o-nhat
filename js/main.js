@@ -51,7 +51,7 @@ dayTick,afterShift,wash,missedDuty,availableVnDishes,cookVietnamese,homeChips,to
 }from'./core/home_life.js';
 import{
 HOLI,ensureHolidayState,holidayActs,openFukubukuro,
-buyBox,openBox,sellToShop,marketPrice,sellOnApp,buyFromStranger,
+buyBox,openBox,monsterImg,sellToShop,marketPrice,sellOnApp,buyFromStranger,
 sideJobOffer,takeSideJob,refuseSideJob,checkCaught,
 }from'./core/holiday.js';
 import{
@@ -137,8 +137,15 @@ $('loadmsg').textContent=label||`Đang tải mô hình ${loadStats.done}/${Math.
 const painter=setInterval(()=>paint(),150);
 const musicP=music.prefetch(()=>{musicDone++;});
 const outfitsP=Promise.all(Object.keys(OUTFITS).map((k)=>ensureSrc(k).catch(()=>null)));
+G.cardImgs=[];
+const cardsP=Promise.all(HOLI.MONSTERS.map((m,i)=>new Promise((res)=>{
+const im=new Image();
+im.onload=im.onerror=()=>res(im);
+im.src=`img/cards/${m[3] || `c${String(i + 1).padStart(2, '0')}`}.jpg`;
+G.cardImgs.push(im);
+})));
 const[town,site,care,bento,lotus,konbini]=await Promise.all([step(buildTown()),step(buildSite()),step(buildCare()),step(buildBento()),step(buildLotus()),step(buildKonbiniStore()),
-step(ensureShrine()),step(ensureStation()),step(ensureMarket()),outfitsP,musicP,fontReady.catch(()=>{})]);
+step(ensureShrine()),step(ensureStation()),step(ensureMarket()),outfitsP,cardsP,musicP,fontReady.catch(()=>{})]);
 G.stages.town=town;
 G.stages.site=site;
 G.stages.care=care;
@@ -684,22 +691,24 @@ el.innerHTML=html;
 }
 }
 }
-function revealBox(S,box,after){
-const r=openBox(S,box);
+function revealBox(S,box,after,rng=Math.random){
+const r=openBox(S,box,rng);
 if(!S.flags?.demo)save(S,storage);
 const price=box.price||HOLI.BOX_PRICE;
 let t=0.35;
 const flips=r.cards.map((c)=>{
 const d=t;t+=c.best?0:0.45;if(c.best)t+=0.3;
+const img=monsterImg(c);
 return`<div class="tcard t-${c.tier}${c.best ? ' best' : ''}" style="animation-delay:${(c.best ? d + 0.5 : d).toFixed(2)}s">
-      <div class="tc-in"><div class="tc-back">モンスター<br>カード</div><div class="tc-face"><span class="tc-ic">${c.icon}</span><b>${esc(c.jp)}</b><small>${esc(c.vi)}</small><i>${c.tier}</i></div></div></div>`;
+      <div class="tc-in"><div class="tc-back"></div><div class="tc-face"><img src="img/cards/${esc(img)}.jpg" alt="${esc(c.jp)}"><i class="tc-tier">${esc(c.tier)}</i></div></div></div>`;
 }).join('');
 const shop=Math.round(r.value*HOLI.SHOP_BUY_RATE),pf=(n)=>(n>=0?`lãi +${yen(n)}`:`lỗ −${yen(-n)}`);
 const result=()=>{
 const b=box.best||r.cards[4];
+const bImg=monsterImg(b);
 const app=Math.max(0,r.value-Math.round(r.value*HOLI.APP_FEE_RATE)-HOLI.APP_SHIP_FEE);
 const head=r.rare
-?`<div class="rare-hit t-${r.tier}"><div class="rh-glow"></div><div class="rh-card"><span class="tc-ic">${b.icon}</span><b>${esc(b.jp)}</b><small>${esc(b.vi)}</small><i>${r.tier}</i></div></div>
+?`<div class="rare-hit t-${r.tier}"><div class="rh-glow"></div><div class="rh-card"><img src="img/cards/${esc(bImg)}.jpg" alt="${esc(b.jp)}"><i class="tc-tier">${esc(r.tier)}</i></div></div>
          <h2 class="rh-title">${r.tier === 'UR' ? '🎉 TRÚNG THẺ SIÊU HIẾM!!' : '✨ Trúng thẻ hiếm!'}</h2>`
 :`<div class="big">😮‍💨</div><h2>Toàn thẻ thường…</h2><p>5 lá chỉ có <b>${esc(b.jp)}</b> là đáng chút tiền. Ngoài đời bóc thẻ cũng vậy: đa số hộp lỗ.</p>`;
 card(`${head}
@@ -811,9 +820,14 @@ const daysHeld=Math.max(0,today-(c.boughtDay||today));
 const est=c.opened?c.value:marketPrice(c,daysHeld,()=>((idx*37+today*13)%100)/100);
 c.askPrice=est;
 const net=Math.max(0,est-Math.round(est*HOLI.APP_FEE_RATE)-HOLI.APP_SHIP_FEE);
+const bestName=c.best?.jp?`${esc(c.best.jp)} (${esc(c.best.vi || '')})`:'Thẻ đã mở';
+const title=c.opened?`${bestName} · ${esc(c.rarity || 'Thường')}`:'モンスターカード 限定BOX (Nguyên seal)';
+const thumb=c.opened?`<img class="chocu-thumb" src="img/cards/${esc(monsterImg(c))}.jpg" alt="${esc(c.best?.jp || 'Thẻ')}">`:'';
 return`<div class="lime-msg">
-          <div class="lime-head"><b>🃏 ${c.opened ? `Thẻ đã mở · ${esc(c.rarity || 'Thường')}` : 'モンスターカード 限定BOX (Nguyên seal)'}</b><span>Mua: ${yen(c.price || 5500)}</span></div>
-          <div>Giá thị trường Chợ Cũ: <b>${yen(est)}</b> · Thực nhận sau phí 10% + ship 700 ¥: <b>${yen(net)}</b></div>
+          <div class="chocu-row">${thumb}<div class="chocu-info">
+            <div class="lime-head"><b>🃏 ${title}</b><span>Mua: ${yen(c.price || 5500)}</span></div>
+            <div>Giá thị trường Chợ Cũ: <b>${yen(est)}</b> · Thực nhận sau phí 10% + ship 700 ¥: <b>${yen(net)}</b></div>
+          </div></div>
           <div class="lime-acts">
             ${!c.opened ? `<button type="button" class="pri" data-cidx="${idx}" data-cact="open">✨ Bóc hộp xem thẻ</button>` : ''}
             <button type="button" class="pri" data-cidx="${idx}" data-cact="sell">💰 Đăng bán (nhận ${yen(net)})</button>
