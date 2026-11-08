@@ -131,20 +131,34 @@ export const loadStats={started:0,done:0};
 const TEX_KEYS=['map','alphaMap','emissiveMap','normalMap','roughnessMap','metalnessMap','aoMap'];
 const halfOf=new WeakMap();
 function shrinkForPhone(tex){
+try{
 const im=tex.image;
 if(!im||typeof document==='undefined')return;
-let c=halfOf.get(im);
-if(!c){
+let e=halfOf.get(im);
+if(!e){
 const w=im.width||0,h=im.height||0;
 if(Math.max(w,h)<512||(typeof HTMLCanvasElement!=='undefined'&&im instanceof HTMLCanvasElement))return;
-c=document.createElement('canvas');
+const c=document.createElement('canvas');
 c.width=Math.max(1,w>>1);c.height=Math.max(1,h>>1);
-c.getContext('2d').drawImage(im,0,0,c.width,c.height);
-halfOf.set(im,c);
+const g=c.getContext('2d');
+if(!g){c.width=c.height=0;return;}
+g.drawImage(im,0,0,c.width,c.height);
+e={img:c,texs:[]};
+halfOf.set(im,e);
+if(typeof createImageBitmap==='function'){
+createImageBitmap(c).then((bm)=>{
+e.img=bm;
+for(const t of e.texs){t.image=bm;t.needsUpdate=true;}
+c.width=c.height=0;
+}).catch(()=>{});
+}
 if(typeof im.close==='function')im.close();
 }
-tex.image=c;
+e.texs.push(tex);
+tex.image=e.img;
 tex.needsUpdate=true;
+}catch(err){
+}
 }
 export function loadModel(name){
 if(!cache[name]){
