@@ -17,6 +17,7 @@ import{CARE_ROOM}from'../gfx/care.js';
 import{BENTO_ROOM}from'../gfx/bento.js';
 import{LOTUS_FIELD}from'../gfx/lotus.js';
 import{KONBINI_STORE,KONBINI_COLORS}from'../gfx/konbini_store.js';
+import{konbiniWalkCamera}from'../core/konbini_view.js';
 import{camera,isPortrait}from'../gfx/stage.js';
 import{$,show,card,esc,deltaChips,deltaText,toast}from'../ui/ui.js';
 const BUTTONS=[
@@ -51,6 +52,7 @@ greeter:'foreman',
 greeterAt:KONBINI_STORE.greeterAt,
 bounds:KONBINI_STORE.bounds,
 blocks:stages.konbini?stages.konbini.blocks||[]:[],
+roomCam:konbiniWalkCamera,
 place:'Cửa hàng サクラマート',
 tip:'Vào cửa hàng, chào cửa hàng trưởng trước giờ giao ca',
 };
@@ -882,6 +884,11 @@ this.camRig.to(this.camPos,this.camLook,dt,5);
 const tx=Math.max(this.stages.station.trainX()-4,-40);
 this.camPos.set(tx+14,4.6,STATION.trackZ+13);this.camLook.set(tx,1.8,STATION.trackZ);
 this.camRig.to(this.camPos,this.camLook,dt,3);
+}else if(s.phase==='walkin'&&this.walkin?.roomCam){
+const v=this.walkin.roomCam(pos.x,pos.z);
+this.camPos.set(v.pos[0],v.pos[1],v.pos[2]);this.camLook.set(v.look[0],v.look[1],v.look[2]);
+c.yaw=Math.atan2(this.camPos.x-this.camLook.x,this.camPos.z-this.camLook.z);
+this.camRig.to(this.camPos,this.camLook,dt,5);
 }else{
 c.follow(P.yaw+Math.PI,moving,dt);
 const dist=4.6*(portrait?1.15:1),cp=Math.cos(c.pitch);

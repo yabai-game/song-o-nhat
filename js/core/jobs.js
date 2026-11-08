@@ -133,7 +133,7 @@ choices:[
 {t:'“Để em nghĩ thêm”',fx:{mental:-3},r:'Cả đêm bạn trằn trọc.'},
 ]},
 ];
-export const SOON_ON_PUBLIC=['konbini'];
+export const SOON_ON_PUBLIC=[];
 export const DAYS_BY_JOB={site:SITE_DAYS,care:CARE_DAYS,bento:BENTO_DAYS,lotus:LOTUS_DAYS,konbini:KONBINI_DAYS};
 export const RANKS_BY_JOB={site:SITE_RANKS,care:CARE_RANKS,bento:BENTO_RANKS,lotus:LOTUS_RANKS,konbini:KONBINI_RANKS};
 export const daysOf=(job)=>DAYS_BY_JOB[job]||SITE_DAYS;

@@ -21,6 +21,7 @@ import{buildCare}from'./gfx/care.js';
 import{buildBento,BENTO_ROOM}from'./gfx/bento.js';
 import{buildLotus,LOTUS_FIELD}from'./gfx/lotus.js';
 import{buildKonbiniStore,KONBINI_STORE,KONBINI_COLORS}from'./gfx/konbini_store.js';
+import{clampToBox}from'./core/konbini_view.js';
 import{buildStation}from'./gfx/station.js';
 import{Crowd}from'./gfx/crowd.js';
 import{CareShift,seatFolk}from'./work/care_shift.js';
@@ -2784,8 +2785,22 @@ const opts=shiftOpts(st.data,st.hard,S);
 const rk=rankOf(S.jobXp||0);
 const meta={unit:JOBS.konbini.unit,rankLabel:demo?'🎮 Chế độ thử':`${hudCalText(S)} · 🎖️ ${rk + 1}/10 ${ranksOf('konbini')[rk]}`,
 onRetry:()=>{if(!demo){retryCost(G.S);save(G.S,storage);}}};
-const begin=()=>G.konbini.start(opts,{player:P,foreman},meta,(r)=>(demo?finishDemoShift('konbini',demoDay,r):shiftDone(st,r)));
-if(demo){begin();return;}
+const warmP=G.stages.konbini.warmTextures?G.stages.konbini.warmTextures(renderer,4):Promise.resolve();
+let starting=false;
+const begin=()=>{
+if(starting)return;
+starting=true;
+const launch=()=>{
+show('modal',false);
+G.konbini.start(opts,{player:P,foreman},meta,(r)=>(demo?finishDemoShift('konbini',demoDay,r):shiftDone(st,r)));
+};
+if(G.stages.konbini.isTexturesWarmed?.()){
+launch();
+return;
+}
+show('modal',true);
+warmP.then(launch);
+};
 card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
     ${opts.jp ? `<p class="jpline">${esc(opts.jp)}</p>` : ''}
     <p>${esc(opts.vi || 'Đứng sau quầy thu ngân, chào khách, quét mã vạch, trả lời yêu cầu và thối đúng tiền thừa.')}</p>
@@ -2793,7 +2808,7 @@ card(`<h2>${st.hard ? '🔥 ' : ''}${esc(opts.label)}</h2>
     <p class="lesson">🏪 Chào <b>いらっしゃいませ</b> → Chạm từng món để quét (ピッ♪) → Trả lời câu hỏi (nếu có) → Chọn mệnh giá tiền thối rồi bấm <b>✔ Đưa tiền thừa</b> → Chào <b>ありがとうございました</b>.</p>`,[
 {label:'Bắt đầu ca →',on:begin},
 ]);
-dayHud(st.label);
+if(!demo)dayHud(st.label);
 G.camRig.snap(G.stages.konbini.showcase.pos,G.stages.konbini.showcase.look);
 }
 function shiftDone(st,r){
@@ -2948,6 +2963,20 @@ const CREDITS=[
 ['Bông cải xanh (xưởng cơm hộp)','Broccoli','meerschaumdigital','0fb58ca488b64298ab8af6f0372e66b9','CC BY 4.0'],
 ['Kẹp gắp inox','metal tongs','kosicky.jozef2308','86628581455a4c5d85faae2511076afe','CC BY 4.0'],
 ['Tay đeo găng (đổi màu, đổi tư thế)','Hand With Gloves','teenjust500','5a6a434b8ec943ffacc581358781eecb','CC BY 4.0'],
+['Konbini (trong cửa hàng)','Lowpoly convenience store interior','kolorn','28bf62dc9fa748b487ca4dec72c74aac','Sketchfab Free Standard'],
+['Lon cà phê','JPN Vending Machine Drink Cans','adenotoxin','0411cdc46a5d41caa1311168874a1581','CC BY 4.0'],
+['Chai trà xanh','JPN Petbottle','adenotoxin','efaac575105b4df583642794005a5afd','CC BY 4.0'],
+['Cơm nắm','Stylized Onigiri | Rice Balls','fairvals','ae4b88bd16d440299cd65a64f6fc5b8b','CC BY 4.0'],
+['Quầy tính tiền','Cash Counter / Checkout','Umar','1a0b9a90e22c4cbf876f4b822b51391b','CC BY 4.0'],
+['Máy tính tiền','Cash Register','nathanielmoore','119e19154a6e40429c47449b7b1e2717','CC BY 4.0'],
+['Đầu đọc thẻ','Payment terminal','nofurion','12376a29b015453da5f7a0deede21dd8','CC BY 4.0'],
+['Tủ kính đồ nóng','Bakery Display Case','mmcmindes','50e0f0f7e37b4a80a6b809a8831835c2','CC BY 4.0'],
+['Máy cà phê','Coffee machine','Xyincs','fd28b66c1585437fa8e00c1f1aafe6dd','CC BY 4.0'],
+['Bánh sừng bò','Croissant','nathanielmoore','51600a9a53284b18a9b1623ca54d9a49','CC BY 4.0'],
+['Bánh mì kẹp','Sandwich','Gabriel Gauthier','db8a57a8e20a47778f660a3103c51486','CC BY 4.0'],
+['Mì ly','Low-Poly 3D Model of Blank Cup Noodle Models','fairuzkamil2','52fddb67cd2f429490dcdb938bac02ae','CC BY 4.0'],
+['Kem ốc quế','Icecream (Low Poly, Game Ready)','LiveToWin34','5736985d6deb4af0a4e2c0ba885f72f8','CC BY 4.0'],
+['Bánh bao','Steamed Bun','LitoStudio','135a3804d5ae4d5294e0d786d36aab20','CC BY 4.0'],
 ];
 function creditsScreen(){
 hideAll();
@@ -3111,6 +3140,7 @@ if(!portrait)vLook.z-=1.2;
 vPos.set(vLook.x+(portrait?6.2:4.6),a.y+2.1,vLook.z+0.9);
 }
 else vPos.set(vLook.x-1.2,a.y+2.3,vLook.z+(portrait?6.4:4.8));
+if(G.stageId==='konbini'){const k=clampToBox([vPos.x,vPos.y,vPos.z]);vPos.set(k[0],k[1],k[2]);}
 G.camRig.to(vPos,vLook,dt,4);
 }else if(G.mode==='talk'){
 const a=P.holder.position;
@@ -3118,6 +3148,7 @@ if(G.stageId==='dorm'){
 vLook.set(a.x,a.y+0.65,a.z);vPos.set(a.x,a.y+2.0,a.z+3.8);
 }else{
 vLook.set(a.x,a.y+0.6,a.z);vPos.set(a.x,a.y+2.4,a.z+6);
+if(G.stageId==='konbini'){const k=clampToBox([vPos.x,vPos.y,vPos.z]);vPos.set(k[0],k[1],k[2]);}
 }
 G.camRig.to(vPos,vLook,dt,4);
 }
